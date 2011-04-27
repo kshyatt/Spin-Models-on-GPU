@@ -1,9 +1,9 @@
 OBJS = ED_Lan_1107.o GenHam.o  Lanczos_07.o lapack.o Lattice_16B.cpp
 CC = g++
 #CFLAGS = -O2 
-CFLAGS = -O2 -arch x86_64
+CFLAGS = -O2
 #LIBS = -lm -framework veclib
-LIBS = -lapack -lblas
+LIBS = -llapack -lblas
 
 a.out: $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o a.out $(LIBS)
