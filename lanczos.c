@@ -9,14 +9,58 @@ __global__ void vecdiff(cuDoubleComplex* w, cuDoubleComplex* x, cuDoubleComplex 
   if (i < n) {
     w[i] = x[i] - alpha*y[i] - beta*z[i];
   }
+  syncthreads();
 }
 
-__global__ void set(cuDoubleComplex* a, cuDoubleComplex* b, int n){
+__global__ void assignr(cuDoubleComplex* a, double b, int n){
+  int i = blockDim.x*blockIdx.x + threadIdx.x;
+  if (i < n){
+    a[i] = make_cuDoubleComplex(b,0.);
+  }
+  syncthreads();
+}
 
+__global__ void complextodoubler(cuDoubleComplex* a, double* b, int n){
   int i = blockDim.x*blockIdx.x + threadIdx.x;
 
-  if(i < n){
-    a[i] = b[i];
+  if(i <= n){
+    b[i] = a[i].x;
+  }
+
+  syncthreads();
+}
+
+__global__ void complextodoubler2(cuDoubleComplex* a, double* b, int n){
+  int i = blockDim.x*blockIdx.x + threadIdx.x + 1;
+
+  if(i <= n){
+    b[i-1] = a[i].x;
+  }
+  
+  b[n] = 0.;
+} 
+
+__global__ void identity(double* a, int m){
+  int i = blockDim.x*blockIdx.x + threadIdx.x;
+  int j = blockDim.y*blockIdx.y + threadIdx.y;
+
+  if (i < m && j < m){
+
+    if (i = j){
+      a[i][j] = 1.;
+    }
+
+    else{
+      a[i][j] = 0.;
+    }
+  }
+}
+
+__global__ void assign(double* a, double b, int n){
+  int i = blockDim.x*blockIdx.x + threadIdx.x;
+
+  if (i < n){
+    a[i] = b;
   }
 }
 
@@ -50,9 +94,7 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
   cudaMalloc(&d_v_Mid, dim*sizeof(cuDoubleComplex));
   cudaMalloc(&d_v_End, dim*sizeof(cuDoubleComplex));
   
-  for( int i = 0; i< dim; i++){
-    d_v_Start[i] = 1.;
-  }
+  assignr<<tpb,bpg>>(d_v_Start, 1., dim);
 
   Hoperate(H, d_v_Start, d_v_Mid, dim);
   //*********************************************************************************************************
@@ -62,9 +104,8 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
 
   cuDoubleComplex* y;
   cudaMalloc(&y, dim*sizeof(cuDoubleComplex));
-  for(int j = 0; j<dim; j++){
-    y[j] = make_cuDoubleComplex(0.,0.);
-  }
+  
+  assignr<<tpb,bpg>>(y,0., dim);
 
   cuDoubleComplex* beta;
   cudaMalloc(&beta, sizeof(cuDoubleComplex));
@@ -85,13 +126,17 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
   //Now we're done the first round!
   //*********************************************************************************************************
 
-  int exit = 0; // an exit flag
+  vector<double> d_ordered;
+
+
 
   double gs_Energy = 1.;
 
+  int returned;
+
   int iter = 0;
 
-  while( exit != 1){
+  while( abs(gs_Energy - d_ordered[num_Eig-1])> conv_req){
 
     iter++
 
@@ -99,7 +144,7 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
 
     d_a[iter] = cublasZdotc(dim, d_v_Mid, sizeof(cuDoubleComplex), d_v_End, sizeof(cuDoubleComplex));
 
-    vecdiff(d_v_End, d_v_End, d_a[iter], d_v_Mid, d_b[iter], d_v_Start);
+    vecdiff<<tpb,bpg>>(d_v_End, d_v_End, d_a[iter], d_v_Mid, d_b[iter], d_v_Start);
 
     d_b[iter+1].x = sqrt(cublasDznrm2(dim, d_v_End, sizeof(cuDoubleComplex)));
     d_b[iter+1].y = 0.;
@@ -107,12 +152,42 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
     alpha = make_cuDoubleComplex(1./d_b[iter+1].x,0.);
     cublasZaxpy(dim, alpha, d_v_End);
     
-    set(d_v_Start, d_v_Mid, dim);
-    set(d_v_Mid, d_v_End, dim);
-      
+    cublasZcopy(dim, d_v_Mid, sizeof(cuDoubleComplex), d_v_Start, sizeof(cuDoubleComplex));
+    cublasZcopy(dim, d_v_End, sizeof(cuDoubleComplex), d_v_Mid, sizeof(cuDoubleComplex));
+
+    // In the original code, we started diagonalizing from iter = 5 and above. I start from iter = 1 to minimize issues of control flow
+    double* d_diag;
+    cudaMalloc(&d_diag, max_Iter*sizeof(double));
+
+    double* d_offdia;
+    cudaMalloc(&d_diag, max_Iter*sizeof(double));
+
+    complextodoubler<<tpb,bpg>>(d_diag, a, iter, max_Iter);
+    complextodoubler2<<tpb,bpg>>(d_offida, b, iter, max_Iter);
+
+    double* d_H_eigen;
+    size_t d_eig_pitch;
+
+
+    cudaMallocPitch(&d_H_eigen, &d_eig_pitch, max_Iter*sizeof(double), max_Iter);
+    identity<<tpb, bpg>>(d_H_eigen, max_Iter);
+
+    returned = tqli(d_diag, d_offdia, iter + 1, d_H_eigen, 0);    
+
+    assign<<tpb,bpg>>(d_ordered, d_diag[0], num_Eig);
+    
+    for(int i = 1, i < max_Iter, i++){
+      for(int j = 0, j< num_Eig, j++){
+        if (d_diag[i]< d_ordered[j]){
+          d_ordered[j] = d_diag[i];
+          break;
+        }
+      }
+    }
+  }
 }
 
-__device__ Hoperate(const cuDoubleComplex* H, const cuDoubleComplex*  v0, const cuDoubleComplex v1, const int dim){
+__device__ void Hoperate(cuDoubleComplex* H, cuDoubleComplex* v0, cuDoubleComplex v1, int dim){
   cuDoubleComplex* alpha;
   cudaMalloc(&alpha, sizeof(cuDoubleComplex));
   cuDoubleComplex* beta;

@@ -1,10 +1,21 @@
+// Katharine Hyatt
+// A set of functions to implement the Lanczos method for a generic Hamiltonian
+// Based on the codes Lanczos_07.cpp and Lanczos07.h by Roger Melko
+//-------------------------------------------------------------------------------
+
 #include<lanczos.h>
 // h_ means this variable is going to be on the host (CPU)
 // d_ means this variable is going to be on the device (GPU)
 // s_ means this variable is shared between threads on the GPU
+// The notation <<x,y>> before a function defined as global tells the GPU how many threads per block to use
+// and how many blocks per grid to use
+// blah.x means the real part of blah, if blah is a data type from cuComplex.h
+// blah.y means the imaginary party of blah, if blah is a data type from cuComplex.h
+// threadIdx.x (or block) means the "x"th thread from the left in the block (or grid)
+// threadIdx,y (or block) means the "y"th thread from the top in the block (or grid)
 
-
-//Function vecdiff: calculates the difference between some vectors, one of which is multiplied by a scalar
+//Function vecdiff: calculates the difference between some vectors, two of which is multiplied by a scalar
+//Implements w = x - a*y - b*z 
 //-------------------------------------------------------------------------------------------------------
 //Input: w, a "dummy pointer" to the vector that is changed
 //       x, the vector that a*y and b*z are subtracted from 
@@ -22,7 +33,7 @@ __global__ void vecdiff(cuDoubleComplex* w, cuDoubleComplex* x, cuDoubleComplex 
 
   int i = blockDim.x*blockIdx.x + threadIdx.x;
   if (i < n) {
-    w[i] = x[i] - alpha*y[i] - beta*z[i];
+    w[i] = cuCsub(x[i],cuCsub(cuCmul(alpha,y[i]),cuCmul(beta,z[i]))); //this is the dirtiest thing ever
   }
   __syncthreads();
 }
@@ -41,7 +52,6 @@ __global__ void assignr(cuDoubleComplex* a, double b, int n){
   if (i < n){
     a[i] = make_cuDoubleComplex(b,0.);
   }
-  __syncthreads();
 }
 
 //Function complextodoubler: assigns the real parts of complex numbers in an array to doubles in another array
@@ -57,10 +67,8 @@ __global__ void complextodoubler(vector<cuDoubleComplex>* a, vector<double>* b, 
   int i = blockDim.x*blockIdx.x + threadIdx.x;
 
   if(i <= n){
-    b[i] = a[i].x;
+    b[i] = a[i].x; 
   }
-
-  __syncthreads();
 }
 
 //Same as above, but in this case the parts are shifted by one space in the vector
@@ -70,10 +78,9 @@ __global__ void complextodoubler2(vector<cuDoubleComplex>* a, vector<double>* b,
   if(i <= n){
     b[i-1] = a[i].x;
   }
-  
-  b[n] = 0.;
-
-  __syncthreads();
+  if(i == n+1){
+    b[i-1] = 0.;
+  }
 } 
 
 __global__ void identity(double* a, int m){
@@ -118,19 +125,22 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
 
   cuDoubleComplex* d_H;
 
-  cudaMallocPitch(&d_H, &h_pitch, dim*sizeof(cuDoubleComplex), dim);
+  cudaMallocPitch(&d_H, &h_pitch, dim*sizeof(cuDoubleComplex), dim); //allocating memory in the GPU for our matrix
 
-  cudaMemcpy2D(d_H, d_pitch, &H, h_pitch, dim, dim, cudaMemcpyHosttoDevice );
+  cudaMemcpy2D(d_H, d_pitch, &H, h_pitch, dim, dim, cudaMemcpyHosttoDevice ); //copying the matrix into the GPU
   // the above memory code could be total lunacy
 
   //Now that I have the Hamiltonian on the GPU, it's time to start generating eigenvectors
 
   vector<cuDoubleComplex> d_a; //these are going to store the elements of the tridiagonal matrix
-  vector<cuDoubleComplex> d_b;
+  vector<cuDoubleComplex> d_b; //they have to be cuDoubleComplex because that's the only input type the cublas functions I need will take
+
+  int tpb = 256; //threads per block - a conventional number
+  int bpg = (dim + tpb - 1)/tpb; //blocks per grid
 
   //Making the "random" starting vector
 
-  cuDoubleComplex* d_v_Start;
+  cuDoubleComplex* d_v_Start; //the three vectors we'll use later
   cuDoubleComplex* d_v_Mid;
   cuDoubleComplex* d_v_End;
 
@@ -140,7 +150,7 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
   
   assignr<<tpb,bpg>>(d_v_Start, 1., dim);
 
-  Hoperate(H, d_v_Start, d_v_Mid, dim);
+  Hoperate(d_H, d_v_Start, d_v_Mid, dim);
   //*********************************************************************************************************
   // This is just the first steps so I can do the rest  
   d_a.push_back(cublasZdotc(dim, d_v_Start, sizeof(cuDoubleComplex), d_v_Mid, sizeof(cuDoubleComplex)));
@@ -149,21 +159,19 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
   cuDoubleComplex* y;
   cudaMalloc(&y, dim*sizeof(cuDoubleComplex));
   
-  assignr<<tpb,bpg>>(y,0., dim);
+  assignr<<tpb,bpg>>(y,0., dim); //a dummy vector of 0s that i can stick in my functions
 
   cuDoubleComplex* beta;
   cudaMalloc(&beta, sizeof(cuDoubleComplex));
-  *beta = make_cuDoubleComplex(0.,0.);
+  *beta = make_cuDoubleComplex(0.,0.); //a dummy coefficient of 0 that i can stick in my functions
   
-  int tpb = 256; //threads per block
-  int bpg = (dim + tpb - 1)/tpb; //blocks per grid
   vecdiff(d_v_Mid, d_v_Mid, d_a[0], d_v_Start, y[0], y);
   d_b.push_back(make_cuDoubleComplex(sqrt(cublasDznrm2(dim, d_v_Mid, sizeof(cuDoubleComplex))),0.));
   // this function (above) takes the norm
   
   cuDoubleComplex* alpha;
   cudaMalloc(&alpha, sizeof(cuDoubleComplex));
-  cuDoubleComplex *alpha = make_cuDoubleComplex(1./d_b[1].x,0.);
+  cuDoubleComplex *alpha = make_cuDoubleComplex(1./d_b[1].x,0.); //alpha = 1/beta in v1 = v1 - alpha*v0
 
   cublasZaxpy(dim, alpha, d_v_Mid, sizeof(cuDoubleComplex), y, sizeof(cuDoubleComplex)); // function performs a*x + y
 
@@ -175,7 +183,7 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
 
   assign<<tpb,bpg>>(d_ordered, 0., num_Eig);
 
-  double gs_Energy = 1.;
+  double gs_Energy = 1.; //the lowest energy
 
   int returned;
 
@@ -186,11 +194,11 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
   vector<double> d_offdia;
 
 
-  while( abs(gs_Energy - d_ordered[num_Eig-1])> conv_req){
+  while( abs(gs_Energy - d_ordered[num_Eig-1])> conv_req){ //this is a cleaner version than what was in the original - way fewer if statements
 
     iter++
 
-    Hoperate(H, d_v_Mid, d_v_End, dim);
+    Hoperate(d_H, d_v_Mid, d_v_End, dim);
 
     d_a.push_back(cublasZdotc(dim, d_v_Mid, sizeof(cuDoubleComplex), d_v_End, sizeof(cuDoubleComplex)));
 
@@ -201,10 +209,10 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
     alpha = make_cuDoubleComplex(1./d_b[iter+1].x,0.);
     cublasZaxpy(dim, alpha, d_v_End);
     
-    cublasZcopy(dim, d_v_Mid, sizeof(cuDoubleComplex), d_v_Start, sizeof(cuDoubleComplex));
+    cublasZcopy(dim, d_v_Mid, sizeof(cuDoubleComplex), d_v_Start, sizeof(cuDoubleComplex)); //switching my vectors around for the next iteration
     cublasZcopy(dim, d_v_End, sizeof(cuDoubleComplex), d_v_Mid, sizeof(cuDoubleComplex));
 
-    d_diag.push_back(0.);
+    d_diag.push_back(0.); //adding another spot in the tridiagonal matrix representation
     d_offdia.push_back(0.);
 
     complextodoubler<<tpb,bpg>>(d_diag, d_a, iter);
@@ -213,27 +221,45 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
     double* d_H_eigen;
     size_t d_eig_pitch;
 
-
     cudaMallocPitch(&d_H_eigen, &d_eig_pitch, iter*sizeof(double), iter);
-    identity<<tpb, bpg>>(d_H_eigen, iter);
+    identity<<tpb, bpg>>(d_H_eigen, iter); //set this matrix to the identity
 
-    returned = tqli(d_diag, d_offdia, iter + 1, d_H_eigen, 0);    
+    returned = tqli(d_diag, d_offdia, iter + 1, d_H_eigen, 0); //tqli is in a separate file   
 
     assign<<tpb,bpg>>(d_ordered, d_diag[0], num_Eig);
     
-    for(int i = 1, i < max_Iter, i++){
-      for(int j = 0, j< num_Eig, j++){
-        if (d_diag[i]< d_ordered[j]){
-          d_ordered[j] = d_diag[i];
+    for(int i = 1, i < max_Iter, i++){ //todo: rewrite this as a setup where if you want 
+      for(int j = 0, j< num_Eig, j++){// n smallest eigenvalues, you take the first n
+        if (d_diag[i]< d_ordered[j]){ //elements, sort them, then add one element at a time 
+          d_ordered[j] = d_diag[i]; // and binary search to see if it is smaller than any other
           break;
         }
       }
     }
 
     gs_Energy = d_ordered[num_Eig - 1];
-  }
-}
+  } //unlike the original code, this resizes every time iter increases so we don't have to set and pass a maxIter at the start
+  
 
+}
+// things left to do:
+// pass eigenvectors back to CPU, output them
+// keep eigenvectors
+// write a thing (separate file) to call routines to find expectation values, should be faster on GPU 
+// put some error conditions into functions to throw errors if dimensions don't match
+
+//Function Hoperate: applies H to some vector to give a = H*b
+//NOTE: this function CANNOT be called from the CPU.
+//Only variables and functions on the GPU may access it.
+//------------------------------------------------------------
+//Input: H, a matrix of complex numbers
+//       v0, the vector H is applied to
+//       v1, a pointer to  the output vector
+//       dim, the number of elements in the vectors and the length of one side of H
+//------------------------------------------------------------
+//Output: v1, the result of H*v0
+//        All other quantities are unchanged
+//------------------------------------------------------------
 __device__ void Hoperate(cuDoubleComplex* H, cuDoubleComplex* v0, cuDoubleComplex v1, int dim){
   cuDoubleComplex* alpha;
   cudaMalloc(&alpha, sizeof(cuDoubleComplex));
