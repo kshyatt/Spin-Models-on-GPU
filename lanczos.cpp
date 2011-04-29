@@ -83,19 +83,21 @@ __global__ void complextodoubler2(vector<cuDoubleComplex>* a, vector<double>* b,
   }
 } 
 
-__global__ void identity(double* a, int m){
+__global__ void zero(double* a, int m){
   int i = blockDim.x*blockIdx.x + threadIdx.x;
   int j = blockDim.y*blockIdx.y + threadIdx.y;
 
-  if (i < m && j < m){
+  if ( i< m && j < m){
+    a[i][j] = 0.;
+  }
+}
+// Note: to get the identity matrix, apply the fuction zero above first
+__global__ void identity(double* a, int m){
+  int i = blockDim.x*blockIdx.x + threadIdx.x;
+  
+  if (i < m ){
 
-    if (i = j){
-      a[i][j] = 1.;
-    }
-
-    else{
-      a[i][j] = 0.;
-    }
+    a[i][i] = 1.
   }
 }
 
@@ -148,7 +150,7 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
   cudaMalloc(&d_v_Mid, dim*sizeof(cuDoubleComplex));
   cudaMalloc(&d_v_End, dim*sizeof(cuDoubleComplex));
   
-  assignr<<tpb,bpg>>(d_v_Start, 1., dim);
+  assignr<<bpg,tpb<>>(d_v_Start, 1., dim);
 
   Hoperate(d_H, d_v_Start, d_v_Mid, dim);
   //*********************************************************************************************************
@@ -159,13 +161,13 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
   cuDoubleComplex* y;
   cudaMalloc(&y, dim*sizeof(cuDoubleComplex));
   
-  assignr<<tpb,bpg>>(y,0., dim); //a dummy vector of 0s that i can stick in my functions
+  assignr<<bpg,tpb>>(y,0., dim); //a dummy vector of 0s that i can stick in my functions
 
   cuDoubleComplex* beta;
   cudaMalloc(&beta, sizeof(cuDoubleComplex));
   *beta = make_cuDoubleComplex(0.,0.); //a dummy coefficient of 0 that i can stick in my functions
   
-  vecdiff(d_v_Mid, d_v_Mid, d_a[0], d_v_Start, y[0], y);
+  vecdiff<<bpg,tpb>>(d_v_Mid, d_v_Mid, d_a[0], d_v_Start, y[0], y);
   d_b.push_back(make_cuDoubleComplex(sqrt(cublasDznrm2(dim, d_v_Mid, sizeof(cuDoubleComplex))),0.));
   // this function (above) takes the norm
   
@@ -181,7 +183,7 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
   double* d_ordered;
   cudaMalloc(&d_ordered, num_Eig*sizeof(double));
 
-  assign<<tpb,bpg>>(d_ordered, 0., num_Eig);
+  assign<<bpg,tpb>>(d_ordered, 0., num_Eig);
 
   double gs_Energy = 1.; //the lowest energy
 
@@ -202,7 +204,7 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
 
     d_a.push_back(cublasZdotc(dim, d_v_Mid, sizeof(cuDoubleComplex), d_v_End, sizeof(cuDoubleComplex)));
 
-    vecdiff<<tpb,bpg>>(d_v_End, d_v_End, d_a[iter], d_v_Mid, d_b[iter], d_v_Start);
+    vecdiff<<bpg,tpb>>(d_v_End, d_v_End, d_a[iter], d_v_Mid, d_b[iter], d_v_Start);
 
     d_b.push_back(make_cuDoubleComplex(sqrt(cublasDznrm2(dim, d_v_End, sizeof(cuDoubleComplex))),0.));
     
@@ -215,14 +217,15 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
     d_diag.push_back(0.); //adding another spot in the tridiagonal matrix representation
     d_offdia.push_back(0.);
 
-    complextodoubler<<tpb,bpg>>(d_diag, d_a, iter);
-    complextodoubler2<<tpb,bpg>>(d_offida, d_b, iter);
+    complextodoubler<<bpg,tpb>>(d_diag, d_a, iter);
+    complextodoubler2<<bpg,tpb>>(d_offida, d_b, iter);
 
     double* d_H_eigen;
     size_t d_eig_pitch;
 
     cudaMallocPitch(&d_H_eigen, &d_eig_pitch, iter*sizeof(double), iter);
-    identity<<tpb, bpg>>(d_H_eigen, iter); //set this matrix to the identity
+    zero<<bpg,tpb>>(d_H_eigen, iter);
+    identity<<bpg,tpb>>(d_H_eigen, iter); //set this matrix to the identity
 
     returned = tqli(d_diag, d_offdia, iter + 1, d_H_eigen, 0); //tqli is in a separate file   
 
@@ -239,14 +242,24 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, const int num_Eig, const
 
     gs_Energy = d_ordered[num_Eig - 1];
   } //unlike the original code, this resizes every time iter increases so we don't have to set and pass a maxIter at the start
-  
+
+  double* h_ordered;
+
+  cudaHostMalloc(&h_ordered, num_Eig*sizeof(double)); //a place to put the eigenvalues on the CPU
+
+  cudaMemcpy(h_ordered, d_ordered, num_Eig*sizeof(double), cudaMemcopyDevicetoHost); // moving the eigenvalues over
+
+  for(int i = 0; i < num_Eig, i++){
+    cout<<h_ordered[i]<<"\t"<<endl;
+  } //write out the eigenenergies
 
 }
 // things left to do:
-// pass eigenvectors back to CPU, output them
+// write the dynamic array thing so i can get rid of vector (RAGE)
 // keep eigenvectors
 // write a thing (separate file) to call routines to find expectation values, should be faster on GPU 
 // put some error conditions into functions to throw errors if dimensions don't match
+// write that tqli thing
 
 //Function Hoperate: applies H to some vector to give a = H*b
 //NOTE: this function CANNOT be called from the CPU.
