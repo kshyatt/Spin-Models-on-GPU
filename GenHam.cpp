@@ -26,9 +26,10 @@ GENHAM::GENHAM(const int Ns, const h_float J_, const h_float J2_, const h_float 
           Basis.push_back(i1);
           BasPos.at(i1)=Basis.size()-1;
           Vdim++;
+	  cout<<BasPos.at(i1)<<endl;
       }
   }//Dim
-
+  
   cout<<"Vdim "<<Vdim<<" "<<Dim<<endl;
 
 }//constructor

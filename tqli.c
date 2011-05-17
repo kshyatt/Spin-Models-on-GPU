@@ -1,6 +1,7 @@
 // tqli - a program to implement the tqli method 
 // from numerical recipes
 //-----------------------------------------------
+#define SIGN(a,b) ((b) >= 0.0 ? fabs(a) : -fabs(a))
 
 void tqli(double d[], double e[], int n, double **z)
 
@@ -8,14 +9,14 @@ void tqli(double d[], double e[], int n, double **z)
   double pythag(double a, double b);
   int m,l,iter,i,k;
   double s,r,p,g,f,dd,c,b;
-  for (i=2;i<=n;i++){
+  for (i=1;i<n;i++){
      e[i-1]=e[i];
   }
-  e[n]=0.0;
-  for (l=1;l<=n;l++) {
+  e[n-1]=0.0;
+  for (l=0;l<n-1;l++) {
     iter=0;
     do {
-      for (m=l;m<=n-1;m++) {
+      for (m=l;m<n-1;m++) {
         dd=fabs(d[m])+fabs(d[m+1]);
         
         if ((double)(fabs(e[m])+dd) == dd) break;

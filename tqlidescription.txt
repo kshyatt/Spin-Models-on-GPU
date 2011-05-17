@@ -1,0 +1,25 @@
+- First, shifts all elements off off diagonal array down by one index
+- Sets the last element as 0
+
+New loop:
+
+- dd is the sum of abs values of 'adjacent' diagonal elements
+- if the mth off diagonal elements has abs value 0, then keep dd = |d[m]| + |d[m+1]|
+- otherwise set g = (d[l+1] + d[l])/(2*e[l]) and r = sqrt(g^2 + 1)
+- now set g = d[m] - d[l] + e[l]/(g + signof(g)*r)
+- set s = c = 1.
+- set p = 0.
+- loop over all m - 1 => i > l
+  - set f = s*e[i] = e[i]
+  - set b = c*e[i] = e[i]
+  - set e[i+1] = r = sqrt(f^2 + g^2)
+  - if r = 0, d[i+1] stays fixed, set e[m] = 0.
+  - otherwise
+  - set s = f/r
+  - set c = g/r
+  - set g = d[i+1] - p = d[i+1]
+  - set r = (d[i]-g)*s+2.0*c*b;
+  - set d[i+1]=g+(p=s*r);
+  - set g=c*r-b;
+  - also set the eigenvectors looool
+- now if r = 0 AND i > l set d[l] -= p; e[l]=g; e[m]=0.0;
