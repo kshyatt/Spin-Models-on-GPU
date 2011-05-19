@@ -1,12 +1,19 @@
+//#include"tqli.h"
 // tqli - a program to implement the tqli method 
 // from numerical recipes
 //-----------------------------------------------
+
+#include<stdio.h>
+#include<math.h>
 #define SIGN(a,b) ((b) >= 0.0 ? fabs(a) : -fabs(a))
 
-void tqli(double d[], double e[], int n, double **z)
+
+double pythag(double a, double b);
+
+int tqli(double d[], double e[], int n, double **z)
 
 {
-  double pythag(double a, double b);
+ 
   int m,l,iter,i,k;
   double s,r,p,g,f,dd,c,b;
   for (i=1;i<n;i++){
@@ -23,7 +30,10 @@ void tqli(double d[], double e[], int n, double **z)
         
       }
       if (m != l) {
-        if (iter++ == 30) nrerror("Too many iterations in tqli");
+        if (iter++ == 30){
+		printf("Too many iterations in tqli \n");
+		return 1;
+	}
         g=(d[l+1]-d[l])/(2.0*e[l]);
         r=pythag(g,1.0);
         g=d[m]-d[l]+e[l]/(g+SIGN(r,g));
@@ -68,6 +78,6 @@ double pythag(double a, double b){
   double absa, absb;
   absa=fabs(a);
   absb=fabs(b);
-  if (absa > absb) return absa*sqrt(1.0+SQR(absb/absa));
-  else return (absb == 0.0 ? 0.0 : absb*sqrt(1.0+SQR(absa/absb)));
+  if (absa > absb) return absa*sqrt(1.0+(absb/absa)*(absb/absa));
+  else return (absb == 0.0 ? 0.0 : absb*sqrt(1.0+(absa/absb)*(absa/absb)));
 }
