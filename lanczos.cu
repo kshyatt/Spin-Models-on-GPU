@@ -194,11 +194,6 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, int max_Iter, const int 
   arraysalloc<<<1, max_Iter>>>(d_eigen_Array, dim, 0); //time to make the actual arrays of the eigenvectors
 
   assignr<<<bpg,tpb>>>(d_eigen_Array[0], 1., dim); //assigning the values of the "random" starting vector
-
-  //cuDoubleComplex* alpha;
-  //status4 = cudaMalloc(&alpha, sizeof(cuDoubleComplex));
-  //cuDoubleComplex* beta;
-  //status3 = cudaMalloc(&beta, sizeof(cuDoubleComplex));
   
   cuDoubleComplex alpha = make_cuDoubleComplex(1.,0.);
   cuDoubleComplex beta = make_cuDoubleComplex(0.,0.); 
@@ -306,7 +301,7 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, int max_Iter, const int 
     assign<<<tpb,bpg>>>(d_ordered, d_diag[0], num_Eig);
     
     for(int i = 1; i < sizeof(d_eigen_Array); i++){ //todo: rewrite this as a setup where if you want 
-      for(int j = 0; j< sizeof(d_ordered); j++){// n smallest eigenvalues, you take the first n
+      for(int j = 0; j< num_Eig; j++){// n smallest eigenvalues, you take the first n
         if (d_diag[i]< d_ordered[j]){ //elements, sort them, then add one element at a time 
           d_ordered[j] = d_diag[i]; // and binary search to see if it is smaller than any other
           break;
