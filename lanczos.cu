@@ -102,7 +102,7 @@ __global__ void zero(double** a, int m){
   }
 }
 // Note: to get the identity matrix, apply the fuction zero above first
-__global__ void identity(double** a, int m){
+__global__ void eye(double** a, int m){
   int i = blockDim.x*blockIdx.x + threadIdx.x;
   
   if (i < m ){
@@ -116,12 +116,92 @@ __global__ void arraysalloc(cuDoubleComplex** a, int n, int m){
   a[i] = (cuDoubleComplex*)malloc(n*sizeof(cuDoubleComplex));
 }
 
-//Function lanczos: takes a hermitian matrix H, tridiagonalizes it, and finds the n smallest eigenvalues - this version only returns eigenvalues, not
-// eigenvectors. Doesn't use sparse matrices yet either, derp. Should be a very simple change to make using CUSPARSE, which has functions for operations
-// between sparse matrices and dense vectors
+//Function copyHamiltonian: copies all the CSR data for the Hamiltonian to the device - made this to clean stuff up
+__host__ void copyHamiltonian(const int h_num_nonzeroelem, const cuDoubleComplex* h_values, const int* h_rowstart, const int* h_colindex, const cusparseMatDescr_t* h_descrH, int dim, int* d_num_nonzeroelem, cuDoubleComplex* d_values, int* d_rowstart, int* d_colindex, cusparseMatDescr_t* d_descrH, int* d_dim){
+  
+
+  cudaError_t error;
+
+  error = cudaMalloc(&d_num_nonzeroelem, sizeof(int));
+
+  if (error != CUDA_SUCCESS){
+    printf("Num of elements allocation on device failed! \n");
+  }
+
+  error = cudaMemcpy(d_num_nonzeroelem, &h_num_nonzeroelem, sizeof(int), cudaMemcpyHostToDevice);
+
+  if (error != CUDA_SUCCESS){
+    printf("Num of elements copy from host to device failed! \n");
+  }
+
+  error = cudaMalloc(&d_values, h_num_nonzeroelem*sizeof(cuDoubleComplex));
+
+  if (error != CUDA_SUCCESS){
+    printf("Values allocation on device failed! \n");
+  }
+
+  error = cudaMemcpy(d_values, h_values, h_num_nonzeroelem*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
+
+  if (error != CUDA_SUCCESS){
+    printf("Values copy from host to device failed! \n");
+  }
+
+  error = cudaMalloc(&d_rowstart, sizeof(h_rowstart)*sizeof(int));
+  
+  if (error != CUDA_SUCCESS){
+    printf("Row start allocation on device failed! \n");
+  }
+
+  error = cudaMemcpy(d_rowstart, h_rowstart, sizeof(h_rowstart)*sizeof(int), cudaMemcpyHostToDevice);
+
+  if (error != CUDA_SUCCESS){
+    printf("Row start copy from host to device failed! \n");
+  }
+
+  error = cudaMalloc(&d_colindex, h_num_nonzeroelem*sizeof(int));
+
+  if (error != CUDA_SUCCESS){
+    printf("Column index allocation on device failed! \n");
+  }
+
+  error = cudaMemcpy(d_colindex, h_colindex, h_num_nonzeroelem*sizeof(int), cudaMemcpyHostToDevice);
+
+  if (error != CUDA_SUCCESS){
+    printf("Column index copy from host to device failed! \n");
+  }
+
+  error = cudaMalloc(&d_descrH, sizeof(cusparseMatDescr_t));
+  
+  if (error != CUDA_SUCCESS){
+    printf("Matrix description allocation on device failed! \n");
+  }
+
+  error = cudaMemcpy(d_descrH, h_descrH, sizeof(cusparseMatDescr_t), cudaMemcpyHostToDevice);
+
+  if (error != CUDA_SUCCESS){
+    printf("Matrix description copy from host to device failed! \n");
+  }
+
+  error = cudaMalloc(&d_dim, sizeof(int));
+  if (error != CUDA_SUCCESS){
+    printf("Matrix dimension allocation on device failed! \n");
+  }
+
+  error = cudaMemcpy(d_dim, &dim, sizeof(int), cudaMemcpyHostToDevice);
+
+  if (error != CUDA_SUCCESS){
+    printf("Matrix dimension copy from host to device failed! \n");
+  }
+
+}
+//Function lanczos: takes a hermitian matrix H, tridiagonalizes it, and finds the n smallest eigenvalues.
 //---------------------------------------------------------------------------------------------------------------------------------------------------
-// Input: h_H, a Hermitian matrix of complex numbers (not yet sparse)
-//        dim, the dimension of the matrix
+// Input: num_nonzeroelem, the number of nonzero elements in the Hamiltonian
+//        values, an array of the nonzero values
+//        rowstart, an array of the index of the values that lead a row (see CSR matrix representation documentation for more on this)
+//        colindex, and array of the column in which each element in values resides
+//        descrH, the description of H that cusparse functions need
+//        dim, the dimension of the full mxm matrix
 //        max_Iter, the starting number of iterations we'll try
 //        num_Eig, the number of eigenvalues we're interested in seeing
 //        conv_req, the convergence we'd like to see
@@ -129,9 +209,11 @@ __global__ void arraysalloc(cuDoubleComplex** a, int n, int m){
 // Output: h_ordered, the array of the num_Eig smallest eigenvalues, ordered from smallest to largest
 //---------------------------------------------------------------------------------------------------------------------------------------------------        
 
+
+
 int main(){}
 
-void lanczos(const cuDoubleComplex* h_H, const int dim, int max_Iter, const int num_Eig, const double conv_req){
+void lanczos(const int h_num_nonzeroelem, const cuDoubleComplex* h_values, const int* h_rowstart, const int* h_colindex, const cusparseMatDescr_t *h_descrH, const int dim, int max_Iter, const int num_Eig, const double conv_req){
 
   cublasStatus linalgstat;
   linalgstat = cublasInit(); //have to initialize the cuBLAS environment, or my program won't work! I could use this later to check for errors as well
@@ -149,24 +231,14 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, int max_Iter, const int 
 
   cudaError_t status1, status2, status3, status4; //this is to throw errors in case things (mostly memory) in the code fail!  
 
-  size_t h_pitch;
-  size_t d_pitch = h_pitch;
+  int* d_num_nonzeroelem;
+  cuDoubleComplex* d_values;
+  int* d_rowstart;
+  int* d_colindex; 
+  cusparseMatDescr_t* d_descrH;
+  int* d_dim;
 
-  cuDoubleComplex* d_H;
-
-  status1 = cudaMallocPitch(&d_H, &h_pitch, dim*sizeof(cuDoubleComplex), dim); //allocating memory in the GPU for our matrix
-  if (status1 != CUDA_SUCCESS){
-    printf("Hamiltonian device memory allocation failed! \n");
-  }
-
-  status2 = cudaMemcpy2D(d_H, d_pitch, &h_H, h_pitch, dim, dim, cudaMemcpyHostToDevice ); //copying the matrix into the GPU
-  // the above memory code could be total lunacy
-
-  if (status2 != CUDA_SUCCESS){
-    printf("Hamiltonian copy from host to device failed! \n");
-  }
-
-  //Now that I have the Hamiltonian on the GPU, it's time to start generating eigenvectors
+  copyHamiltonian(h_num_nonzeroelem, h_values, h_rowstart, h_colindex, h_descrH, dim, d_num_nonzeroelem, d_values, d_rowstart, d_colindex, d_descrH, d_dim);
 
   cuDoubleComplex* d_a; //these are going to store the elements of the tridiagonal matrix
   cuDoubleComplex* d_b; //they have to be cuDoubleComplex because that's the only input type the cublas functions I need will take
@@ -195,14 +267,27 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, int max_Iter, const int 
 
   assignr<<<bpg,tpb>>>(d_eigen_Array[0], 1., dim); //assigning the values of the "random" starting vector
   
-  cuDoubleComplex alpha = make_cuDoubleComplex(1.,0.);
-  cuDoubleComplex beta = make_cuDoubleComplex(0.,0.); 
+  cuDoubleComplex* alpha; 
+  status3 = cudaMalloc(&alpha, sizeof(cuDoubleComplex));
+  *alpha = make_cuDoubleComplex(1.,0.);
+  cuDoubleComplex* beta;
+  status4 = cudaMalloc(&beta, sizeof(cuDoubleComplex));
+  *beta = make_cuDoubleComplex(0.,0.);
 
-  cublasZgemv('N', dim, dim, alpha, d_H, dim*sizeof(cuDoubleComplex), d_eigen_Array[0], sizeof(cuDoubleComplex), beta, d_eigen_Array[1], sizeof(cuDoubleComplex)); // the Hamiltonian is applied here
+  if ((status3 != CUDA_SUCCESS) || (status4 != CUDA_SUCCESS)){
+    printf("Dummy constants alpha and beta initialization failed! \n");
+  }
+
+  cusparseOperation_t* A;
+  cudaMalloc(&A, sizeof(cusparseOperation_t));
+
+  *A = CUSPARSE_OPERATION_NON_TRANSPOSE;
+
+  cusparseZcsrmv(sparsehandle, *A, *d_dim, *d_dim, *alpha, *d_descrH, d_values, d_rowstart, d_colindex, d_eigen_Array[0], *beta, d_eigen_Array[1]); // the Hamiltonian is applied here
 
   //*********************************************************************************************************
   // This is just the first steps so I can do the rest  
-  d_a[0] = cublasZdotc(dim, d_eigen_Array[0], sizeof(cuDoubleComplex), d_eigen_Array[1], sizeof(cuDoubleComplex));
+  d_a[0] = cublasZdotc(*d_dim, d_eigen_Array[0], sizeof(cuDoubleComplex), d_eigen_Array[1], sizeof(cuDoubleComplex));
   d_b[0] = make_cuDoubleComplex(0.,0.);
 
   cuDoubleComplex* y;
@@ -212,9 +297,9 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, int max_Iter, const int 
     printf("Memory allocation of y dummy vector failed! \n");
   }
   
-  assignr<<<bpg,tpb>>>(y,0., dim); //a dummy vector of 0s that i can stick in my functions
+  assignr<<<bpg,tpb>>>(y, 0., *d_dim); //a dummy vector of 0s that i can stick in my functions
 
-  vecdiff<<<bpg,tpb>>>(d_eigen_Array[1], d_eigen_Array[1], d_a[0], d_eigen_Array[0], y[0], y, dim);
+  vecdiff<<<bpg,tpb>>>(d_eigen_Array[1], d_eigen_Array[1], d_a[0], d_eigen_Array[0], y[0], y, *d_dim);
   d_b[1] = make_cuDoubleComplex(sqrt(cublasDznrm2(dim, d_eigen_Array[1], sizeof(cuDoubleComplex))),0.);
   // this function (above) takes the norm
   
@@ -245,8 +330,10 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, int max_Iter, const int 
   double* d_diag;
   double* d_offdia;
 
-  status3 = cudaMalloc(&d_diag, num_Eig*sizeof(double));
-  status4 = cudaMalloc(&d_offdia, num_Eig*sizeof(double));
+  status3 = cudaMalloc(&d_diag, dim*sizeof(double));
+  status4 = cudaMalloc(&d_offdia, dim*sizeof(double));
+
+  thrust::device_ptr<double> dev_ptr(d_diag);
 
   if ((status3 != CUDA_SUCCESS) || (status4 != CUDA_SUCCESS)){
     printf("Second matrix elements array memory allocation failed! \n");
@@ -265,16 +352,18 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, int max_Iter, const int 
       printf("Copying last eigenvalue failed \n");
     }
 
-    cublasZgemv('N', dim, dim, alpha, d_H, dim*sizeof(cuDoubleComplex), d_eigen_Array[iter], sizeof(cuDoubleComplex), beta, d_eigen_Array[iter+1], sizeof(cuDoubleComplex)); // the Hamiltonian is applied here, in this gross expression
+    cusparseZcsrmv(sparsehandle, *A, *d_dim, *d_dim, *alpha, *d_descrH, d_values, d_rowstart, d_colindex, d_eigen_Array[iter], *beta, d_eigen_Array[iter+1]); // the Hamiltonian is applied here, in this gross expression
 
-    d_a[iter] = cublasZdotc(dim, d_eigen_Array[iter], sizeof(cuDoubleComplex), d_eigen_Array[iter + 1], sizeof(cuDoubleComplex));
+    d_a[iter] = cublasZdotc(*d_dim, d_eigen_Array[iter], sizeof(cuDoubleComplex), d_eigen_Array[iter + 1], sizeof(cuDoubleComplex));
 
     vecdiff<<<bpg,tpb>>>(d_eigen_Array[iter+1], d_eigen_Array[iter+1], d_a[iter], d_eigen_Array[iter], d_b[iter], d_eigen_Array[iter - 1], dim);
 
     d_b[iter+1] = make_cuDoubleComplex(sqrt(cublasDznrm2(dim, d_eigen_Array[iter+1], sizeof(cuDoubleComplex))),0.);
     
-    gamma = make_cuDoubleComplex(1./d_b[iter+1].x,0.);
-    cublasZaxpy(dim, gamma, d_eigen_Array[iter+1], sizeof(cuDoubleComplex), y, sizeof(cuDoubleComplex));
+    cuDoubleComplex* gamma;
+    cudaMalloc(&gamma, sizeof(cuDoubleComplex));
+    *gamma = make_cuDoubleComplex(1./d_b[iter+1].x,0.);
+    cublasZaxpy(d_dim, gamma, d_eigen_Array[iter+1], sizeof(cuDoubleComplex), y, sizeof(cuDoubleComplex));
     
     //cublasZcopy(dim, d_v_Mid, sizeof(cuDoubleComplex), d_v_Start, sizeof(cuDoubleComplex)); //switching my vectors around for the next iteration
     //cublasZcopy(dim, d_v_End, sizeof(cuDoubleComplex), d_v_Mid, sizeof(cuDoubleComplex)); unnecesarry now that i'm using the array of pointers
@@ -294,20 +383,17 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, int max_Iter, const int 
     }
     
     zero<<<bpg,tpb>>>(d_H_eigen, iter);
-    identity<<<bpg,tpb>>>(d_H_eigen, iter); //set this matrix to the identity
+    eye<<<bpg,tpb>>>(d_H_eigen, iter); //set this matrix to the identity
 
     returned = tqli(d_diag, d_offdia, iter + 1, d_H_eigen); //tqli is in a separate file   
 
-    assign<<<tpb,bpg>>>(d_ordered, d_diag[0], num_Eig);
+    //assign<<<tpb,bpg>>>(d_ordered, d_diag[0], num_Eig);
     
-    for(int i = 1; i < sizeof(d_eigen_Array); i++){ //todo: rewrite this as a setup where if you want 
-      for(int j = 0; j< num_Eig; j++){// n smallest eigenvalues, you take the first n
-        if (d_diag[i]< d_ordered[j]){ //elements, sort them, then add one element at a time 
-          d_ordered[j] = d_diag[i]; // and binary search to see if it is smaller than any other
-          break;
-        }
-      }
-    } // or just use radixsort!
+    
+    thrust::sort(dev_ptr, dev_ptr + *d_dim); //sorts the array of eigenvalues    
+
+    cudaMemcpy(d_ordered, d_diag, num_Eig*sizeof(double), cudaMemcpyDeviceToDevice);
+
 
     status2 = cudaMemcpy(&gs_Energy, &(d_ordered[num_Eig - 1]), sizeof(double), cudaMemcpyDeviceToHost);
 
@@ -387,7 +473,7 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, int max_Iter, const int 
   }
 
   for(int i = 0; i < num_Eig; i++){
-    printf("%d \n", h_ordered[i]);
+    printf("%lf \n", h_ordered[i]);
   } //write out the eigenenergies
 
   cudaFree(&alpha);
@@ -434,25 +520,5 @@ void lanczos(const cuDoubleComplex* h_H, const int dim, int max_Iter, const int 
 // write a thing (separate file) to call routines to find expectation values, should be faster on GPU 
 // make the tqli thing better!
 // do the hamiltonian generating stuff
+// change things in here to set device array values properly
 
-//Function Hoperate: applies H to some vector to give a = H*b
-//NOTE: this function CANNOT be called from the CPU.
-//Only variables and functions on the GPU may access it.
-//------------------------------------------------------------
-//Input: H, a matrix of complex numbers
-//       v0, the vector H is applied to
-//       v1, a pointer to  the output vector
-//       alpha, a dummy variable
-//       beta, a dummy variable
-//       dim, the number of elements in the vectors and the length of one side of H
-//------------------------------------------------------------
-//Output: v1, the result of H*v0
-//        All other quantities are unchanged
-//------------------------------------------------------------
-//__device__ void Hoperate(cuDoubleComplex* H, cuDoubleComplex* v0, cuDoubleComplex v1, cuDoubleComplex alpha, cuDoubleComplex beta, int dim){
-  
-//  v1 = cublasZgemv(N, dim, dim, alpha, &H, m*sizeof(cuDoubleComplex), v0, sizeof(cuDoubleComplex), beta, v1, sizeof(cuDoubleComplex));
-
-//}
-
-//fin

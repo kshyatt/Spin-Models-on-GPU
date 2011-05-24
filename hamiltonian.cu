@@ -109,7 +109,39 @@ int ConstructSparseMatrix(enum model_Type, int lattice_Size, long* Bond){
 		return 1;
 	}
 
-	int bpg;
-	int tpb; //these are going to need to depend on dim and Nsize
+	dim3 bpg = (ceil(dim/1024.), lattice_Size);
+	int tpb = 1024; //these are going to need to depend on dim and Nsize
 
-	FillSparse<<<bpg, tpb>>>(d_basis_Position, 
+	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, d_dim, H_vals, H_pos, d_Bond); //each block 
+
+}
+
+
+__global__ void FillSparse(long* d_basis_Position, long* d_basis, int* d_dim, cuDoubleComplex** H_vals, long** H_pos, long* d_Bond);
+
+	int T0 = blockIdx.y; //my indices!
+	int ii = threadIdx.x + 1024*blockIdx.x;
+
+	int si, sj,sk,sl; //spin operators
+	unsigned long tempi, tempj, tempod;
+	double tempD;
+
+	tempi = d_basis[ii];
+	H_pos[ii][0] = d_basis_Position[tempi];
+
+	tempD = HDiagPart(tempi);
+
+	H_vals[ii][0] = tempD;
+
+	si = d_Bond[T0];
+	tempod = tempi;
+	sj = d_Bond[T0 + lattice_Size];
+	
+	tempod ^= (1<<si);   //toggle bit 
+	tempod ^= (1<<sj);   //toggle bit 
+
+	if (d_basis_Position[tempod] != -1 && d_basis_Position[tempod] > ii){ //build only upper half of matrix
+        	H_pos[ii][T0] = d_basis_Position[tempod];
+        	tempD = HOFFdBondX(T0,tempi);
+        	H_vals[ii][T0] = tempD; 
+      	}
