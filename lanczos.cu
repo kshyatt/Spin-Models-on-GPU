@@ -111,10 +111,6 @@ __global__ void eye(double** a, int m){
   }
 }
 
-__global__ void arraysalloc(cuDoubleComplex** a, int n, int m){
-  int i = threadIdx.x + m;
-  a[i] = (cuDoubleComplex*)malloc(n*sizeof(cuDoubleComplex));
-}
 
 //Function copyHamiltonian: copies all the CSR data for the Hamiltonian to the device - made this to clean stuff up
 __host__ void copyHamiltonian(const int h_num_nonzeroelem, const cuDoubleComplex* h_values, const int* h_rowstart, const int* h_colindex, const cusparseMatDescr_t* h_descrH, int dim, int* d_num_nonzeroelem, cuDoubleComplex* d_values, int* d_rowstart, int* d_colindex, cusparseMatDescr_t* d_descrH, int* d_dim){
@@ -262,8 +258,8 @@ void lanczos(const int h_num_nonzeroelem, const cuDoubleComplex* h_values, const
   if (status1 != CUDA_SUCCESS){
     printf("Eigenvector array allocation failed! \n");
   }
-
-  arraysalloc<<<1, max_Iter>>>(d_eigen_Array, dim, 0); //time to make the actual arrays of the eigenvectors
+	//need to fix the below too
+  CDCarraysalloc<<<1, max_Iter>>>(d_eigen_Array, dim, 0); //time to make the actual arrays of the eigenvectors
 
   assignr<<<bpg,tpb>>>(d_eigen_Array[0], 1., dim); //assigning the values of the "random" starting vector
   
@@ -450,7 +446,7 @@ void lanczos(const int h_num_nonzeroelem, const cuDoubleComplex* h_values, const
           printf("Resizing d_eigen_Array failed! \n");
         }
 
-        arraysalloc<<<1, temp2 + 1>>>(d_eigen_Array, dim, temp2);
+        CDCarraysalloc<<<1, temp2 + 1>>>(d_eigen_Array, dim, temp2);//need to change this
                 
         cudaFree(temp); 
         //resizing
