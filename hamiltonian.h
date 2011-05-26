@@ -2,8 +2,9 @@
 #include<iostream>
 #include<cstdlib>
 #include<algorithm>
-#include<cuda.h>
+#include"cuda.h"
 #include"cuComplex.h"
+
 
 using namespace std;
 
@@ -32,14 +33,14 @@ struct Hamiltonian addpoint(Hamiltonian H, double val, long i, long j){
 //keeping this stuff commented out for now 
 
 __global__ void CDCarraysalloc(cuDoubleComplex** a, long dim, long n, long m){
-  int i = 256*blockIdx.x + threadIdx.x + m;
+  long i = 256*blockIdx.x + threadIdx.x + m;
   if (i < dim){
     a[i] = (cuDoubleComplex*)malloc(n*sizeof(cuDoubleComplex));
   }
 }
 
 __global__ void longarraysalloc(long** a, long dim, long n, long m){
-  int i = 256*blockIdx.x + threadIdx.x + m;
+  long i = 256*blockIdx.x + threadIdx.x + m;
   if (i < dim){
     a[i] = (long*)malloc(n*sizeof(long));
   }
@@ -50,3 +51,5 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int d_dim, cuD
 
 
 __global__ void CompressSparse(cuDoubleComplex** H_vals, long** H_pos, int d_dim, int lattice_Size);
+
+__host__ void UpperHalfToFull(cuDoubleComplex** H_vals, long** H_pos, long dim, int lattice_Size);
