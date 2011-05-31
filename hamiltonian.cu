@@ -1,7 +1,16 @@
 #include"hamiltonian.h"
 
 
+/* Function GetBasis:
+Inputs: dim - the initial dimension of the Hamiltonian
+	lattice_Size - the number of sites
+	Sz - the value of the Sz operator
+	basis_Position[] - an empty array that records the positions of the basis
+	basis - an empty array that records the basis
+Outputs:	basis_Position - a full array now
+		basis[] - a full array now
 
+*/
 __host__ void GetBasis(int dim, int lattice_Size, int Sz, long basis_Position[], long basis[]){
 	unsigned long temp = 0;
 
@@ -74,7 +83,25 @@ __device__ cuDoubleComplex HDiagPart(const long bra, int lattice_Size, long* d_B
 
 }//HdiagPart 
 
-int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond){
+
+
+/* Function: ConstructSparseMatrix:
+
+Inputs: model_Type - tells this function how many elements there could be, what generating functions to use, etc. Presently only supports Heisenberg
+	lattice_Size - the number of lattice sites
+	Bond - the bond values ??
+	hamil_Values - an empty pointer for a device array containing the values 
+	hamil_PosRow - an empty pointer for a device array containing the locations of each value in a row
+	hamil_PosCol - an empty pointer to a device array containing the locations of each values in a column
+
+Outputs:  hamil_Values - a pointer to a device array containing the values 
+	hamil_PosRow - a pointer to a device array containing the locations of each value in a row
+	hamil_PosCol - a pointer to a device array containing the locations of each values in a column
+
+*/
+
+
+int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol){
 	
 	unsigned long num_Elem; // the total number of elements in the matrix, will get this (or an estimate) from the input types
 	cudaError_t status1, status2, status3;
@@ -86,20 +113,8 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond){
 
 	int dim = 2;
 
-	cuDoubleComplex* hamil_Values;
-	//status1 = cudaMalloc(&hamil_Values, num_Elem*sizeof(cuDoubleComplex));
-
-	long* hamil_PosRow;
-	//status2 = cudaMalloc(&hamil_PosRow, (1<<lattice_Size)*sizeof(long));
-
-	long* hamil_PosCol;
-	//status3 = cudaMalloc(&hamil_PosCol, num_Elem*sizeof(long));
-
-	/*if ( (status1 != CUDA_SUCCESS) ||
-	     (status2 != CUDA_SUCCESS) ||
-	     (status3 != CUDA_SUCCESS) ){
-		cout<<"Memory allocation for COO representation failed!";
-		return 1;
+	
+	/*
 	}*/		
 
 	long* d_Bond;
@@ -255,8 +270,32 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond){
 
 	}
 
-	FullToCOO<<<bpg2, tpb2>>>(num_Elem, H_vals, H_pos, );
+	status1 = cudaMalloc(&hamil_Values, num_Elem*sizeof(cuDoubleComplex));
+	status2 = cudaMalloc(&hamil_PosRow, num_Elem*sizeof(long));
+	status3 = cudaMalloc(&hamil_PosCol, num_Elem*sizeof(long));
 
+	if ( (status1 != CUDA_SUCCESS) ||
+	     (status2 != CUDA_SUCCESS) ||
+	     (status3 != CUDA_SUCCESS) ){
+		cout<<"Memory allocation for COO representation failed!";
+		return 1;
+	}
+	FullToCOO<<<bpg2, tpb2>>>(num_Elem, H_vals, H_pos, hamil_Values, hamil_PosRow, hamil_PosCol); // csr and description initializations happen somewhere else
+
+	for(int nn = 0; nn < dim; nn++){
+		cudaFree(&H_vals[nn]);
+		cudaFree(&H_pos[nn]);
+	}
+
+	cudaFree(&H_vals); //cleanup
+	cudaFree(&H_pos);
+	cudaFree(&d_dim);
+	cudaFreeHost(&h_H_vals);
+	cudaFreeHost(&h_H_pos);
+
+	
+
+	
 }
 
 int main(){
@@ -275,7 +314,14 @@ int main(){
 	Bond[36] = 8;	Bond[37] = 9;	Bond[38] = 10;	Bond[39] = 11;	Bond[40] = 12;	Bond[41] = 13;
 	Bond[42] = 14;	Bond[43] = 15;	Bond[44] = 0;	Bond[45] = 1;	Bond[46] = 2;	Bond[48] = 3;
 
-	int rtn = ConstructSparseMatrix(0, 16, Bond);
+	cuDoubleComplex* hamil_Values;
+
+	long* hamil_PosRow;
+
+	long* hamil_PosCol;
+
+
+	int rtn = ConstructSparseMatrix(0, 16, Bond, hamil_Values, hamil_PosRow, hamil_PosCol);
 
 	free(Bond);
 
@@ -338,7 +384,15 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int d_dim, cuD
 	}
 }
 
+/* Function: CompressSparse
+Inputs:	H_vals - an array of arrays of Hamiltonian values
+	H_pos - an array of arrays of value positions in columns
+	d_dim - the dimension of the Hamiltonian, stored on the device
+	lattice_Size - the number of lattice sites
+Outputs: H_vals - an array of smaller arrays than before
+	 H_pos - see above
 
+*/
 __global__ void CompressSparse(cuDoubleComplex** H_vals, long** H_pos, int d_dim, int lattice_Size){
 
 	int i = 256*blockIdx.x + threadIdx.x;
@@ -424,5 +478,31 @@ __host__ void UpperHalfToFull(cuDoubleComplex** H_vals, long** H_pos, long dim, 
 
 } 
 
+/*Function: FullToCOO - takes a full sparse matrix and transforms it into COO format
+Inputs - num_Elem - the total number of nonzero elements
+	 H_vals - the Hamiltonian values
+	 H_pos - the Hamiltonian positions
+	 hamil_Values - a 1D array that will store the values for the COO form
 
+*/
+__global__ void FullToCOO(long num_Elem, cuDoubleComplex** H_vals, long** H_pos, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol){
+
+	int i = threadIdx.x + 256*blockIdx.x;
+	int j = threadIdx.y + 256*blockIdx.y;
+
+	long start = 0;
+
+	if (i < sizeof(H_vals)){
+		for(int k = 0; k < i; k++){
+			start += H_pos[k][0];
+		} //need to know where to start sticking values into the COO arrays
+
+
+		if(j < H_pos[i][0]){
+			hamil_Values[start + j] = H_vals[i][j];
+			hamil_PosRow[start + j] = i;
+			hamil_PosCol[start + j] = H_pos[i][j+1];
+		}
+	}
+}
 
