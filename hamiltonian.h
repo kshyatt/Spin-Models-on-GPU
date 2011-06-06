@@ -21,14 +21,15 @@ struct hamstruct{
 };
 
 __global__ void CDCarraysalloc(cuDoubleComplex** a, long dim, long n, long m){
-  long i = 256*blockIdx.x + threadIdx.x + m;
+  long i = blockDim.x*blockIdx.x + threadIdx.x + m;
+  
   if (i < dim){
     a[i] = (cuDoubleComplex*)malloc(n*sizeof(cuDoubleComplex));
   }
 }
 
 __global__ void longarraysalloc(long** a, long dim, long n, long m){
-  long i = 256*blockIdx.x + threadIdx.x + m;
+  long i = blockDim.x*blockIdx.x + threadIdx.x + m;
   if (i < dim){
     a[i] = (long*)malloc(n*sizeof(long));
   }

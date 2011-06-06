@@ -147,6 +147,8 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 
 	for (int ch=1; ch<lattice_Size; ch++) dim *=2;
 
+        cout<<dim<<endl;
+
 	long basis_Position[dim];
 	long basis[dim];
 
@@ -161,7 +163,8 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 	status2 = cudaMalloc(&d_basis, dim*sizeof(long));
 
 	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-		cout<<"Memory allocation for basis arrays failed!";
+		cout<<"Memory allocation for basis arrays failed! Error: ";
+                cout<<cudaPeekAtLastError()<<endl;
 		return 1;
 	}
 
@@ -169,24 +172,26 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 	status2 = cudaMemcpy(d_basis, basis, dim*sizeof(long), cudaMemcpyHostToDevice);
 
 	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-		cout<<"Memory copy for basis arrays failed!";
+		cout<<"Memory copy for basis arrays failed! Error: ";
+                cout<<cudaPeekAtLastError()<<endl;
 		return 1;
 	}
 
 	dim3 bpg = (dim/256, lattice_Size);
 	int tpb = 256; //these are going to need to depend on dim and Nsize
 
-	long** H_pos;
-	cuDoubleComplex** H_vals; 
+	long** h_H_pos;
+	cuDoubleComplex** h_H_vals; 
 
 	//status1 = cudaMalloc(&H_pos, dim*sizeof(long*));
 	//status2 = cudaMalloc(&H_vals, dim*sizeof(cuDoubleComplex*));
 
-        H_pos = (long**)malloc(dim*sizeof(long*));
-        H_vals = (cuDoubleComplex**)malloc(dim*sizeof(cuDoubleComplex*));
+        h_H_pos = (long**)malloc(dim*sizeof(long*));
+        h_H_vals = (cuDoubleComplex**)malloc(dim*sizeof(cuDoubleComplex*));
 
 	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-		cout<<"Memory allocation for upper half arrays failed!";
+		cout<<"Memory allocation for upper half arrays failed! Error: ";
+                cout<<cudaPeekAtLastError()<<endl;
 		return 1;
 	}
 
@@ -195,7 +200,8 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 	status2 = cudaMemcpy(d_dim, &dim, sizeof(int), cudaMemcpyHostToDevice);
 
 	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-		cout<<"Memory allocation and copy for dimension failed!";
+		cout<<"Memory allocation and copy for dimension failed! Error: ";
+                cout<<cudaPeekAtLastError()<<endl;
 		return 1;
 	}
 
@@ -204,7 +210,8 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 	status2 = cudaMemcpy(d_lattice_Size, &lattice_Size, sizeof(int), cudaMemcpyHostToDevice);
 
 	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-		cout<<"Memory allocation and copy for lattice size failed!";
+		cout<<"Memory allocation and copy for lattice size failed! Error: ";
+                cout<<cudaPeekAtLastError()<<endl;
 		return 1;
 	}
 
@@ -215,39 +222,55 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
         status2 = cudaMalloc(&d_H_vals, dim*sizeof(cuDoubleComplex*));
 
         if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-              cout<<"Memory allocation for device Hamiltonian failed! Error: "<<cudaPeekAtLastError();
+              cout<<"Memory allocation for device Hamiltonian failed! Error: "<<cudaPeekAtLastError()<<endl;
               return 1;
         }
 
-	for(long i = 0; i<dim; i++){
-		status1 = cudaMalloc(&(H_vals[i]), (2*(lattice_Size)+1)*sizeof(cuDoubleComplex));
-		status2 = cudaMalloc(&(H_pos[i]), (2*(lattice_Size)+2)*sizeof(long));
+	/*for(long i = 0; i<dim; i++){
+		status1 = cudaMalloc(&(h_H_vals[i]), (2*(lattice_Size)+1)*sizeof(cuDoubleComplex));
+		status2 = cudaMalloc(&(h_H_pos[i]), (2*(lattice_Size)+2)*sizeof(long));
                 if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-                      cout<<"Memory allocation for "<<i<<"th Hamiltonian arrays failed!";
+                      cout<<"Memory allocation for "<<i<<"th Hamiltonian arrays failed! Error: "<<cudaPeekAtLastError()<<endl;
                       return 1;
                 }
 
       }
 
-      status1 = cudaMemcpy(d_H_pos, H_pos, dim*sizeof(long*), cudaMemcpyHostToDevice);
-      status2 = cudaMemcpy(d_H_vals, H_vals, dim*sizeof(cuDoubleComplex*), cudaMemcpyHostToDevice);
+
+
+      status1 = cudaMemcpy(d_H_pos, h_H_pos, dim*sizeof(long*), cudaMemcpyHostToDevice);
+      status2 = cudaMemcpy(d_H_vals, h_H_vals, dim*sizeof(cuDoubleComplex*), cudaMemcpyHostToDevice);
 
       if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-          cout<<"Copy of Hamiltonian array pointers from host to device failed! Error: "<<cudaPeekAtLastError();
+          cout<<"Copy of Hamiltonian array pointers from host to device failed! Error: "<<cudaPeekAtLastError()<<endl;
           return 1;
       }
 
+      */
+
+      CDCarraysalloc<<<(dim/256), 256 >>>(d_H_vals, dim, 2*(lattice_Size) + 1, 0);
+      cudaThreadSynchronize();
+      longarraysalloc<<<(dim/256), 256>>>(d_H_pos, dim, 2*(lattice_Size) + 2, 0);
       
-	
-	for(int jj = 0; jj < dim; jj++){
-		status3 = cudaMemset(&d_H_pos[jj][0], 1, sizeof(int));
+      
+      status1 = cudaMemcpy(h_H_vals, d_H_vals, dim*sizeof(cuDoubleComplex*), cudaMemcpyDeviceToHost);
+      status2 = cudaMemcpy(h_H_pos, d_H_pos, dim*sizeof(long*), cudaMemcpyDeviceToHost);    
+      
+      if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
+          cout<<"Copy of Hamiltonian array pointers from host to device failed! Erro: "<<cudaPeekAtLastError()<<endl;
+          return 1;
+      }
+      
+      	
+      for(int jj = 0; jj < dim; jj++){
+		status3 = cudaMemset(&h_H_pos[jj][0], 1, sizeof(int));
                 if (status3 != CUDA_SUCCESS){
-                    cout<<"Counting the diagonal element failed! Error: "<<cudaPeekAtLastError();
+                    cout<<"Counting the diagonal element failed! Error: "<<cudaPeekAtLastError()<<endl;
                     return 1;
                 }
-	} //counting the diagonal element
+      } //counting the diagonal element
 
-	double JJ = 1.;
+      double JJ = 1.;
 
 	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, *d_dim, d_H_vals, d_H_pos, d_Bond, *d_lattice_Size, JJ);
 
@@ -255,11 +278,11 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 	
 	CompressSparse<<<bpg, tpb>>>(d_H_vals, d_H_pos, *d_dim, *d_lattice_Size);
 
-	long** h_H_pos;
-	cuDoubleComplex** h_H_vals;
+	long** buffer_H_pos;
+	cuDoubleComplex** buffer_H_vals;
 
-	status1 = cudaMallocHost(&h_H_pos, dim*sizeof(long*));
-	status2 = cudaMallocHost(&h_H_vals, dim*sizeof(cuDoubleComplex*));
+	status1 = cudaMallocHost(&buffer_H_pos, dim*sizeof(long*));
+	status2 = cudaMallocHost(&buffer_H_vals, dim*sizeof(cuDoubleComplex*));
 
         if ( (status1 != CUDA_SUCCESS ) || (status2 != CUDA_SUCCESS ) ){
             cout<<"Memory allocation for Hamiltonian arrays on host failed!"<<endl;
@@ -279,7 +302,7 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
                      (status2 != CUDA_SUCCESS) ||
                      (status3 != CUDA_SUCCESS) ){
                     
-                    cout<<"Memory allocation for "<<ii<<"th host Hamiltonian arrays failed!"<<endl;
+                    cout<<"Memory allocation for "<<ii<<"th host Hamiltonian arrays failed! Error: "<<cudaPeekAtLastError()<<endl;
                     return 1;
                 }
 
@@ -287,7 +310,7 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 		status2 = cudaMemcpy(h_H_vals[ii], d_H_vals[ii], (*temp)*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 
                 if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-                    cout<<"Copying "<<ii<<" th Hamiltonian arrays from device to host failed!"<<endl;
+                    cout<<"Copying "<<ii<<" th Hamiltonian arrays from device to host failed! Error: "<<cudaPeekAtLastError()<<endl;
                     return 1;
                 }
 
@@ -332,34 +355,46 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 
 	for(long mm = 0; mm < dim; mm++){ //this for loop allocates just enough memory in the device arrays to hold the full row, copies the data, and also finds the true number of nonzero elements
 		num_Elem += h_H_pos[mm][0];
+
+                //long* temppos;
+                //cuDoubleComplex* tempval;
 		
-                status1 = cudaMalloc(&H_pos[mm], h_H_pos[mm][0]*sizeof(long));
-		status2 = cudaMalloc(&H_vals[mm], (h_H_pos[mm][0] + 1)*sizeof(cuDoubleComplex));
+                status1 = cudaMalloc(&buffer_H_pos[mm], (h_H_pos[mm][0]+ 1)*sizeof(long));
+		status2 = cudaMalloc(&buffer_H_vals[mm], (h_H_pos[mm][0])*sizeof(cuDoubleComplex));
 		
                 if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-                    cout<<"Memory allocation for "<<mm<<"th arrays on device failed!"<<endl;
+                    cout<<"Memory allocation for "<<mm<<"th arrays on device failed! Error: "<<cudaPeekAtLastError()<<endl;
                     return 1;
                 }
 
-                status1 = cudaMemcpy(H_vals[mm], h_H_vals[mm], h_H_pos[mm][0]*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
-		status2 = cudaMemcpy(H_pos[mm], h_H_pos[mm], (h_H_pos[mm][0] + 1)*sizeof(long), cudaMemcpyHostToDevice);
+                status1 = cudaMemcpy(buffer_H_pos[mm], h_H_pos[mm], (h_H_pos[mm][0] + 1)*sizeof(long), cudaMemcpyHostToHost);
+                status2 = cudaMemcpy(buffer_H_vals[mm], h_H_vals[mm], (h_H_pos[mm][0])*sizeof(cuDoubleComplex), cudaMemcpyHostToHost);
+                
 
                 if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-                    cout<<"Memory copy from host to device for "<<mm<<"th arrays failed!"<<endl;
+                    cout<<"Array copy from host to buffer failed! Error: "<<cudaPeekAtLastError()<<endl;
                     return 1;
                 }
 
+                
 	}
 
-        long* d_num_Elem;
+        status1 = cudaMemcpy(d_H_vals, buffer_H_vals, dim*sizeof(cuDoubleComplex*), cudaMemcpyHostToDevice);
+        status2 = cudaMemcpy(d_H_pos, buffer_H_pos, dim*sizeof(long*), cudaMemcpyHostToDevice);
+                                                                                        if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
+            cout<<"Pointer memory copy from host buffer to device failed!"<<endl;     
+            return 1;                                                                                       
+        }
         
+        long* d_num_Elem;
         status1 = cudaMalloc(&d_num_Elem, sizeof(long));
         status2 = cudaMemcpy(d_num_Elem, &num_Elem, sizeof(long), cudaMemcpyHostToDevice);
 
         if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-            cout<<"Memory allocation and copy for number of elements failed!"<<endl;
+            cout<<"Memory allocation and copy for number of elements failed! Error: "<<cudaPeekAtLastError()<<endl;
             return 1;
         }
+
 
 	status1 = cudaMalloc(&hamil_Values, num_Elem*sizeof(cuDoubleComplex));
 	status2 = cudaMalloc(&hamil_PosRow, num_Elem*sizeof(long));
@@ -368,26 +403,30 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 	if ( (status1 != CUDA_SUCCESS) ||
 	     (status2 != CUDA_SUCCESS) ||
 	     (status3 != CUDA_SUCCESS) ){
-		cout<<"Memory allocation for COO representation failed!";
+		cout<<"Memory allocation for COO representation failed! Error: "<<cudaPeekAtLastError()<<endl;
 		return 1;
 	}
 	
-        FullToCOO<<<bpg2, tpb2>>>(num_Elem, H_vals, H_pos, hamil_Values, hamil_PosRow, hamil_PosCol); // csr and description initializations happen somewhere else
+        FullToCOO<<<bpg2, tpb2>>>(*d_num_Elem, d_H_vals, d_H_pos, hamil_Values, hamil_PosRow, hamil_PosCol); // csr and description initializations happen somewhere else
 
 	for(int nn = 0; nn < dim; nn++){
-		cudaFree(&H_vals[nn]);
-		cudaFree(&H_pos[nn]);
+		cudaFree(&d_H_vals[nn]);
+		cudaFree(&d_H_pos[nn]);
                 cudaFreeHost(&h_H_vals[nn]);
                 cudaFreeHost(&h_H_pos[nn]);
+                cudaFreeHost(&buffer_H_vals[nn]);
+                cudaFreeHost(&buffer_H_pos[nn]);
 	}
 
-	cudaFree(&H_vals); //cleanup
-	cudaFree(&H_pos);
+	cudaFree(&d_H_vals); //cleanup
+	cudaFree(&d_H_pos);
 	cudaFree(&d_dim);
         cudaFree(&d_lattice_Size);
         cudaFree(&d_num_Elem);
 	cudaFreeHost(&h_H_vals);
 	cudaFreeHost(&h_H_pos);
+        cudaFreeHost(&buffer_H_vals);
+        cudaFreeHost(&buffer_H_pos);
         cudaFree(&d_basis);
         cudaFree(&d_basis_Position);
         cudaFree(&d_Bond);
