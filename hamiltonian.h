@@ -53,8 +53,8 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int d_dim, cuD
 
 
 
-__global__ void CompressSparse(cuDoubleComplex** H_vals, long** H_pos, int d_dim, int lattice_Size);
+__global__ void CompressSparse(cuDoubleComplex** H_vals, long** H_pos, int d_dim, const int lattice_Size);
 
 __host__ void UpperHalfToFull(cuDoubleComplex** H_vals, long** H_pos, long dim, int lattice_Size);
 
-__global__ void FullToCOO(long num_Elem, cuDoubleComplex** H_vals, long** H_pos, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol);
+__global__ void FullToCOO(long num_Elem, cuDoubleComplex** H_vals, long** H_pos, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol, long dim);
