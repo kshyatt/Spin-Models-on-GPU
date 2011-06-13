@@ -12,7 +12,13 @@ using namespace std;
 
 #define likely(x)   __builtin_expect((x),1)
 #define unlikely(x) __builtin_expect((x),0)
-#define idx(i,j,lda) = ( j + (i*lda))
+//#define idx(i,j,lda) = ( j + (i*lda))
+
+__host__ __device__ long idx(long i, long j, long lda){
+
+	return ( j + (i*lda));
+
+}
 
 struct hamstruct{
 
@@ -50,12 +56,12 @@ __global__ void longarraysalloc(long** a, long dim, long n, long m){
 
 }
 
-__global__ void FillSparse(long* d_basis_Position, long* d_basis, int d_dim, cuDoubleComplex** H_vals, long** H_pos, long* d_Bond, int d_lattice_Size, const double JJ);
+__global__ void FillSparse(long* d_basis_Position, long* d_basis, int d_dim, cuDoubleComplex* H_vals, long* H_pos, long* d_Bond, int d_lattice_Size, const double JJ);
 
 
 
-__global__ void CompressSparse(cuDoubleComplex** H_vals, long** H_pos, int d_dim, const int lattice_Size);
+__global__ void CompressSparse(cuDoubleComplex* H_vals, long* H_pos, int d_dim, const int lattice_Size);
 
-__host__ void UpperHalfToFull(cuDoubleComplex** H_vals, long** H_pos, long dim, int lattice_Size);
+__host__ void UpperHalfToFull(long* H_pos, cuDoubleComplex* H_vals, long* buffer_pos, cuDoubleComplex* buffer_val, long num_Elem, long dim, int lattice_Size);
 
-__global__ void FullToCOO(long num_Elem, cuDoubleComplex** H_vals, long** H_pos, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol, long dim);
+__global__ void FullToCOO(long num_Elem, cuDoubleComplex* H_vals, long2* H_pos, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol, long dim);
