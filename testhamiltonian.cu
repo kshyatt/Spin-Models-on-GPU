@@ -181,7 +181,7 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 		return 1;
 	}
 
-	dim3 bpg = (dim/256, 16, 1);
+	dim3 bpg = (256, 16, 1);
 	dim3 tpb = (256, 256, 1); //these are going to need to depend on dim and Nsize
 
 	//--------------Declare the Hamiltonian arrays on the device, and copy the pointers to them to the device -----------//
@@ -211,7 +211,7 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 
 	
      
-        SetFirst<<<(dim/256), tpb>>>(d_H_pos, stridepos, dim, 1); 
+        SetFirst<<<256, 256>>>(d_H_pos, stridepos, dim, 1); 
 
 	// --------------------- Fill up the sparse matrix and compress it to remove extraneous elements ------//
   
@@ -220,7 +220,7 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 	
         double JJ = 1.;
 
-	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, dim, d_H_vals, d_H_pos, d_Bond, lattice_Size, JJ);
+	FillSparse<<<(256, 16, 1), (256, 256, 1)>>>(d_basis_Position, d_basis, dim, d_H_vals, d_H_pos, d_Bond, lattice_Size, JJ);
 
 
 
@@ -230,10 +230,10 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
         cudaFree(&d_basis_Position);
         cudaFree(&d_Bond); // we don't need these later on
 	
-	bpg = (dim/256, (((2*lattice_Size)/32) + 1) , 1);
+	bpg = (256, (((2*lattice_Size)/32) + 1) , 1);
 	tpb = (256, 32, 1);
 	
-	CompressSparse<<<bpg, tpb>>>(d_H_vals, d_H_pos, dim, lattice_Size);
+	CompressSparse<<<(256, 2, 1), (256, 32, 1)>>>(d_H_vals, d_H_pos, dim, lattice_Size);
         cudaThreadSynchronize();
 	
 	long2* buffer_H_pos; //I'm going to allocate pinned memory here. This will allow us to transfer information from the device much faster
@@ -266,12 +266,12 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 	memcpy(h_H_vals, buffer_H_vals, dim*stridepos*sizeof(cuDoubleComplex));
 
 	cudaFreeHost(&buffer_H_pos);
-	cudaFreeHost(&buffer_H_vals);	
+	cudaFreeHost(&buffer_H_vals); //keeping things in pinned memory slows down the computer	
        
 
 	hamstruct temphamstruct;
 
-        vector<hamstruct> sortcontainer;
+        vector<hamstruct> sortcontainer; //creating these to sort
 
 	for (uint ii = 0; ii < dim; ii++){
 

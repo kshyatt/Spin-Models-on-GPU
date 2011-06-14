@@ -1,0 +1,36 @@
+\documentclass{article}
+
+\author{Katharine Hyatt}
+\title{Documentation for Lanczos and Hamiltonian generating CUDA code}
+
+\usepackage{fullpage}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+\section{Hamiltonian Generation}
+
+\subsection{General Description}
+
+There are two codes used to generate the Hamiltonians: hamiltonian.cu and hamiltonian.h. The ``builder" function, ConstructSparseMatrix, creates and fills a number and three arrays with information about the Hamiltonian for a certain model and number of sites in the COO format
+
+\paragraph{int ConstructSparseMatrix(int, int, long*, cuDoubleComplex*, long*, long*)}
+
+Parameters:
+\begin{description}
+\item[int model_Type] A value that tells ConstructSparseMatrix to build a Hamiltonian for the spin 1/2 Heisenberg (1), ..., or ... models.
+\item[int lattice_Size] The number of lattice sites
+\item[long* Bond] An array containing the bond information for the model we're using 
+\item[cuDoubleComplex* hamil_Values] A device pointer that will have an array of Hamiltonian values allocated at it as ConstructSparseMatrix runs
+\item[long* hamil_PosRow] A device pointer that will have an array of row indices allocated at it as ConstructSparseMatrix runs, in the COO form
+\item[long* hamil_PosCol] A device pointer that will have an array of column indicies allocated at is as ConstructSparseMatrix runs, in the COO form
+\end{description}
+
+\section{Lanczos}
+
+\section{References}
+
+\end{document}
