@@ -99,12 +99,12 @@ Inputs: H_pos - an array on the device whose first row elements will be changed
 	value - the value we want to set the first elements to
 */
 
-__global__ void SetFirst(long* H_pos, long stride, long dim, long value){
+__global__ void SetFirst(long2* H_pos, long stride, long dim, long value){
     int i = blockDim.x*blockIdx.x + threadIdx.x;
 
     if (i < dim){
       
-      H_pos[ idx(i, 0, stride) ] = value;
+      (H_pos[ idx(i, 0, stride) ]).y = value;
     }
 }
 /* Function: ConstructSparseMatrix:
@@ -189,17 +189,17 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 	int stridepos = 2*lattice_Size + 2;
 	int strideval = 2*lattice_Size + 1;
 
-	long* h_H_pos;
+	long2* h_H_pos;
 	cuDoubleComplex* h_H_vals; 
 
-	h_H_pos = (long*)malloc(dim*stridepos*sizeof(long));
+	h_H_pos = (long2*)malloc(dim*stridepos*sizeof(long2));
         h_H_vals = (cuDoubleComplex*)malloc(dim*strideval*sizeof(cuDoubleComplex));
 
 	
-        long* d_H_pos;
+        long2* d_H_pos;
         cuDoubleComplex* d_H_vals;
 
-        status1 = cudaMalloc(&d_H_pos, dim*stridepos*sizeof(long));
+        status1 = cudaMalloc(&d_H_pos, dim*stridepos*sizeof(long2));
         status2 = cudaMalloc(&d_H_vals, dim*strideval*sizeof(cuDoubleComplex));
 
         if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
@@ -236,10 +236,10 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 	CompressSparse<<<bpg, tpb>>>(d_H_vals, d_H_pos, dim, lattice_Size);
         cudaThreadSynchronize();
 	
-	long* buffer_H_pos; //I'm going to allocate pinned memory here. This will allow us to transfer information from the device much faster
+	long2* buffer_H_pos; //I'm going to allocate pinned memory here. This will allow us to transfer information from the device much faster
 	cuDoubleComplex* buffer_H_vals;
 
-	status1 = cudaHostAlloc((void**)&buffer_H_pos, dim*sizeof(long), cudaHostAllocDefault);
+	status1 = cudaHostAlloc((void**)&buffer_H_pos, dim*sizeof(long2), cudaHostAllocDefault);
 	status2 = cudaHostAlloc((void**)&buffer_H_vals, dim*sizeof(cuDoubleComplex), cudaHostAllocDefault);
 
         if ( (status1 != CUDA_SUCCESS ) || (status2 != CUDA_SUCCESS ) ){
@@ -251,7 +251,7 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 
 
 
-	status1 = cudaMemcpy(buffer_H_pos, d_H_pos, (dim*stridepos*sizeof(long)), cudaMemcpyDeviceToHost);
+	status1 = cudaMemcpy(buffer_H_pos, d_H_pos, (dim*stridepos*sizeof(long2)), cudaMemcpyDeviceToHost);
 	status2 = cudaMemcpy(buffer_H_vals, d_H_vals, dim*stridepos*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 
         if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
@@ -262,7 +262,7 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 	cudaFree(&d_H_vals);
 	cudaFree(&d_H_pos);
          
-	memcpy(h_H_pos, buffer_H_pos, dim*stridepos*sizeof(long));
+	memcpy(h_H_pos, buffer_H_pos, dim*stridepos*sizeof(long2));
 	memcpy(h_H_vals, buffer_H_vals, dim*stridepos*sizeof(cuDoubleComplex));
 
 	cudaFreeHost(&buffer_H_pos);
@@ -275,10 +275,10 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 
 	for (uint ii = 0; ii < dim; ii++){
 
-			num_Elem += h_H_pos[ idx(ii, 0, stridepos)];
+			num_Elem += (h_H_pos[ idx(ii, 0, stridepos)]).y;
 
-                	for (uint jj = 0; jj < h_H_pos[ idx(ii, 0, stridepos) ]; jj++){
-                  		temphamstruct.position = h_H_pos[ idx( ii, jj + 1, stridepos) ];
+                	for (uint jj = 0; jj < (h_H_pos[ idx(ii, 0, stridepos) ]).y; jj++){
+                  		temphamstruct.position = (h_H_pos[ idx( ii, jj + 1, stridepos) ]).y;
                   		temphamstruct.value = h_H_vals[ idx(ii, jj, strideval) ];
 
                   		sortcontainer.push_back(temphamstruct);
@@ -289,19 +289,19 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 
 			for(uint kk = 0; kk < sortcontainer.size(); kk++){
 			
-				h_H_pos[ idx(ii, kk + 1, stridepos) ] = (sortcontainer.at(kk)).position;
+				(h_H_pos[ idx(ii, kk + 1, stridepos) ]).y = (sortcontainer.at(kk)).position;
 				h_H_vals[ idx(ii, kk, strideval) ] = (sortcontainer.at(kk)).value;
 			}	
 
 
-			for(uint ll = 0; ll < (h_H_pos[ idx(ii, 0, stridepos) ] + 1); ll++){
-				cout<<"At position: ("<<ii<<", "<<h_H_pos[ idx(ii, ll + 1, stridepos) ]<<": ";
+			for(uint ll = 0; ll < ((h_H_pos[ idx(ii, 0, stridepos) ]).y + 1); ll++){
+				cout<<"At position: ("<<ii<<", "<<(h_H_pos[ idx(ii, ll + 1, stridepos) ]).y<<": ";
 				cout<<h_H_vals[ idx( ii, ll, strideval) ].x<<endl;
 			}
 
 	}
 
-	(long2*)buffer_H_pos;
+
 
 	UpperHalfToFull(h_H_pos, h_H_vals, buffer_H_pos, buffer_H_vals, num_Elem, dim, lattice_Size);
 	
@@ -310,8 +310,6 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 
 	dim3 tpb2 = ( tpb.x);	
 	dim3 bpg2 = ( (2*num_Elem - dim)/tpb.x );
-
-	(long2*)d_H_pos;
 
 	status1 = cudaMalloc(&d_H_vals, (2*num_Elem - dim)*sizeof(cuDoubleComplex));
 	status2 = cudaMalloc(&d_H_pos, (2*num_Elem - dim)*sizeof(long2));
@@ -343,7 +341,6 @@ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDouble
 		return 1;
 	}
 
-	(long2*)d_H_pos;
 	
         FullToCOO<<<bpg2, tpb2>>>(num_Elem, d_H_vals, d_H_pos, hamil_Values, hamil_PosRow, hamil_PosCol, dim); // csr and description initializations happen somewhere else
 
@@ -395,7 +392,7 @@ Inputs: d_basis_Position - position information about the basis
 
 */
 
-__global__ void FillSparse(long* d_basis_Position, long* d_basis, int d_dim, cuDoubleComplex* H_vals, long* H_pos, long* d_Bond, int d_lattice_Size, const double JJ){
+__global__ void FillSparse(long* d_basis_Position, long* d_basis, int d_dim, cuDoubleComplex* H_vals, long2* H_pos, long* d_Bond, int d_lattice_Size, const double JJ){
 
 	int T0 = threadIdx.y + blockDim.y*blockIdx.y; //my indices!
 	int ii = threadIdx.x + blockDim.x*blockIdx.x;
@@ -432,7 +429,8 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int d_dim, cuD
 		    tempval[0] = HDiagPart(tempi, d_lattice_Size, tempbond, JJ);
 
                     H_vals[ idx(ii, 0, strideval) ] = tempval[0];
-                    H_pos[ idx(ii, 1, stridepos) ] = temppos[0];
+                    (H_pos[ idx(ii, 1, stridepos) ]).y = temppos[0];
+                    (H_pos[ idx(ii, 1, stridepos) ]).x = ii;
                 }
                 
 
@@ -477,9 +475,15 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int d_dim, cuD
 
                 //time to write back to global memory
                 __syncthreads;
-                H_pos[ idx(ii, 0, stridepos) ] += count;
-                H_pos[ idx(ii, 2*T0 + 1, stridepos) ] = temppos[2*jj];
-                H_pos[ idx(ii, 2*T0 + 2, stridepos) ] = temppos[2*jj + 1];
+                (H_pos[ idx(ii, 0, stridepos) ]).x = ii;
+                (H_pos[ idx(ii, 0, stridepos) ]).y += count;
+                
+                (H_pos[ idx(ii, 2*T0 + 1, stridepos) ]).x = ii;
+                (H_pos[ idx(ii, 2*T0 + 1, stridepos) ]).y = temppos[2*jj];
+
+                (H_pos[ idx(ii, 2*T0 + 2, stridepos) ]).x = ii;
+                (H_pos[ idx(ii, 2*T0 + 2, stridepos) ]).y = temppos[2*jj + 1];
+                
                 H_vals[ idx(ii, 2*T0, strideval) ] = tempval[2*jj];
                 H_vals[ idx(ii, 2*T0 + 1, strideval) ] = tempval[2*jj + 1];
                 
@@ -497,7 +501,7 @@ Outputs: H_vals - an array of smaller arrays than before
 	 H_pos - see above
 
 */
-__global__ void CompressSparse(cuDoubleComplex* H_vals, long* H_pos, int d_dim, const int lattice_Size){
+__global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, int d_dim, const int lattice_Size){
 
 	int row = blockDim.x*blockIdx.x + threadIdx.x;
 	int col = blockDim.y*blockIdx.y + threadIdx.y;
@@ -518,13 +522,13 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long* H_pos, int d_dim, 
 		
 
 		if (col < size2){
-			s_H_pos[col] = H_pos[ idx( row, col, size1 ) ];
+			s_H_pos[col] = (H_pos[ idx( row, col, size1 ) ]).y;
 			s_H_vals[col] = H_vals[ idx( row, col, size2) ];
                 
                 }
 
 		if (col == size2){
-			s_H_pos[col] = H_pos[ idx(row, col, size1) ];
+			s_H_pos[col] = (H_pos[ idx(row, col, size1) ]).y;
 		} //loading the Hamiltonian information into shared memory
 
 		__syncthreads(); // have to make sure all loading is done before we start anything else
@@ -548,7 +552,7 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long* H_pos, int d_dim, 
 				temp_pos[iter+1] = s_H_pos[col+1];
 				temp_val[iter] = s_H_vals[col];
 
-                                H_pos[ idx(row, iter+1, size1) ] = temp_pos[iter + 1];
+                                (H_pos[ idx(row, iter+1, size1) ]).y = temp_pos[iter + 1];
                                 H_vals[ idx(row, iter, size2) ] = temp_val[iter];
 				iter++;
 			}
@@ -560,7 +564,7 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long* H_pos, int d_dim, 
 }
 
 //this function takes the upper half form I had from FillSparse and CompressSparse and fills out the bottom half of the matrix - since there are so many comparisons it's probably faster to just do this on CPU
-__host__ void UpperHalfToFull(cuDoubleComplex* H_vals, long* H_pos, long2* buffer_pos, cuDoubleComplex* buffer_val, long num_Elem, long dim, int lattice_Size) {
+__host__ void UpperHalfToFull(long2* H_pos, cuDoubleComplex* H_vals, long2* buffer_pos, cuDoubleComplex* buffer_val, long num_Elem, long dim, int lattice_Size) {
 
 	int stridepos = 2*lattice_Size + 2;
 	int strideval = 2*lattice_Size + 1;
@@ -572,7 +576,7 @@ __host__ void UpperHalfToFull(cuDoubleComplex* H_vals, long* H_pos, long2* buffe
 
 	for(int ii = 0; ii<dim; ii++){
 
-		long size = dim - H_pos[ idx(ii, 0, stridepos) ] ;
+		long size = dim - (H_pos[ idx(ii, 0, stridepos) ]).y ; // the maximum number of nonzero elements we could pull from the columns
 		cuDoubleComplex* temp;
 		long* temp_col;
 
@@ -582,9 +586,9 @@ __host__ void UpperHalfToFull(cuDoubleComplex* H_vals, long* H_pos, long2* buffe
 		long iter = 0;
 
 		for(int jj = 0; jj<ii; jj++){
-			for(int kk = 1; kk <= H_pos[ idx(jj, 0, stridepos) ]; kk++){
+			for(int kk = 1; kk <= (H_pos[ idx(jj, 0, stridepos) ]).y; kk++){
 
-				if(H_pos[ idx(jj, kk, stridepos) ] = ii){
+				if((H_pos[ idx(jj, kk, stridepos) ]).y = ii){
 					
 					temp[iter] = H_vals[ idx(jj, kk-1, strideval) ];
 					temp_col[iter] = jj;
@@ -595,11 +599,11 @@ __host__ void UpperHalfToFull(cuDoubleComplex* H_vals, long* H_pos, long2* buffe
 		}
 
 
-		cuDoubleComplex temp_vals[H_pos[ idx(ii, 0, stridepos) ] + iter];
-		long temp_pos[H_pos[ idx(ii, 0, stridepos) ] + iter + 1];
-		temp_pos[0] = iter + H_pos[ idx(ii , 0, stridepos) ]; //we'll need this number later!
+		cuDoubleComplex temp_vals[(H_pos[ idx(ii, 0, stridepos) ]).y + iter];
+		long temp_pos[(H_pos[ idx(ii, 0, stridepos) ]).y + iter + 1];
+		temp_pos[0] = iter + (H_pos[ idx(ii , 0, stridepos) ] ).y; //we'll need this number later!
 		
-		for(int ll = 0; ll < H_pos[ idx(ii, 0, stridepos) ] + iter; ll++){
+		for(int ll = 0; ll < (H_pos[ idx(ii, 0, stridepos) ]).y + iter; ll++){
 			if (ll < iter){
 				temp_vals[ll] = temp[ll];
 				temp_pos[ll+1] = temp_col[ll];
@@ -607,7 +611,7 @@ __host__ void UpperHalfToFull(cuDoubleComplex* H_vals, long* H_pos, long2* buffe
 			}
 			else{
 				temp_vals[ll] = H_vals[ idx(ii, ll - iter, strideval) ];
-				temp_pos[ll+1] = H_pos[ idx(ii, ll - iter + 1, stridepos) ];
+				temp_pos[ll+1] = (H_pos[ idx(ii, ll - iter + 1, stridepos) ]).y;
 			}
 
 
