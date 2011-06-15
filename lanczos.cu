@@ -488,6 +488,5 @@ void lanczos(const int h_num_nonzeroelem, const cuDoubleComplex* h_values, const
 // things left to do:
 // write a thing (separate file) to call routines to find expectation values, should be faster on GPU 
 // make the tqli thing better!
-// do the hamiltonian generating stuff
 // change things in here to set device array values properly
 

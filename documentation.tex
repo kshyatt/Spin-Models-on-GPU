@@ -11,6 +11,8 @@
 
 \section{Introduction}
 
+This document describes code for generating Hamiltonians on lattices and then applying the Lanczos procedure to them to approximate the low energy spectrum of the Hamiltonians. There are two main files: hamiltonian.cu, and lanczos.cu. The Hamiltonian generation is treated first. For each major function in the files, the function prototype is given first, then a description of each of its parameters, a description of the steps the function takes and what it actually does, and some possible optimizations that could be implemented. Notes are also included about what other functions would be affected by changes to the function in question.
+
 \section{Hamiltonian Generation}
 
 \subsection{General Description}
