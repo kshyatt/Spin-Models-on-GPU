@@ -30,7 +30,7 @@ struct hamstruct{
 	bool operator>=(const hamstruct& rhs)const{return position >= rhs.position;};
 	bool operator<=(const hamstruct& rhs)const{return position <= rhs.position;};
 };
-
+/*
 __global__ void CDCarraysalloc(cuDoubleComplex** a, long dim, long n, long m){
   long i = blockDim.x*blockIdx.x + threadIdx.x + m;
   
@@ -55,8 +55,8 @@ __global__ void longarraysalloc(long** a, long dim, long n, long m){
   }
 
 }
-
-__global__ void FillSparse(long* d_basis_Position, long* d_basis, int d_dim, cuDoubleComplex* H_vals, long2* H_pos, long* d_Bond, int d_lattice_Size, const double JJ);
+*/
+__global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDoubleComplex* H_vals, long2* H_pos, long* d_Bond, int lattice_Size, const double JJ);
 
 
 
