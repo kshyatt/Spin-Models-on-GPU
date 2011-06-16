@@ -20,7 +20,7 @@ This document describes code for generating Hamiltonians on lattices and then ap
 There are two codes used to generate the Hamiltonians: hamiltonian.cu and hamiltonian.h. The ``builder" function, ConstructSparseMatrix, creates and fills a number and three arrays with information about the Hamiltonian for a certain model and number of sites in the COO format
 
 \paragraph{$\_\_$host$\_\_$ int ConstructSparseMatrix(int, int, long*, cuDoubleComplex*, long*, long*)}
-
+\\
 Parameters:
 \begin{description}
 \item[int model$\_$Type] A value that tells ConstructSparseMatrix to build a Hamiltonian for the spin 1/2 Heisenberg (1), ..., or ... models.
@@ -60,7 +60,7 @@ Other Important Things:
 \end{itemize} 
 
 \paragraph{$\_\_$host$\_\_$ void GetBasis(int , int , int , long [], long [])}
-
+\\
 Parameters:
 \begin{description}
 \item[dim] The full dimension of the Hamiltonian
@@ -83,7 +83,7 @@ Possible Optimizations:
 \end{itemize}
 
 \paragraph{$\_\_$global$\_\_$ void FillSparse(long* , long* , int , cuDoubleComplex* , long2* , long* , int , const double )}
-
+\\
 Parameters:
 \begin{description}
 \item[d$\_$basis$\_$Position] The position information about the basis
@@ -108,7 +108,50 @@ The function proceeds by:
 Possible Optimizations:
 \begin{itemize}
 \item{Instead of doing the off-x and off-y parts for each lattice site sequentially, I should probably do it by block or something}
+\item{There's probably a way to use shared memory more intelligently here - should be using atomicAdd to change the count as well}
 \end{itemize}
+
+Other things:
+\begin{itemize}
+\item{H$\_$pos is a long2 because this makes later functions easier. The first long is the row index and the second is the column.}
+\end{itemize}
+
+\paragraph{ $\_\_$global$\_\_$ void CompressSparse(cuDoubleComplex* , long2* , int , const int )}
+\\
+Parameters:
+\begin{description}
+\item[H$\_$vals] The array of Hamiltonian values
+\item[H$\_$pos] The array of Hamiltonian positions in the columns
+\item[dim] The dimension of the Hamiltonian
+\item[lattice$\_$Size] The number of sites
+\end{description}
+
+The function proceeds by
+\begin{enumerate}
+\item{Moves the Hamiltonian information into shared memory}
+\item{Checks to see if the column index of a value is -1}
+\item{If not, the value is put back into the Hamiltonian array. If yes, the value is overwritten}
+\item{The Hamiltonian arrays are left with some ``junk'' values that are not accessed again at the end of each ``row''}
+\end{enumerate}
+
+Possible Optimizations:
+\begin{itemize}
+\item{If CUDA stores TRUE/FALSE as -1/0, that could make this much easier}
+\item{There's probably a better way to use shared memory here too}
+\end{itemize}
+
+\paragraph{$\_\_$host$\_\_$ void UpperHalfToFull(long2* , cuDoubleComplex* , long2* , cuDoubleComplex* , long , long , int )}  
+\\
+Parameters:
+\begin{description}
+\item[H$\_$pos] (Half) the positions of the values in the Hamiltonian
+\item[H$\_$vals] (Half) the values of the Hamiltonian
+\item[buffer$\_$pos] A buffer array that will be filled with the positions for the full Hamiltonian
+\item[buffer$\_$val] A buffer array that will be filled with the values for the full Hamiltonian
+\item[num$\_$Elem] The number of nonzero elements in the upper half and diagonal
+\item[dim] The dimension of the full Hamiltonian
+\item[lattice$\_$Size] The number of sites
+\end{description}
 
 \section{Lanczos}
 

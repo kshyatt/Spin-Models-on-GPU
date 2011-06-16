@@ -63,7 +63,7 @@ __device__ cuDoubleComplex HOffBondY(const int si, const long bra, const double 
 
 }
 
-__device__ cuDoubleComplex HDiagPart(const long bra, int lattice_Size, long* d_Bond, const double JJ){
+__device__ cuDoubleComplex HDiagPart(const long bra, int lattice_Size, long3* d_Bond, const double JJ){
 
   int S0b,S1b ;  //spins (bra 
   int T0,T1;  //site
@@ -74,13 +74,13 @@ __device__ cuDoubleComplex HDiagPart(const long bra, int lattice_Size, long* d_B
   for (int Ti=0; Ti<lattice_Size; Ti++){
     //***HEISENBERG PART
 
-    T0 = d_Bond[Ti]; //lower left spin
+    T0 = (d_Bond[Ti]).x; //lower left spin
     S0b = (bra>>T0)&1;  
     //if (T0 != Ti) cout<<"Square error 3\n";
-    T1 = d_Bond[Ti + lattice_Size]; //first bond
+    T1 = (d_Bond[Ti]).y; //first bond
     S1b = (bra>>T1)&1;  //unpack bra
     valH.x += JJ*(S0b-0.5)*(S1b-0.5);
-    T1 = d_Bond[Ti + 2*lattice_Size]; //second bond
+    T1 = (d_Bond[Ti]).z; //second bond
     S1b = (bra>>T1)&1;  //unpack bra
     valH.x += JJ*(S0b-0.5)*(S1b-0.5);
 
@@ -184,8 +184,12 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	}	
 
 
-	dim3 bpg = (256, 16, 1);
-	dim3 tpb = (256, 256, 1); //these are going to need to depend on dim and Nsize
+	dim3 bpg;
+        bpg.x = dim/32;
+        bpg.y =  lattice_Size;
+	dim3 tpb;
+        tpb.x = 32;
+        tpb.y = 16; //these are going to need to depend on dim and Nsize
 
 	//--------------Declare the Hamiltonian arrays on the device, and copy the pointers to them to the device -----------//
 
@@ -224,7 +228,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
         cout<<"Running FillSparse"<<endl;
 
-	FillSparse<<<(256, 16, 1), (256, 256, 1)>>>(d_basis_Position, d_basis, dim, d_H_vals, d_H_pos, d_Bond, lattice_Size, JJ);
+	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, dim, d_H_vals, d_H_pos, d_Bond, lattice_Size, JJ);
 
 
 
@@ -234,12 +238,14 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         cudaFree(&d_basis_Position);
         cudaFree(&d_Bond); // we don't need these later on
 	
-	bpg = (256, (((2*lattice_Size)/32) + 1) , 1);
-	tpb = (256, 32, 1);
+	bpg.x = dim/16;
+        bpg.y = ((2*lattice_Size)/32) + 1;
+	tpb.x = 16;
+        tpb.y = 32;
 
         cout<<"Running CompressSparse"<<endl;
 	
-	CompressSparse<<<(256, 2, 1), (256, 32, 1)>>>(d_H_vals, d_H_pos, dim, lattice_Size);
+	CompressSparse<<<bpg, tpb>>>(d_H_vals, d_H_pos, dim, lattice_Size);
         cudaThreadSynchronize();
 	
 	long2* buffer_H_pos; //I'm going to allocate pinned memory here. This will allow us to transfer information from the device much faster
@@ -400,18 +406,20 @@ Inputs: d_basis_Position - position information about the basis
 
 __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDoubleComplex* H_vals, long2* H_pos, long* d_Bond, int lattice_Size, const double JJ){
 
-	int T0 = threadIdx.y + blockDim.y*blockIdx.y; //my indices!
+	int T0 = blockIdx.y; //my indices!
 	int ii = threadIdx.x + blockDim.x*blockIdx.x;
         int jj = threadIdx.y;
 
-        __shared__ long tempbond[3*16];
+        __shared__ long3 tempbond[16];
         __shared__ int count;
 	count = 0;
-        __shared__ long temppos[256];
-        __shared__ cuDoubleComplex tempval[256]; //going to eliminate a huge number of read/writes to d_Bond, H_vals, H_pos in global memory
+        __shared__ long temppos[32];
+        __shared__ cuDoubleComplex tempval[32]; //going to eliminate a huge number of read/writes to d_Bond, H_vals, H_pos in global memory
 
-        if(threadIdx.y < 3*lattice_Size) {
-              tempbond[threadIdx.y] = d_Bond[threadIdx.y];
+        if(jj < lattice_Size) {
+        	(tempbond[jj]).x = d_Bond[jj];
+		(tempbond[jj]).y = d_Bond[lattice_Size + jj];
+		(tempbond[jj]).z = d_Bond[2*lattice_Size + jj];
         }
         
 
@@ -425,14 +433,14 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
 	cuDoubleComplex tempD;
 
 	if( ii < dim ){
-            if (T0 < 2*lattice_Size){
+            if (T0 < lattice_Size){
 
 		//Diagonal part----------------
                 if (blockIdx.y == 0){
 		    tempi = d_basis[ii];
 		    temppos[0] = d_basis_Position[tempi];
 
-		    tempval[0] = HDiagPart(tempi, d_lattice_Size, tempbond, JJ);
+		    tempval[0] = HDiagPart(tempi, lattice_Size, tempbond, JJ);
 
                     H_vals[ idx(ii, 0, strideval) ] = tempval[0];
                     (H_pos[ idx(ii, 1, stridepos) ]).y = temppos[0];
@@ -442,9 +450,9 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
 
 		//-------------------------------
 		//Horizontal bond ---------------
-		si = tempbond[T0];
+		si = (tempbond[T0]).x;
 		tempod = tempi;
-		sj = tempbond[T0 + d_lattice_Size];
+		sj = (tempbond[T0]).y;
 	
 		tempod ^= (1<<si);   //toggle bit 
 		tempod ^= (1<<sj);   //toggle bit 
@@ -462,7 +470,7 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
 
 		//Vertical bond -----------------
 		tempod = tempi;
-      		sj = tempbond[T0 + 2*lattice_Size];
+      		sj = (tempbond[T0]).z;
 
       		tempod ^= (1<<si);   //toggle bit 
      		tempod ^= (1<<sj);   //toggle bit
@@ -540,8 +548,7 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, int d_dim,
 		__syncthreads(); // have to make sure all loading is done before we start anything else
 
 		
-		long temp_pos[33];
-		cuDoubleComplex temp_val[33]; // originally I had these malloced as 
+		// originally I had these malloced as 
 		/* 	long* temp_pos = (long*)malloc(s_H_pos[0]*sizeof(long));
 			cuDoubleComplex* temp_val = (cuDoubleComplex*)malloc(s_H_pos[0]*sizeof(cuDoubleComplex));
 		*/
@@ -562,11 +569,10 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, int d_dim,
 
 	        if (col < size2){
 			if( (s_H_pos[col+1] != -1) ){
-				temp_pos[iter] = s_H_pos[col+1];
-				temp_val[iter] = s_H_vals[col];
+				
+                                (H_pos[ idx(row, iter+1, size1) ]).y = s_H_pos[col+1];
+                                H_vals[ idx(row, iter, size2) ] = s_H_vals[col];
 
-                                (H_pos[ idx(row, iter+1, size1) ]).y = temp_pos[iter];
-                                H_vals[ idx(row, iter, size2) ] = temp_val[iter];
 				iter++;
 			}
 		 
