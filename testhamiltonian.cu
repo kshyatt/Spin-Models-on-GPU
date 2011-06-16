@@ -12,7 +12,7 @@ Outputs:	basis_Position - a full array now
 		basis[] - a full array now
 
 */
-__host__ void GetBasis(int dim, int lattice_Size, int Sz, long basis_Position[], long basis[]){
+__host__ void GetBasis(long dim, int lattice_Size, int Sz, long basis_Position[], long basis[]){
 	unsigned long temp = 0;
 
 	for (unsigned long i1=0; i1<dim; i1++){
@@ -128,15 +128,15 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	unsigned long num_Elem = 0; // the total number of elements in the matrix, will get this (or an estimate) from the input types
 	cudaError_t status1, status2, status3;
 
-	int dim;
-	
+	const long dim = 65536;
+	/*
 	switch (model_Type){
-		case 0: dim = 2;
+		case 0: dim = 65536;
 		case 1: dim = 10; //guesses
 	}
-
+        */
 	
-	for (int ch=1; ch<lattice_Size; ch++) dim *=2;
+	//for (int ch=1; ch<lattice_Size; ch++) dim *= 2;
 
 	int stridepos = 2*lattice_Size + 2;
 	int strideval = 2*lattice_Size + 1;        
@@ -185,15 +185,15 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
 
 	dim3 bpg;
-        bpg.x = dim/32;
-        bpg.y =  lattice_Size;
+        bpg.x = dim/64;
+        bpg.y = lattice_Size;
 	dim3 tpb;
-        tpb.x = 32;
+        tpb.x = 64;
         tpb.y = 16; //these are going to need to depend on dim and Nsize
 
 	//--------------Declare the Hamiltonian arrays on the device, and copy the pointers to them to the device -----------//
 
-	
+        cout<<dim<<endl; 	
 
 	long2* h_H_pos;
 	cuDoubleComplex* h_H_vals; 
@@ -218,7 +218,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         cout<<"Running SetFirst"<<endl;	
      
         SetFirst<<<256, 256>>>(d_H_pos, stridepos, dim, 1); //count the diagonal element
-
+        cout<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
 	// --------------------- Fill up the sparse matrix and compress it to remove extraneous elements ------//
   
 
@@ -230,23 +230,32 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
 	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, dim, d_H_vals, d_H_pos, d_Bond, lattice_Size, JJ);
 
-
+        cout<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
 
 	cudaThreadSynchronize(); //need to make sure all elements are initialized before I start compression
 
-	cudaFree(&d_basis);
-        cudaFree(&d_basis_Position);
-        cudaFree(&d_Bond); // we don't need these later on
+	status1 = cudaFree(d_basis);
+        status2 = cudaFree(d_basis_Position);
+        status3 = cudaFree(d_Bond); // we don't need these later on
 	
-	bpg.x = dim/16;
-        bpg.y = ((2*lattice_Size)/32) + 1;
-	tpb.x = 16;
-        tpb.y = 32;
+        if ( (status1 != CUDA_SUCCESS) || 
+             (status2 != CUDA_SUCCESS) ||
+             (status3 != CUDA_SUCCESS) ){
+          cout<<"Freeing bond and basis information failed! Error: "
+          <<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
+          return 1;
+        }
 
-        cout<<"Running CompressSparse"<<endl;
-	
+	bpg.x = dim/32;
+        bpg.y = ((2*lattice_Size)/32) + 1;
+	tpb.x = 32;
+        tpb.y = 32;
+       	
 	CompressSparse<<<bpg, tpb>>>(d_H_vals, d_H_pos, dim, lattice_Size);
+        cout<<cudaGetErrorString(cudaPeekAtLastError())<<endl;
         cudaThreadSynchronize();
+
+        cout<<cudaGetErrorString(cudaPeekAtLastError() )<<endl;
 	
 	long2* buffer_H_pos; //I'm going to allocate pinned memory here. This will allow us to transfer information from the device much faster
 	cuDoubleComplex* buffer_H_vals;
@@ -261,24 +270,43 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
 	//----Copy over the Hamiltonian arrays and sort them-------------//
 
+        if (buffer_H_pos == NULL){
+          cout<<"Null pointer at buffer_pos!"<<endl;
+          return 1;
+        }
+        if (buffer_H_vals == NULL){
+          cout<<"Null pointer at buffer_val!"<<endl;
+          return 1;
+        }
 
+        long2* b_pos_add;
+        cuDoubleComplex* b_val_add;
+        
+        status1 = cudaHostGetDevicePointer(&b_pos_add, buffer_H_pos, 0);
+        status2 = cudaHostGetDevicePointer(&b_val_add, buffer_H_vals, 0);         
 
-	status1 = cudaMemcpy(buffer_H_pos, d_H_pos, (dim*stridepos*sizeof(long2)), cudaMemcpyDeviceToHost);
-	status2 = cudaMemcpy(buffer_H_vals, d_H_vals, dim*stridepos*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+	status1 = cudaMemcpy(b_pos_add, d_H_pos, (dim*stridepos*sizeof(long2)), cudaMemcpyDeviceToDevice);
+	status2 = cudaMemcpy(b_val_add, d_H_vals, dim*stridepos*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
 
-        if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-              cout<<"Copying Hamiltonian arrays from device to host failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
+        if (status1 != CUDA_SUCCESS){
+          cout<<"Copying Hamiltonian positions d-h failed! Error: "<<cudaGetErrorString(status1)<<endl;
+          return 1;
+        }
+          
+          
+        if (status2 != CUDA_SUCCESS) {
+              cout<<"Copying Hamiltonian values from device to host failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
               return 1;
         }
 
-	cudaFree(&d_H_vals);
-	cudaFree(&d_H_pos);
+	cudaFree(d_H_vals);
+	cudaFree(d_H_pos);
          
 	memcpy(h_H_pos, buffer_H_pos, dim*stridepos*sizeof(long2));
 	memcpy(h_H_vals, buffer_H_vals, dim*stridepos*sizeof(cuDoubleComplex));
 
-	cudaFreeHost(&buffer_H_pos);
-	cudaFreeHost(&buffer_H_vals); //keeping things in pinned memory slows down the computer	
+	cudaFreeHost(buffer_H_pos);
+	cudaFreeHost(buffer_H_vals); //keeping things in pinned memory slows down the computer	
        
 
 	hamstruct temphamstruct;
@@ -317,8 +345,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
 	UpperHalfToFull(h_H_pos, h_H_vals, buffer_H_pos, buffer_H_vals, num_Elem, dim, lattice_Size);
 	
-	cudaFreeHost(&h_H_vals);
-	cudaFreeHost(&h_H_pos);
+	cudaFreeHost(h_H_vals);
+	cudaFreeHost(h_H_pos);
 
 	dim3 tpb2 = ( tpb.x);	
 	dim3 bpg2 = ( (2*num_Elem - dim)/tpb.x );
@@ -339,8 +367,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
             return 1;                                                                        
         }
         	
-        cudaFreeHost(&buffer_H_vals);
-        cudaFreeHost(&buffer_H_pos);
+        cudaFreeHost(buffer_H_vals);
+        cudaFreeHost(buffer_H_pos);
         
 	status1 = cudaMalloc(&hamil_Values, num_Elem*sizeof(cuDoubleComplex));
 	status2 = cudaMalloc(&hamil_PosRow, num_Elem*sizeof(long));
@@ -357,8 +385,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         FullToCOO<<<bpg2, tpb2>>>(num_Elem, d_H_vals, d_H_pos, hamil_Values, hamil_PosRow, hamil_PosCol, dim); // csr and description initializations happen somewhere else
 
 
-	cudaFree(&d_H_vals); //cleanup
-	cudaFree(&d_H_pos);
+	cudaFree(d_H_vals); //cleanup
+	cudaFree(d_H_pos);
        
 
 	return 0;
@@ -432,12 +460,14 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
 	unsigned long tempi, tempj, tempod;
 	cuDoubleComplex tempD;
 
+        tempi = d_basis[ii];
+
 	if( ii < dim ){
             if (T0 < lattice_Size){
 
 		//Diagonal part----------------
                 if (blockIdx.y == 0){
-		    tempi = d_basis[ii];
+		    
 		    temppos[0] = d_basis_Position[tempi];
 
 		    tempval[0] = HDiagPart(tempi, lattice_Size, tempbond, JJ);
@@ -547,24 +577,7 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, int d_dim,
 
 		__syncthreads(); // have to make sure all loading is done before we start anything else
 
-		
-		// originally I had these malloced as 
-		/* 	long* temp_pos = (long*)malloc(s_H_pos[0]*sizeof(long));
-			cuDoubleComplex* temp_val = (cuDoubleComplex*)malloc(s_H_pos[0]*sizeof(cuDoubleComplex));
-		*/
-		// this was changed to allow compilation on Angel	
-                
 
-		/*
-                if ( temp_pos == (long*)NULL){
-                  printf("Allocation of temp_pos in iteration %d failed! \n", i);
-                }	
-
-                if ( temp_val == (cuDoubleComplex*)NULL){
-                  printf("Allocation of temp_val in iteration %d failed! \n", i);
-                }
-		*/
-		
                 
 
 	        if (col < size2){
@@ -573,7 +586,7 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, int d_dim,
                                 (H_pos[ idx(row, iter+1, size1) ]).y = s_H_pos[col+1];
                                 H_vals[ idx(row, iter, size2) ] = s_H_vals[col];
 
-				iter++;
+				atomicAdd(&iter,1);
 			}
 		 
 		}

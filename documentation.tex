@@ -20,7 +20,7 @@ This document describes code for generating Hamiltonians on lattices and then ap
 There are two codes used to generate the Hamiltonians: hamiltonian.cu and hamiltonian.h. The ``builder" function, ConstructSparseMatrix, creates and fills a number and three arrays with information about the Hamiltonian for a certain model and number of sites in the COO format
 
 \paragraph{$\_\_$host$\_\_$ int ConstructSparseMatrix(int, int, long*, cuDoubleComplex*, long*, long*)}
-\\
+
 Parameters:
 \begin{description}
 \item[int model$\_$Type] A value that tells ConstructSparseMatrix to build a Hamiltonian for the spin 1/2 Heisenberg (1), ..., or ... models.
@@ -60,7 +60,7 @@ Other Important Things:
 \end{itemize} 
 
 \paragraph{$\_\_$host$\_\_$ void GetBasis(int , int , int , long [], long [])}
-\\
+
 Parameters:
 \begin{description}
 \item[dim] The full dimension of the Hamiltonian
@@ -83,7 +83,7 @@ Possible Optimizations:
 \end{itemize}
 
 \paragraph{$\_\_$global$\_\_$ void FillSparse(long* , long* , int , cuDoubleComplex* , long2* , long* , int , const double )}
-\\
+
 Parameters:
 \begin{description}
 \item[d$\_$basis$\_$Position] The position information about the basis
@@ -114,10 +114,11 @@ Possible Optimizations:
 Other things:
 \begin{itemize}
 \item{H$\_$pos is a long2 because this makes later functions easier. The first long is the row index and the second is the column.}
+\item{If you want to add in another model, FillSparse needs to have the enum passed to it, and you'll need to write some equivalents of HOffX, HOffY, and HDiagPart. You might have to change the array size as well}
 \end{itemize}
 
 \paragraph{ $\_\_$global$\_\_$ void CompressSparse(cuDoubleComplex* , long2* , int , const int )}
-\\
+
 Parameters:
 \begin{description}
 \item[H$\_$vals] The array of Hamiltonian values
@@ -141,7 +142,7 @@ Possible Optimizations:
 \end{itemize}
 
 \paragraph{$\_\_$host$\_\_$ void UpperHalfToFull(long2* , cuDoubleComplex* , long2* , cuDoubleComplex* , long , long , int )}  
-\\
+
 Parameters:
 \begin{description}
 \item[H$\_$pos] (Half) the positions of the values in the Hamiltonian
@@ -152,6 +153,21 @@ Parameters:
 \item[dim] The dimension of the full Hamiltonian
 \item[lattice$\_$Size] The number of sites
 \end{description}
+
+The function proceeds by:
+\begin{enumerate}
+\item{Step through all elements in a row above the current one}
+\item{If one of those elements has the same column index as the current row index, put it in the row array}
+\item{Do this for all rows}
+\end{enumerate}
+
+Possible Optimizations:
+\begin{itemize}
+\item{This might be faster as a GPU function as well - not sure yet}
+\item{There are probably even more bithax to be done}
+\end{itemize}
+
+
 
 \section{Lanczos}
 
