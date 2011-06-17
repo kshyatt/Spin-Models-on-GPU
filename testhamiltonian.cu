@@ -289,25 +289,34 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	status2 = cudaMemcpy(b_val_add, d_H_vals, dim*stridepos*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
 
         if (status1 != CUDA_SUCCESS){
-          cout<<"Copying Hamiltonian positions d-h failed! Error: "<<cudaGetErrorString(status1)<<endl;
-          return 1;
+          	cout<<"Copying Hamiltonian positions d-h failed! Error: "<<cudaGetErrorString(status1)<<endl;
+          	return 1;
         }
           
           
         if (status2 != CUDA_SUCCESS) {
-              cout<<"Copying Hamiltonian values from device to host failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
-              return 1;
+              	cout<<"Copying Hamiltonian values from device to host failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
+              	return 1;
         }
 
-	cudaFree(d_H_vals);
-	cudaFree(d_H_pos);
+	status1 = cudaFree(d_H_vals);
+	status2 = cudaFree(d_H_pos);
+
+	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
+		cout<<"Freeing device Hamiltonian arrays failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
+		return 1;
+	}
          
 	memcpy(h_H_pos, buffer_H_pos, dim*stridepos*sizeof(long2));
 	memcpy(h_H_vals, buffer_H_vals, dim*stridepos*sizeof(cuDoubleComplex));
 
-	cudaFreeHost(buffer_H_pos);
-	cudaFreeHost(buffer_H_vals); //keeping things in pinned memory slows down the computer	
+	status1 = cudaFreeHost(buffer_H_pos);
+	status2 = cudaFreeHost(buffer_H_vals); //keeping things in pinned memory slows down the computer	
        
+	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
+		cout<<"Freeing buffer arrays failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
+		return 1;
+	}
 
 	hamstruct temphamstruct;
 
