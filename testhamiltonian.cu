@@ -107,6 +107,11 @@ __global__ void SetFirst(long2* H_pos, long stride, long dim, long value){
       (H_pos[ idx(i, 0, stride) ]).y = value;
     }
 }
+
+__device__ int nthdigit(long x, int n){
+      return (x/10^n)%10;
+}
+
 /* Function: ConstructSparseMatrix:
 
 Inputs: model_Type - tells this function how many elements there could be, what generating functions to use, etc. Presently only supports Heisenberg
@@ -135,8 +140,10 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 		case 1: dim = 10; //guesses
 	}
         */
-	
+      
 	//for (int ch=1; ch<lattice_Size; ch++) dim *= 2;
+
+        status1 = cudaSetDeviceFlags(cudaDeviceMapHost);
 
 	int stridepos = 2*lattice_Size + 2;
 	int strideval = 2*lattice_Size + 1;        
@@ -252,107 +259,14 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         tpb.y = 32;
        	
 	CompressSparse<<<bpg, tpb>>>(d_H_vals, d_H_pos, dim, lattice_Size);
-        cout<<cudaGetErrorString(cudaPeekAtLastError())<<endl;
+        
         cudaThreadSynchronize();
 
         cout<<cudaGetErrorString(cudaPeekAtLastError() )<<endl;
-	
-	long2* buffer_H_pos; //I'm going to allocate pinned memory here. This will allow us to transfer information from the device much faster
-	cuDoubleComplex* buffer_H_vals;
 
-	status1 = cudaHostAlloc((void**)&buffer_H_pos, dim*sizeof(long2), cudaHostAllocDefault);
-	status2 = cudaHostAlloc((void**)&buffer_H_vals, dim*sizeof(cuDoubleComplex), cudaHostAllocDefault);
+        SortHamiltonian<<<65536, 64>>>(d_H_pos, d_H_vals, dim, lattice_Size);
 
-        if ( (status1 != CUDA_SUCCESS ) || (status2 != CUDA_SUCCESS ) ){
-            cout<<"Memory allocation for Hamiltonian arrays on host failed!"<< cudaGetErrorString(cudaPeekAtLastError())<<endl;
-            return 1;
-        }
-
-	//----Copy over the Hamiltonian arrays and sort them-------------//
-
-        if (buffer_H_pos == NULL){
-          cout<<"Null pointer at buffer_pos!"<<endl;
-          return 1;
-        }
-        if (buffer_H_vals == NULL){
-          cout<<"Null pointer at buffer_val!"<<endl;
-          return 1;
-        }
-
-        long2* b_pos_add;
-        cuDoubleComplex* b_val_add;
-        
-        status1 = cudaHostGetDevicePointer(&b_pos_add, buffer_H_pos, 0);
-        status2 = cudaHostGetDevicePointer(&b_val_add, buffer_H_vals, 0);         
-
-	status1 = cudaMemcpy(b_pos_add, d_H_pos, (dim*stridepos*sizeof(long2)), cudaMemcpyDeviceToDevice);
-	status2 = cudaMemcpy(b_val_add, d_H_vals, dim*stridepos*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
-
-        if (status1 != CUDA_SUCCESS){
-          	cout<<"Copying Hamiltonian positions d-h failed! Error: "<<cudaGetErrorString(status1)<<endl;
-          	return 1;
-        }
-          
-          
-        if (status2 != CUDA_SUCCESS) {
-              	cout<<"Copying Hamiltonian values from device to host failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
-              	return 1;
-        }
-
-	status1 = cudaFree(d_H_vals);
-	status2 = cudaFree(d_H_pos);
-
-	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-		cout<<"Freeing device Hamiltonian arrays failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
-		return 1;
-	}
-         
-	memcpy(h_H_pos, buffer_H_pos, dim*stridepos*sizeof(long2));
-	memcpy(h_H_vals, buffer_H_vals, dim*stridepos*sizeof(cuDoubleComplex));
-
-	status1 = cudaFreeHost(buffer_H_pos);
-	status2 = cudaFreeHost(buffer_H_vals); //keeping things in pinned memory slows down the computer	
-       
-	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-		cout<<"Freeing buffer arrays failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
-		return 1;
-	}
-
-	hamstruct temphamstruct;
-
-        vector<hamstruct> sortcontainer; //creating these to sort
-
-	for (uint ii = 0; ii < dim; ii++){
-
-			num_Elem += (h_H_pos[ idx(ii, 0, stridepos)]).y;
-
-                	for (uint jj = 0; jj < (h_H_pos[ idx(ii, 0, stridepos) ]).y; jj++){
-                  		temphamstruct.position = (h_H_pos[ idx( ii, jj + 1, stridepos) ]).y;
-                  		temphamstruct.value = h_H_vals[ idx(ii, jj, strideval) ];
-
-                  		sortcontainer.push_back(temphamstruct);
-
-                	}
-
-                	sort(sortcontainer.begin(), sortcontainer.end()); //it may be that it's faster to sort on the GPU - will need to change this around and see - memory transfers might really slow this down
-
-			for(uint kk = 0; kk < sortcontainer.size(); kk++){
-			
-				(h_H_pos[ idx(ii, kk + 1, stridepos) ]).y = (sortcontainer.at(kk)).position;
-				h_H_vals[ idx(ii, kk, strideval) ] = (sortcontainer.at(kk)).value;
-			}	
-
-
-			for(uint ll = 0; ll < ((h_H_pos[ idx(ii, 0, stridepos) ]).y + 1); ll++){
-				cout<<"At position: ("<<ii<<", "<<(h_H_pos[ idx(ii, ll + 1, stridepos) ]).y<<": ";
-				cout<<h_H_vals[ idx( ii, ll, strideval) ].x<<endl;
-			}
-
-	}
-
-
-
-	UpperHalfToFull(h_H_pos, h_H_vals, buffer_H_pos, buffer_H_vals, num_Elem, dim, lattice_Size);
+        UpperHalfToFull(buffer_H_vals, buffer_H_pos, buffer_H_vals, num_Elem, dim, lattice_Size);
 	
 	cudaFreeHost(h_H_vals);
 	cudaFreeHost(h_H_pos);
@@ -389,7 +303,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 		cout<<"Memory allocation for COO representation failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
 		return 1;
 	}
-
+        cout<<"Running FullToCOO."<<endl;
 	
         FullToCOO<<<bpg2, tpb2>>>(num_Elem, d_H_vals, d_H_pos, hamil_Values, hamil_PosRow, hamil_PosCol, dim); // csr and description initializations happen somewhere else
 
@@ -698,4 +612,36 @@ __global__ void FullToCOO(long num_Elem, cuDoubleComplex* H_vals, long2* H_pos, 
 		
 	}
 }
+
+__global__ void SortHamiltonian( long2* H_pos, cuDoubleComplex* H_vals, long dim, int lattice_Size){
+      long i = blockIdx.x;
+      int j = threadIdx.x;
+
+      __shared__ long max;
+      max = 0;
+      __shared__ int maxnumdigits;
+      __shared__ stop;
+
+      __shared__ hamstruct temparray[64];
+      __shared__ hamstruct sortarray[64];
+
+      if ( i < dim){
+
+            stop = (H_pos[ idx(i, 0, 2*lattice_Size + 2) ]).y;
+            if (j < stop ){
+              (temparray[j]).position  = ( H_pos[ idx(i, j + 1, 2*lattice_Size + 2) ] ).y;
+              (temparray[j]).value = H_vals[ idx(i, j, 2*lattice_Size + 1) ];
+
+              (sortarray[j]).position = 0;
+              (sortarray[j]).value = make_cuDoubleComplex(0.,0.);
+
+              max = max ^ ( (max ^ (temparray[j]).position) & -(max < (temparray[j]).position) ); //computes maximum using bithax
+            }
+
+            __syncthreads; //need to finish loading everything            
+
+            maxnumdigits = floor ( log10 ( max ) ) + 1; 
+
+
+
 
