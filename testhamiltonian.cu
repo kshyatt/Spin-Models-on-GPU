@@ -266,7 +266,26 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
         SortHamiltonian<<<65536, 64>>>(d_H_pos, d_H_vals, dim, lattice_Size);
 
-        UpperHalfToFull(buffer_H_vals, buffer_H_pos, buffer_H_vals, num_Elem, dim, lattice_Size);
+	long2* buffer_H_pos;
+	cuDoubleComplex* buffer_H_vals;
+
+	cudaHostAlloc(&buffer_H_pos, dim*stridepos*sizeof(long2), cudaHostAllocDefault);
+	cudaHostAlloc(&buffer_H_vals, dim*strideval*sizeof(cuDoubleComplex), cudaHostAllocDefault);
+
+	cudaMemcpy(buffer_H_pos, d_H_pos, dim*stridepos*sizeof(long2), cudaMemcpyDeviceToHost);
+	cudaMemcpy(buffer_H_vals, d_H_vals, dim*strideval*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+
+	cudaMemcpy(h_H_pos, buffer_H_pos, dim*stridepos*sizeof(long2), cudaMemcpyHostToHost);
+	cudaMemcpy(h_H_vals, buffer_H_vals, dim*strideval*sizeof(cuDoubleComplex), cudaMemcpyHostToHost);
+
+	cudaFreeHost(buffer_H_pos);
+	cudaFreeHost(buffer_H_vals);
+
+	for(int ii = 0; ii < dim; ii++){
+		num_Elem += (h_H_pos[ idx(ii, 0, stridepos) ]).y;
+	}
+
+        UpperHalfToFull(h_H_pos, h_H_vals, buffer_H_pos, buffer_H_vals, num_Elem, dim, lattice_Size);
 	
 	cudaFreeHost(h_H_vals);
 	cudaFreeHost(h_H_pos);
@@ -614,34 +633,49 @@ __global__ void FullToCOO(long num_Elem, cuDoubleComplex* H_vals, long2* H_pos, 
 }
 
 __global__ void SortHamiltonian( long2* H_pos, cuDoubleComplex* H_vals, long dim, int lattice_Size){
-      long i = blockIdx.x;
-      int j = threadIdx.x;
+	long i = blockIdx.x;
+	int j = threadIdx.x;
 
-      __shared__ long max;
-      max = 0;
-      __shared__ int maxnumdigits;
-      __shared__ stop;
+	__shared__ long maxpos;
+	maxpos = 0;
+	__shared__ int maxnumdigits;
+	__shared__ int rowlength;
 
-      __shared__ hamstruct temparray[64];
-      __shared__ hamstruct sortarray[64];
+	__shared__ hamstruct temparray[33];
+	__shared__ int sortarray[10];
 
-      if ( i < dim){
+	if ( i < dim){
 
-            stop = (H_pos[ idx(i, 0, 2*lattice_Size + 2) ]).y;
-            if (j < stop ){
-              (temparray[j]).position  = ( H_pos[ idx(i, j + 1, 2*lattice_Size + 2) ] ).y;
-              (temparray[j]).value = H_vals[ idx(i, j, 2*lattice_Size + 1) ];
+      		rowlength = (H_pos[ idx(i, 0, 2*lattice_Size + 2) ]).y;
+      	
+		if (j < rowlength ){
+      			(temparray[j]).position  = ( H_pos[ idx(i, j + 1, 2*lattice_Size + 2) ] ).y;
+              		(temparray[j]).value = H_vals[ idx(i, j, 2*lattice_Size + 1) ];
 
-              (sortarray[j]).position = 0;
-              (sortarray[j]).value = make_cuDoubleComplex(0.,0.);
+              		sortarray[j] = 0;
 
-              max = max ^ ( (max ^ (temparray[j]).position) & -(max < (temparray[j]).position) ); //computes maximum using bithax
-            }
+              		maxpos = maxpos ^ ( (maxpos ^ (temparray[j]).position) & -(maxpos < (temparray[j]).position) ); //computes maximum using bithax
+        	       	__syncthreads; //need to finish loading everything            
+	       		maxnumdigits = floor ( log10f( maxpos ) ) + 1; 
 
-            __syncthreads; //need to finish loading everything            
+			for(int k = 1; k < maxnumdigits; k++){
+				int key = nthdigit(temparray[j].position, 1);
+				sortarray[key] = sortarray[key] + 1;
+				maxpos = 0; //maxpos now functions as total
+  			
+				if ( j < 10 ){				
+					int temp = sortarray[j];
+					sortarray[j] = maxpos;
+					maxpos = maxpos + temp;
+				}
 
-            maxnumdigits = floor ( log10 ( max ) ) + 1; 
+				temparray[sortarray[key]] = temparray[j];
+				sortarray[key] = sortarray[key] + 1;
+			}//k
+					
+		}//j
 
-
+	}//i
+}
 
 

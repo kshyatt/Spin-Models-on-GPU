@@ -65,3 +65,5 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, int d_dim,
 __host__ void UpperHalfToFull(long2* H_pos, cuDoubleComplex* H_vals, long2* buffer_pos, cuDoubleComplex* buffer_val, long num_Elem, long dim, int lattice_Size);
 
 __global__ void FullToCOO(long num_Elem, cuDoubleComplex* H_vals, long2* H_pos, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol, long dim);
+
+__global__ void SortHamiltonian(long2* H_pos, cuDoubleComplex* H_vals, long dim, int lattice_Size);
