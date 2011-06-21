@@ -237,8 +237,11 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
 	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, dim, d_H_vals, d_H_pos, d_Bond, lattice_Size, JJ);
 
-        cout<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
-
+        if( cudaPeekAtLastError() != 0 ){
+		cout<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
+		return 1;
+	}
+		
 	cudaThreadSynchronize(); //need to make sure all elements are initialized before I start compression
 
 	status1 = cudaFree(d_basis);
@@ -672,6 +675,10 @@ __global__ void SortHamiltonian( long2* H_pos, cuDoubleComplex* H_vals, long dim
 				temparray[sortarray[key]] = temparray[j];
 				sortarray[key] = sortarray[key] + 1;
 			}//k
+
+			(H_pos[ idx(i, j, 2*lattice_Size + 2) ]).y = temparray[j].position;
+			H_vals[ idx(i, j, 2*lattice_Size + 1) ] = temparray[j].value;
+			//passing the sorted array back to global memory
 					
 		}//j
 
