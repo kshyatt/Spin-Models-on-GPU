@@ -60,7 +60,7 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
 
 
 
-__global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, int d_dim, const int lattice_Size);
+__global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, long d_dim, const int lattice_Size);
 
 __host__ void UpperHalfToFull(long2* H_pos, cuDoubleComplex* H_vals, long2* buffer_pos, cuDoubleComplex* buffer_val, long num_Elem, long dim, int lattice_Size);
 
