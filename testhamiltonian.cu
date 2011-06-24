@@ -203,7 +203,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
 	dim3 bpg;
         bpg.x = vdim/64;
-        bpg.y = lattice_Size;
+        bpg.y = 1;
 	dim3 tpb;
         tpb.x = 64;
         tpb.y = 16; //these are going to need to depend on dim and Nsize
@@ -283,26 +283,43 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         
         SortHamiltonian<<<vdim/2, 64>>>(d_H_pos, d_H_vals, vdim, lattice_Size, 0);
         cudaThreadSynchronize();
+
+        if (cudaPeekAtLastError != 0){
+              cout<<cudaGetErrorString(cudaPeekAtLastError())<<endl;
+              return 1;
+        }
+
         SortHamiltonian<<<vdim/2, 64>>>(d_H_pos, d_H_vals, vdim, lattice_Size, vdim/2);
         cudaThreadSynchronize();
 
         if (cudaPeekAtLastError != 0){
           cout<<cudaGetErrorString(cudaPeekAtLastError())<<endl;
+          return 1;
         }
 
 	long2* buffer_H_pos;
 	cuDoubleComplex* buffer_H_vals;
 
-	cudaHostAlloc(&buffer_H_pos, vdim*stridepos*sizeof(long2), cudaHostAllocDefault);
-	cudaHostAlloc(&buffer_H_vals, vdim*strideval*sizeof(cuDoubleComplex), cudaHostAllocDefault);
+	status1 = cudaHostAlloc(&buffer_H_pos, vdim*stridepos*sizeof(long2), cudaHostAllocDefault);
+	status2 = cudaHostAlloc(&buffer_H_vals, vdim*strideval*sizeof(cuDoubleComplex), cudaHostAllocDefault);
+
+        if ( (status1 != CUDA_SUCCESS) ){
+              cout<<"Allocation of buffer positions failed! Error: "<<cudaGetErrorString(status1)<<endl;
+              return 1;
+        }
+
+        if ( (status2 != CUDA_SUCCESS) ){
+              cout<<"Allocation of buffer values failed! Error: "<<cudaGetErrorString(status2)<<endl;
+              return 1;
+        }
 
         cudaThreadSynchronize();
 
-	cudaMemcpy(buffer_H_pos, d_H_pos, vdim*stridepos*sizeof(long2), cudaMemcpyDeviceToHost);
-	cudaMemcpy(buffer_H_vals, d_H_vals, vdim*strideval*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+	status1 = cudaMemcpy(buffer_H_pos, d_H_pos, vdim*stridepos*sizeof(long2), cudaMemcpyDeviceToHost);
+	status2 = cudaMemcpy(buffer_H_vals, d_H_vals, vdim*strideval*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 
-	cudaMemcpy(h_H_pos, buffer_H_pos, vdim*stridepos*sizeof(long2), cudaMemcpyHostToHost);
-	cudaMemcpy(h_H_vals, buffer_H_vals, vdim*strideval*sizeof(cuDoubleComplex), cudaMemcpyHostToHost);
+	status1 = cudaMemcpy(h_H_pos, buffer_H_pos, vdim*stridepos*sizeof(long2), cudaMemcpyHostToHost);
+	status2 = cudaMemcpy(h_H_vals, buffer_H_vals, vdim*strideval*sizeof(cuDoubleComplex), cudaMemcpyHostToHost);
 
 	cudaFreeHost(buffer_H_pos);
 	cudaFreeHost(buffer_H_vals);
@@ -409,13 +426,14 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
         __shared__ long3 tempbond[16];
         __shared__ int count;
 	count = 0;
+        //printf("%d ", count);
         __shared__ long temppos[16];
         __shared__ cuDoubleComplex tempval[16]; //going to eliminate a huge number of read/writes to d_Bond, H_vals, H_pos in global memory
 
-        if(jj < lattice_Size) {
-        	(tempbond[jj]).x = d_Bond[jj];
-		(tempbond[jj]).y = d_Bond[lattice_Size + jj];
-		(tempbond[jj]).z = d_Bond[2*lattice_Size + jj];
+        if(T0 < lattice_Size) {
+        	(tempbond[T0]).x = d_Bond[T0];
+		(tempbond[T0]).y = d_Bond[lattice_Size + T0];
+		(tempbond[T0]).z = d_Bond[2*lattice_Size + T0];
         }
         
 
@@ -458,7 +476,8 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
 		if (d_basis_Position[tempod] > ii){ //build only upper half of matrix
         		temppos[T0] = d_basis_Position[tempod];
         		tempval[T0] = HOffBondX(T0,tempi, JJ);
-			atomicAdd(&count,1); 
+			count++;
+                         
       		}
 
 		else {
@@ -483,7 +502,8 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
         		temppos[T0] = d_basis_Position[tempod];
    
         		tempval[T0] = HOffBondY(T0,tempi, JJ);
-			atomicAdd(&count,1);
+			count++;           
+                        
       		}
 
 		else {
@@ -494,12 +514,16 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
                 //time to write back to global memory
                 __syncthreads;
                 (H_pos[ idx(ii, 0, stridepos) ]).x = ii;
-                (H_pos[ idx(ii, 0, stridepos) ]).y, count;
+                (H_pos[ idx(ii, 0, stridepos) ]).y = count + 1;
+
+                printf("%d \t", count);
                 
                 (H_pos[ idx(ii, 2*T0 + 1, stridepos) ]).x = ii;
                 (H_pos[ idx(ii, 2*T0 + 1, stridepos) ]).y = temppos[T0];
                 
                 H_vals[ idx(ii, 2*T0 + 1, strideval) ] = tempval[T0];
+                
+                
                                  
             }//end of T0 
 
@@ -667,23 +691,26 @@ __global__ void SortHamiltonian( long2* H_pos, cuDoubleComplex* H_vals, long dim
 	int j = threadIdx.x;
 
 	__shared__ int maxpos;
-	maxpos = 0;
-	__shared__ int maxnumdigits;
-	__shared__ int rowlength;
+	atomicExch(&maxpos,0);
+	int maxnumdigits;
+	int rowlength;
 
 	__shared__ hamstruct temparray[33];
 	__shared__ int sortarray[10];
 
+        if (j <  10){
+                sortarray[j] = 0;
+        }
+
 	if ( i < dim){
 
       		rowlength = (H_pos[ idx(i, 0, 2*lattice_Size + 2) ]).y;
-      	
+                //printf("%d \t", rowlength);	
 		if (j < rowlength ){
       			(temparray[j]).position  = ( H_pos[ idx(i, j + 1, 2*lattice_Size + 2) ] ).y;
               		(temparray[j]).value = H_vals[ idx(i, j, 2*lattice_Size + 1) ];
                         //printf("%d \n", (temparray[j]).position);
-              		sortarray[j] = 0;
-
+           		
               		atomicMax(&maxpos, (temparray[j]).position ); //computes maximum using bithax
         	       	__syncthreads(); //need to finish loading everything            
 	       		maxnumdigits = floor ( log10f( maxpos ) ) + 1; 
