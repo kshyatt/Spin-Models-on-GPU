@@ -6,7 +6,7 @@
 #include<stdio.h>
 #include"cuda.h"
 #include"cuComplex.h"
-
+#include<fstream>
 
 using namespace std;
 
