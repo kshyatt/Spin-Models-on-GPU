@@ -12,11 +12,9 @@ Outputs:	basis_Position - a full array now
 		basis[] - a full array now
 
 */
-__host__ int GetBasis(long dim, int lattice_Size, int Sz, long basis_Position[], long basis[]){
+__host__ long GetBasis(long dim, int lattice_Size, int Sz, long basis_Position[], long basis[]){
 	unsigned long temp = 0;
 	long realdim = 0;
-
-	long iter = 0;
 
 	for (unsigned long i1=0; i1<dim; i1++){
       		temp = 0;
@@ -25,10 +23,10 @@ __host__ int GetBasis(long dim, int lattice_Size, int Sz, long basis_Position[],
           		temp += (i1>>sp)&1;
 		}  //unpack bra
       		if (temp==(lattice_Size/2+Sz) ){ 
-          		basis[iter] = i1;
-          		basis_Position[i1] = i1 -1;
+          		basis[realdim] = i1;
+          		basis_Position[i1] = realdim;
 			realdim++;
-			iter++;
+			//cout<<basis[realdim]<<" "<<basis_Position[i1]<<endl;
       		}
   	} 
 
@@ -288,6 +286,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
               cout<<cudaGetErrorString(cudaPeekAtLastError())<<endl;
               return 1;
         }
+        cout<<"First sorting completed"<<endl;
 
         SortHamiltonian<<<vdim/2, 64>>>(d_H_pos, d_H_vals, vdim, lattice_Size, vdim/2);
         cudaThreadSynchronize();
@@ -297,7 +296,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
           return 1;
         }
 
-        cout<<"Sorting completed"<<endl;
+        cout<<"Second sorting completed"<<endl;
 
 	long2* buffer_H_pos;
 	cuDoubleComplex* buffer_H_vals;
@@ -447,7 +446,6 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
         __shared__ long3 tempbond[16];
         __shared__ int count;
 	atomicExch(&count, 0);
-        //printf("%d ", count);
         __shared__ long temppos[32];
         __shared__ cuDoubleComplex tempval[32]; //going to eliminate a huge number of read/writes to d_Bond, H_vals, H_pos in global memory
 
@@ -504,12 +502,6 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
 			tempval[2*T0] = make_cuDoubleComplex(0., 0.);
 		}
 
-
-                H_vals[ idx(ii, 2*T0, strideval) ] = tempval[2*T0];
-                (H_pos[ idx(ii, 2*T0, stridepos) ]).y = temppos[2*T0];
-                (H_pos[ idx(ii, 2*T0, stridepos) ]).x = ii;
-                
-
 		//Vertical bond -----------------
 		tempod = tempi;
       		sj = (tempbond[T0]).z;
@@ -530,16 +522,20 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
 
                 //time to write back to global memory
                 __syncthreads;
-                (H_pos[ idx(ii, 0, stridepos) ]).x = ii;
+
+		
+                H_vals[ idx(ii, 2*T0, strideval) ] = tempval[2*T0];
+                (H_pos[ idx(ii, 2*T0, stridepos) ]).y = temppos[2*T0];
+                (H_pos[ idx(ii, 2*T0, stridepos) ]).x = ii;                
+
+		(H_pos[ idx(ii, 0, stridepos) ]).x = ii;
                 (H_pos[ idx(ii, 0, stridepos) ]).y = count + 1;
                                
                 (H_pos[ idx(ii, 2*T0 + 1, stridepos) ]).x = ii;
                 (H_pos[ idx(ii, 2*T0 + 1, stridepos) ]).y = temppos[2*T0 + 1];
                 
                 H_vals[ idx(ii, 2*T0 + 1, strideval) ] = tempval[2*T0 + 1];
-                
-                printf("%d \t", count);
-                                 
+                                                 
             }//end of T0 
 
 	}//end of ii
@@ -715,16 +711,12 @@ __global__ void SortHamiltonian( long2* H_pos, cuDoubleComplex* H_vals, long dim
 	int rowlength;
 
 	__shared__ hamstruct temparray[33];
-	__shared__ int sortarray[10];
+	__shared__ int sortarray[64];
 
-        if (j <  10){
-                sortarray[j] = 0;
-        }
-
-	if ( i < dim){
+        if ( i < dim){
 
       		rowlength = (H_pos[ idx(i, 0, 2*lattice_Size + 2) ]).y;
-                //printf("%d \t", rowlength);	
+                printf("%d ", rowlength);	
 		if (j < rowlength ){
       			(temparray[j]).position  = ( H_pos[ idx(i, j + 1, 2*lattice_Size + 2) ] ).y;
               		(temparray[j]).value = H_vals[ idx(i, j, 2*lattice_Size + 1) ];          		
@@ -732,23 +724,24 @@ __global__ void SortHamiltonian( long2* H_pos, cuDoubleComplex* H_vals, long dim
         	       	__syncthreads(); //need to finish loading everything            
 	       		maxnumdigits = floor ( log10f( maxpos ) ) + 1; 
 
-			maxpos = 0; //maxpos now functions as total
+			atomicExch(&maxpos, 0); //maxpos now functions as total
 	
 			__syncthreads();
 
-			for(int k = 1; k < maxnumdigits; k++){
-				int key = nthdigit(temparray[j].position, 1);
-				sortarray[key] = sortarray[key] + 1;
-				
-  			
-				if ( j < 10 ){				
-					int temp = sortarray[j];
-					sortarray[j] = maxpos;
-					maxpos += temp;
-				}
+                        int key;
 
+			for(int k = 1; k < maxnumdigits; k++){
+				key = nthdigit(temparray[j].position, 1);
+				atomicAdd(&sortarray[key], 1);
+	  							
+                                sortarray[j] = 0;			
+				int temp = sortarray[j];
+				sortarray[j] = maxpos;
+				atomicAdd(&maxpos, temp);
+				
+                                printf("%d \t", sortarray[key]);
 				temparray[sortarray[key]] = temparray[j];
-				sortarray[key] = sortarray[key] + 1;
+				atomicAdd(&sortarray[key], 1);
 
                                 __syncthreads();
 

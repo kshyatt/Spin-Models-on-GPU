@@ -1,7 +1,6 @@
 #include<cmath>
 #include<iostream>
 #include<cstdlib>
-#include<algorithm>
 #include<vector>
 #include<stdio.h>
 #include"cuda.h"
@@ -54,6 +53,16 @@ __global__ void longarraysalloc(long** a, long dim, long n, long m){
     printf("The %d th values array failed to allocate! \n", i);
   }
 
+}
+__device__ long atomicAdd(long* address, long val){
+	unsigned long long int* address_as_ull = (unsigned long long int *)address; 
+	unsigned long long int old = *address_as_ull, assumed;
+	do {
+		assumed = old;
+		old = atomicCAS(address_as_ull, assumed, __long_as_longlong(val + __longlong_as_long(assumed)));
+	} while (assumed != old);
+
+	return __longlong_as_long(old);
 }
 */
 __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDoubleComplex* H_vals, long2* H_pos, long* d_Bond, int lattice_Size, const double JJ);
