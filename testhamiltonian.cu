@@ -200,6 +200,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
 
 	dim3 bpg;
+
+	if (vdim <= 65336);
         bpg.x = vdim;
         
 	dim3 tpb;
@@ -207,8 +209,6 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         //these are going to need to depend on dim and Nsize
 
 	//--------------Declare the Hamiltonian arrays on the device, and copy the pointers to them to the device -----------//
-
-        cout<<vdim<<endl; 	
 
 	long2* h_H_pos;
 	cuDoubleComplex* h_H_vals; 
@@ -230,15 +230,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
         //the above code should work on devices of any compute capability - YEAAAAH
 
-        cout<<"Running SetFirst"<<endl;	
-     
-        SetFirst<<<256, 256>>>(d_H_pos, stridepos, vdim, 1); //count the diagonal element
-        cout<<cudaGetErrorString( cudaPeekAtLastError() )<<endl;
 	// --------------------- Fill up the sparse matrix and compress it to remove extraneous elements ------//
   
-
-        cudaThreadSynchronize();
-	
         double JJ = 1.;
 
         cout<<"Running FillSparse"<<endl;
@@ -345,8 +338,6 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	}
 
         fout.close();
-
-        cout<<num_Elem<<endl;
 
         UpperHalfToFull(h_H_pos, h_H_vals, buffer_H_pos, buffer_H_vals, num_Elem, vdim, lattice_Size);
 	
@@ -711,12 +702,12 @@ __global__ void SortHamiltonian( long2* H_pos, cuDoubleComplex* H_vals, long dim
 	int rowlength;
 
 	__shared__ hamstruct temparray[33];
-	__shared__ int sortarray[64];
+	__shared__ int sortarray[10];
 
         if ( i < dim){
 
       		rowlength = (H_pos[ idx(i, 0, 2*lattice_Size + 2) ]).y;
-                printf("%d ", rowlength);	
+                	
 		if (j < rowlength ){
       			(temparray[j]).position  = ( H_pos[ idx(i, j + 1, 2*lattice_Size + 2) ] ).y;
               		(temparray[j]).value = H_vals[ idx(i, j, 2*lattice_Size + 1) ];          		
@@ -724,22 +715,26 @@ __global__ void SortHamiltonian( long2* H_pos, cuDoubleComplex* H_vals, long dim
         	       	__syncthreads(); //need to finish loading everything            
 	       		maxnumdigits = floor ( log10f( maxpos ) ) + 1; 
 
-			atomicExch(&maxpos, 0); //maxpos now functions as total
-	
-			__syncthreads();
-
                         int key;
+                        int lowerthreadcount = 0;//need to see the number of elements under this key
 
 			for(int k = 1; k < maxnumdigits; k++){
 				key = nthdigit(temparray[j].position, 1);
-				atomicAdd(&sortarray[key], 1);
-	  							
-                                sortarray[j] = 0;			
-				int temp = sortarray[j];
-				sortarray[j] = maxpos;
-				atomicAdd(&maxpos, temp);
-				
-                                printf("%d \t", sortarray[key]);
+				if (j < 10) sortarray[j] = 0;
+                                atomicAdd(&sortarray[key], 1);
+                                lowerthreadcount = 0;
+	  		        //printf("%d ", key);
+                                __syncthreads();	
+                                if (j < 10){			      		
+				      for (int l = 0; l < j; l++){
+                                            lowerthreadcount+=sortarray[l];
+                                      }
+                                      __syncthreads();
+
+                                      sortarray[j] = lowerthreadcount;
+				}
+                                
+                                printf("%d %d %d \t", i, lowerthreadcount, sortarray[key]);
 				temparray[sortarray[key]] = temparray[j];
 				atomicAdd(&sortarray[key], 1);
 
