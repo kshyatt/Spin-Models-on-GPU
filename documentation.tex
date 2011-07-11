@@ -1,0 +1,176 @@
+\documentclass{article}
+
+\author{Katharine Hyatt}
+\title{Documentation for Lanczos and Hamiltonian generating CUDA code}
+
+\usepackage{fullpage}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+This document describes code for generating Hamiltonians on lattices and then applying the Lanczos procedure to them to approximate the low energy spectrum of the Hamiltonians. There are two main files: hamiltonian.cu, and lanczos.cu. The Hamiltonian generation is treated first. For each major function in the files, the function prototype is given first, then a description of each of its parameters, a description of the steps the function takes and what it actually does, and some possible optimizations that could be implemented. Notes are also included about what other functions would be affected by changes to the function in question.
+
+\section{Hamiltonian Generation}
+
+\subsection{General Description}
+
+There are two codes used to generate the Hamiltonians: hamiltonian.cu and hamiltonian.h. The ``builder" function, ConstructSparseMatrix, creates and fills a number and three arrays with information about the Hamiltonian for a certain model and number of sites in the COO format
+
+\paragraph{$\_\_$host$\_\_$ int ConstructSparseMatrix(int, int, long*, cuDoubleComplex*, long*, long*)}
+
+Parameters:
+\begin{description}
+\item[int model$\_$Type] A value that tells ConstructSparseMatrix to build a Hamiltonian for the spin 1/2 Heisenberg (1), ..., or ... models.
+\item[int lattice$\_$Size] The number of lattice sites
+\item[long* Bond] An array containing the bond information for the model we're using 
+\item[cuDoubleComplex* hamil$\_$Values] A device pointer that will have an array of Hamiltonian values allocated at it as ConstructSparseMatrix runs
+\item[long* hamil$\_$PosRow] A device pointer that will have an array of row indices allocated at it as ConstructSparseMatrix runs, in the COO form
+\item[long* hamil$\_$PosCol] A device pointer that will have an array of column indicies allocated at is as ConstructSparseMatrix runs, in the COO form
+\end{description}
+
+The function proceeds by:
+\begin{enumerate}
+\item{Figuring out (from model$\_$Type and lattice$\_$Size) what the dimension of the system is}
+\item{Constructing a basis for the system on the CPU (could maybe move to GPU)}
+\item{Allocating device and host FORTRAN style (1D row-major format) arrays to hold the 2D Hamiltonian matrix on host and device}
+\item{Call function FillSparse, which constructs the Hamiltonian naively and counts the number of nonzero elements per row}
+\item{Call function CompressSparse, which moves all the nonzero elements and their positions to the ``front'' of the row arrays}
+\item{Copy the Hamiltonian arrays back to the host, sort them by position}
+\item{Call function UpperHalfToFull, which fills out the lower triangular half of the Hamiltonian}
+\item{Copy the Hamiltonian back to the device}
+\item{Call function FulltoCOO, which transforms the representation to COO form}
+\end{enumerate}
+
+If the function completes successfully, the three hamil$\_*$ arrays will be allocated and filled, and can be transformed to CSR format for the Lanczos procedure.
+ 
+Possible Optimizations:
+\begin{itemize}
+\item{Since memory transfers may be the main bottleneck, it might be faster to construct the basis on the GPU - this way there are two fewer arrays to transfer over}
+\item{It may also be faster to just use the radix sort provided with thrust, instead of copying over and using the STL. The downside of using thrust is that we have to use weird pointer mechanics, and their vectors are pretty slow. However thrust will work with custom structs like hamstruct (in the same way std::sort does).}
+\item{Filling out the lower half of the matrix may be faster on GPU as well (because of the memory bottleneck)}
+\end{itemize}
+
+Other Important Things:
+\begin{itemize}
+\item{I created buffer$\_$H$\_*$ because copying from pinned memory to the GPU and back can be up to 2$\times$ faster than regular memory transfer. However since the OS needs pinned memory for other things, we have to be careful not to use too much. If the rest of the system starts to really slow down while running this code, just copy directly to h$\_$H$\_*$ and get rid of the buffers - nothing else should be affected}
+\item{ There's a lot of error checking going on - it's probably possible to outsource this to a function. It uses cudaGetErrorString so people debugging don't have to go do a table lookup.}
+\end{itemize} 
+
+\paragraph{$\_\_$host$\_\_$ void GetBasis(int , int , int , long [], long [])}
+
+Parameters:
+\begin{description}
+\item[dim] The full dimension of the Hamiltonian
+\item[lattice$\_$Size] The number of sites
+\item[Sz] The spin operator in the $\hat{z}$ direction
+\item[basis$\_$Position] An empty array of size dim to hold information about the basis positions
+\item[basis] An empty array of size dim to hold information about the basis
+\end{description}
+
+The function proceeds by:
+\begin{enumerate}
+\item{For each value from 0 to dim, step through the arrays}
+\item{Determine whether or not there is an element at that position}
+\end{enumerate}
+
+Possible Optimizations:
+\begin{itemize}
+\item{If this becomes a device function, you could put temp in shared memory for threads in the y direction}
+\item{Using some bithax to get rid of the if statement would probably speed this up a bit}
+\end{itemize}
+
+\paragraph{$\_\_$global$\_\_$ void FillSparse(long* , long* , int , cuDoubleComplex* , long2* , long* , int , const double )}
+
+Parameters:
+\begin{description}
+\item[d$\_$basis$\_$Position] The position information about the basis
+\item[d$\_$basis] The information about the basis
+\item[dim] The dimension of the Hamiltonian
+\item[H$\_$vals] An empty array that will store the Hamiltonian values
+\item[H$\_$pos] An empty array that will store the Hamiltonian positions
+\item[d$\_$Bond] An array that stores the bond information
+\item[lattice$\_$Size] The number of sites
+\item[JJ] The coupling constant
+\end{description}
+
+The function proceeds by:
+\begin{enumerate}
+\item{Create some indexing variables, depending where we are in the block/thread structure}
+\item{Create several shared arrays to speed up memory access}
+\item{Copy the bond data into shared memory}
+\item{Construct the diagonal, off-x, and off-y components of the Hamiltonian in shared memory}
+\item{Copy the Hamiltonian information back to global memory}
+\end{enumerate}
+
+Possible Optimizations:
+\begin{itemize}
+\item{Instead of doing the off-x and off-y parts for each lattice site sequentially, I should probably do it by block or something}
+\item{There's probably a way to use shared memory more intelligently here - should be using atomicAdd to change the count as well}
+\end{itemize}
+
+Other things:
+\begin{itemize}
+\item{H$\_$pos is a long2 because this makes later functions easier. The first long is the row index and the second is the column.}
+\item{If you want to add in another model, FillSparse needs to have the enum passed to it, and you'll need to write some equivalents of HOffX, HOffY, and HDiagPart. You might have to change the array size as well}
+\end{itemize}
+
+\paragraph{ $\_\_$global$\_\_$ void CompressSparse(cuDoubleComplex* , long2* , int , const int )}
+
+Parameters:
+\begin{description}
+\item[H$\_$vals] The array of Hamiltonian values
+\item[H$\_$pos] The array of Hamiltonian positions in the columns
+\item[dim] The dimension of the Hamiltonian
+\item[lattice$\_$Size] The number of sites
+\end{description}
+
+The function proceeds by
+\begin{enumerate}
+\item{Moves the Hamiltonian information into shared memory}
+\item{Checks to see if the column index of a value is -1}
+\item{If not, the value is put back into the Hamiltonian array. If yes, the value is overwritten}
+\item{The Hamiltonian arrays are left with some ``junk'' values that are not accessed again at the end of each ``row''}
+\end{enumerate}
+
+Possible Optimizations:
+\begin{itemize}
+\item{If CUDA stores TRUE/FALSE as -1/0, that could make this much easier}
+\item{There's probably a better way to use shared memory here too}
+\end{itemize}
+
+\paragraph{$\_\_$host$\_\_$ void UpperHalfToFull(long2* , cuDoubleComplex* , long2* , cuDoubleComplex* , long , long , int )}  
+
+Parameters:
+\begin{description}
+\item[H$\_$pos] (Half) the positions of the values in the Hamiltonian
+\item[H$\_$vals] (Half) the values of the Hamiltonian
+\item[buffer$\_$pos] A buffer array that will be filled with the positions for the full Hamiltonian
+\item[buffer$\_$val] A buffer array that will be filled with the values for the full Hamiltonian
+\item[num$\_$Elem] The number of nonzero elements in the upper half and diagonal
+\item[dim] The dimension of the full Hamiltonian
+\item[lattice$\_$Size] The number of sites
+\end{description}
+
+The function proceeds by:
+\begin{enumerate}
+\item{Step through all elements in a row above the current one}
+\item{If one of those elements has the same column index as the current row index, put it in the row array}
+\item{Do this for all rows}
+\end{enumerate}
+
+Possible Optimizations:
+\begin{itemize}
+\item{This might be faster as a GPU function as well - not sure yet}
+\item{There are probably even more bithax to be done}
+\end{itemize}
+
+
+
+\section{Lanczos}
+
+\section{References}
+
+\end{document}
