@@ -6,8 +6,10 @@
 #include"cuda.h"
 #include"cuComplex.h"
 #include<fstream>
+#include"thrust/sort.h"
+#include"thrust/device_ptr.h"
 
-using namespace std;
+using namespace thrust;
 
 #define likely(x)   __builtin_expect((x),1)
 #define unlikely(x) __builtin_expect((x),0)
@@ -19,60 +21,40 @@ __host__ __device__ long idx(long i, long j, long lda){
 
 }
 
+__device__ long d_num_Elem;
+
 struct hamstruct{
 
-	long position;
+	long row;
+        long col;
 	cuDoubleComplex value;
+        long dim;
 
-	bool operator>(const hamstruct& rhs)const{return position > rhs.position;};
-	bool operator<(const hamstruct& rhs)const{return position < rhs.position;};
-	bool operator>=(const hamstruct& rhs)const{return position >= rhs.position;};
-	bool operator<=(const hamstruct& rhs)const{return position <= rhs.position;};
+	bool operator>(const hamstruct& rhs)const{return ( (row + col*dim) > (rhs.row + rhs.col*rhs.dim) ) ;};
+	bool operator<(const hamstruct& rhs)const{return ( (row + col*dim) < (rhs.row + rhs.col*rhs.dim) ) ;};
+	bool operator>=(const hamstruct& rhs)const{return ( (row + col*dim) >= (rhs.row + rhs.col*rhs.dim) ) ;};
+	bool operator<=(const hamstruct& rhs)const{return ( (row + col*dim) <= (rhs.row + rhs.col*rhs.dim) ) ;};
 };
-/*
-__global__ void CDCarraysalloc(cuDoubleComplex** a, long dim, long n, long m){
-  long i = blockDim.x*blockIdx.x + threadIdx.x + m;
-  
-  if (i < dim){
-    a[i] = (cuDoubleComplex*)malloc(n*sizeof(cuDoubleComplex));
-  }
 
-  if  (a[i] == (cuDoubleComplex*)NULL) {
-    printf("The %d th positions array failed to allocate! \n", i);
-  }
-
-}
-
-__global__ void longarraysalloc(long** a, long dim, long n, long m){
-  long i = blockDim.x*blockIdx.x + threadIdx.x + m;
-  if (i < dim){
-    a[i] = (long*)malloc(n*sizeof(long));
-  }
-
-  if (a[i] == (long*)NULL) {
-    printf("The %d th values array failed to allocate! \n", i);
-  }
-
-}
 __device__ long atomicAdd(long* address, long val){
 	unsigned long long int* address_as_ull = (unsigned long long int *)address; 
 	unsigned long long int old = *address_as_ull, assumed;
 	do {
 		assumed = old;
-		old = atomicCAS(address_as_ull, assumed, __long_as_longlong(val + __longlong_as_long(assumed)));
+		old = atomicCAS(address_as_ull, assumed, (long long)(val + (long)(assumed)));
 	} while (assumed != old);
 
-	return __longlong_as_long(old);
+	return (long)(old);
 }
-*/
+
 __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDoubleComplex* H_vals, long2* H_pos, long* d_Bond, int lattice_Size, const double JJ);
 
-
-
-__global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, long d_dim, const int lattice_Size);
+__global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, hamstruct* H_sort, long d_dim, const int lattice_Size);
 
 __host__ void UpperHalfToFull(long2* H_pos, cuDoubleComplex* H_vals, long2* buffer_pos, cuDoubleComplex* buffer_val, long num_Elem, long dim, int lattice_Size);
 
 __global__ void FullToCOO(long num_Elem, cuDoubleComplex* H_vals, long2* H_pos, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol, long dim);
 
-__global__ void SortHamiltonian(long2* H_pos, cuDoubleComplex* H_vals, long dim, int lattice_Size, long start);
+__global__ void GetNumElem(long2* H_pos, int lattice_Size);
+
+__global__ void CopyBack(hamstruct* H_sort, long2* H_pos, cuDoubleComplex* H_vals, long dim, int lattice_Size, long num_Elem);
