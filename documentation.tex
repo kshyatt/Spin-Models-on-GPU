@@ -4,8 +4,20 @@
 \title{Documentation for Lanczos and Hamiltonian generating CUDA code}
 
 \usepackage{fullpage}
-
+\usepackage[usenames, dvipsnames]{color}
 \begin{document}
+\renewcommand{\int}{\textcolor{Green}{int $\,$}}
+\newcommand{\const}{\textcolor{Green}{const $\,$}}
+\renewcommand{\long}{\textcolor{Green}{long $\,$}}
+\newcommand{\double}{\textcolor{Green}{double $\,$}}
+\newcommand{\typelongptr}{\textcolor{Green}{long$^\ast \,$}}
+\newcommand{\void}{\textcolor{Green}{void $\,$}}
+\newcommand{\typelongtwoptr}{\textcolor{Green}{long2$^\ast \,$}}
+\newcommand{\cuDoubleComplex}{\textcolor{Green}{cuDoubleComplex$^\ast \,$}}
+\newcommand{\hamstruct}{\textcolor{Green}{hamstruct$^\ast \,$}}
+\newcommand{\host}{\textcolor{Red}{$\_\_$host$\_\_ \; \;$}}
+\newcommand{\cudaglobal}{\textcolor{Red}{$\_\_$global$\_\_ \; \;$}}
+\newcommand{\device}{\textcolor{Red}{$\_\_$device$\_\_ \; \;$}}
 
 \maketitle
 
@@ -19,26 +31,27 @@ This document describes code for generating Hamiltonians on lattices and then ap
 
 There are two codes used to generate the Hamiltonians: hamiltonian.cu and hamiltonian.h. The ``builder" function, ConstructSparseMatrix, creates and fills a number and three arrays with information about the Hamiltonian for a certain model and number of sites in the COO format
 
-\paragraph{$\_\_$host$\_\_$ int ConstructSparseMatrix(int, int, long*, cuDoubleComplex*, long*, long*)}
-
-Parameters:
+\paragraph{\host \int ConstructSparseMatrix(\int, \int, \typelongptr, \cuDoubleComplex, \typelongptr, \typelongptr) \\ \\}
+\noindent\textbf{Parameters}:
 \begin{description}
-\item[int model$\_$Type] A value that tells ConstructSparseMatrix to build a Hamiltonian for the spin 1/2 Heisenberg (1), ..., or ... models.
-\item[int lattice$\_$Size] The number of lattice sites
-\item[long* Bond] An array containing the bond information for the model we're using 
-\item[cuDoubleComplex* hamil$\_$Values] A device pointer that will have an array of Hamiltonian values allocated at it as ConstructSparseMatrix runs
-\item[long* hamil$\_$PosRow] A device pointer that will have an array of row indices allocated at it as ConstructSparseMatrix runs, in the COO form
-\item[long* hamil$\_$PosCol] A device pointer that will have an array of column indicies allocated at is as ConstructSparseMatrix runs, in the COO form
+\item[\int model$\_$Type] A value that tells ConstructSparseMatrix to build a Hamiltonian for the spin 1/2 Heisenberg (1), ..., or ... models.
+\item[\int lattice$\_$Size] The number of lattice sites
+\item[\typelongptr Bond] An array containing the bond information for the model we're using 
+\item[\cuDoubleComplex hamil$\_$Values] A device pointer that will have an array of Hamiltonian values allocated at it as ConstructSparseMatrix runs
+\item[\typelongptr hamil$\_$PosRow] A device pointer that will have an array of row indices allocated at it as ConstructSparseMatrix runs, in the COO form
+\item[\typelongptr hamil$\_$PosCol] A device pointer that will have an array of column indicies allocated at is as ConstructSparseMatrix runs, in the COO form
 \end{description}
 
-The function proceeds by:
+\noindent\textbf{The function proceeds by:}
 \begin{enumerate}
 \item{Figuring out (from model$\_$Type and lattice$\_$Size) what the dimension of the system is}
 \item{Constructing a basis for the system on the CPU (could maybe move to GPU)}
 \item{Allocating device and host FORTRAN style (1D row-major format) arrays to hold the 2D Hamiltonian matrix on host and device}
 \item{Call function FillSparse, which constructs the Hamiltonian naively and counts the number of nonzero elements per row}
-\item{Call function CompressSparse, which moves all the nonzero elements and their positions to the ``front'' of the row arrays}
-\item{Copy the Hamiltonian arrays back to the host, sort them by position}
+\item{Call function GetNumElem, which finds how many nonzero elements there are}
+\item{Call function CompressSparse, which moves all the nonzero elements and their positions into the array d$\_$H$\_$sort which is an array of hamstructs}
+\item{Sort the Hamiltonian array on the device by using the Thrust library}
+\item{Call function CopyBack, which copies the sorted array information from d$\_$H$\_$sort back to d$\_$H$\_$pos and d$\_$H$\_$vals}
 \item{Call function UpperHalfToFull, which fills out the lower triangular half of the Hamiltonian}
 \item{Copy the Hamiltonian back to the device}
 \item{Call function FulltoCOO, which transforms the representation to COO form}
@@ -49,7 +62,6 @@ If the function completes successfully, the three hamil$\_*$ arrays will be allo
 Possible Optimizations:
 \begin{itemize}
 \item{Since memory transfers may be the main bottleneck, it might be faster to construct the basis on the GPU - this way there are two fewer arrays to transfer over}
-\item{It may also be faster to just use the radix sort provided with thrust, instead of copying over and using the STL. The downside of using thrust is that we have to use weird pointer mechanics, and their vectors are pretty slow. However thrust will work with custom structs like hamstruct (in the same way std::sort does).}
 \item{Filling out the lower half of the matrix may be faster on GPU as well (because of the memory bottleneck)}
 \end{itemize}
 
@@ -59,18 +71,17 @@ Other Important Things:
 \item{ There's a lot of error checking going on - it's probably possible to outsource this to a function. It uses cudaGetErrorString so people debugging don't have to go do a table lookup.}
 \end{itemize} 
 
-\paragraph{$\_\_$host$\_\_$ void GetBasis(int , int , int , long [], long [])}
-
-Parameters:
+\paragraph{\host \void GetBasis(\int , \int , \int , \long [], \long []) \\ \\}
+\noindent\textbf{Parameters}:
 \begin{description}
-\item[dim] The full dimension of the Hamiltonian
-\item[lattice$\_$Size] The number of sites
-\item[Sz] The spin operator in the $\hat{z}$ direction
-\item[basis$\_$Position] An empty array of size dim to hold information about the basis positions
-\item[basis] An empty array of size dim to hold information about the basis
+\item[\long dim] The full dimension of the Hamiltonian
+\item[\int lattice$\_$Size] The number of sites
+\item[\int Sz] The spin operator in the $\hat{z}$ direction
+\item[\long basis$\_$Position] An empty array of size dim to hold information about the basis positions
+\item[\long basis] An empty array of size dim to hold information about the basis
 \end{description}
 
-The function proceeds by:
+\noindent\textbf{The function proceeds by:}
 \begin{enumerate}
 \item{For each value from 0 to dim, step through the arrays}
 \item{Determine whether or not there is an element at that position}
@@ -82,21 +93,20 @@ Possible Optimizations:
 \item{Using some bithax to get rid of the if statement would probably speed this up a bit}
 \end{itemize}
 
-\paragraph{$\_\_$global$\_\_$ void FillSparse(long* , long* , int , cuDoubleComplex* , long2* , long* , int , const double )}
-
-Parameters:
+\paragraph{\cudaglobal \void FillSparse(\typelongptr , \typelongptr , \int, \cuDoubleComplex , \typelongtwoptr , \int , \int , \const \double ) \\ \\ }
+\noindent\textbf{Parameters}:
 \begin{description}
-\item[d$\_$basis$\_$Position] The position information about the basis
-\item[d$\_$basis] The information about the basis
-\item[dim] The dimension of the Hamiltonian
-\item[H$\_$vals] An empty array that will store the Hamiltonian values
-\item[H$\_$pos] An empty array that will store the Hamiltonian positions
-\item[d$\_$Bond] An array that stores the bond information
-\item[lattice$\_$Size] The number of sites
-\item[JJ] The coupling constant
+\item[\typelongptr d$\_$basis$\_$Position] The position information about the basis
+\item[\typelongptr d$\_$basis] The information about the basis
+\item[\long dim] The dimension of the Hamiltonian
+\item[\cuDoubleComplex H$\_$vals] An empty array that will store the Hamiltonian values
+\item[\typelongtwoptr H$\_$pos] An empty array that will store the Hamiltonian positions
+\item[\int d$\_$Bond] An array that stores the bond information
+\item[\int lattice$\_$Size] The number of sites
+\item[const \double JJ] The coupling constant
 \end{description}
 
-The function proceeds by:
+\noindent\textbf{The function proceeds by:}
 \begin{enumerate}
 \item{Create some indexing variables, depending where we are in the block/thread structure}
 \item{Create several shared arrays to speed up memory access}
@@ -108,31 +118,44 @@ The function proceeds by:
 Possible Optimizations:
 \begin{itemize}
 \item{Instead of doing the off-x and off-y parts for each lattice site sequentially, I should probably do it by block or something}
-\item{There's probably a way to use shared memory more intelligently here - should be using atomicAdd to change the count as well}
+\item{There's probably a way to use shared memory more intelligently here}
 \end{itemize}
 
 Other things:
 \begin{itemize}
-\item{H$\_$pos is a long2 because this makes later functions easier. The first long is the row index and the second is the column.}
+\item{H$\_$pos is a typelongptr because this makes later functions easier. The first typelongptr is the row index and the second is the column.}
 \item{If you want to add in another model, FillSparse needs to have the enum passed to it, and you'll need to write some equivalents of HOffX, HOffY, and HDiagPart. You might have to change the array size as well}
 \end{itemize}
 
-\paragraph{ $\_\_$global$\_\_$ void CompressSparse(cuDoubleComplex* , long2* , int , const int )}
-
-Parameters:
+\paragraph{\cudaglobal \void GetNumElem( \typelongtwoptr , \int ) \\ \\}
+\noindent\textbf{Parameters}:
 \begin{description}
-\item[H$\_$vals] The array of Hamiltonian values
-\item[H$\_$pos] The array of Hamiltonian positions in the columns
-\item[dim] The dimension of the Hamiltonian
-\item[lattice$\_$Size] The number of sites
+\item[\typelongtwoptr H$\_$pos] The array of Hamiltonian positions
+\item[\int lattice$\_$Size] The number of lattice sites
 \end{description}
 
-The function proceeds by
+\noindent\textbf{The function proceeds by:}
+\begin{enumerate}
+\item{Each thread gets the number of elements in the corresponding row}
+\item{This number is added to a global $\_\_$device$\_\_$ variable called d$\_$num$\_$Elem}
+\end{enumerate}
+
+\paragraph{\cudaglobal \void CompressSparse(\cuDoubleComplex , \typelongtwoptr , \hamstruct , \int , \const \int ) \\ \\}
+\noindent\textbf{Parameters}:
+\begin{description}
+\item[\cuDoubleComplex H$\_$vals] The array of Hamiltonian values
+\item[\typelongtwoptr H$\_$pos] The array of Hamiltonian positions in the columns
+\item[\hamstruct H$\_$sort] The array of ``good'' values to be sorted
+\item[\long dim] The dimension of the Hamiltonian
+\item[\int lattice$\_$Size] The number of sites
+\end{description}
+
+\noindent\textbf{The function proceeds by:}
 \begin{enumerate}
 \item{Moves the Hamiltonian information into shared memory}
 \item{Checks to see if the column index of a value is -1}
-\item{If not, the value is put back into the Hamiltonian array. If yes, the value is overwritten}
-\item{The Hamiltonian arrays are left with some ``junk'' values that are not accessed again at the end of each ``row''}
+\item{If not, the value is put into the sorting array. If yes, nothing is done}
+\item{The sorting array lacks information about how many ``good'' values per row there are, but this doesn't matter because the struct overloading of > and < ensures that row-ordering is preserved }
 \end{enumerate}
 
 Possible Optimizations:
@@ -141,20 +164,41 @@ Possible Optimizations:
 \item{There's probably a better way to use shared memory here too}
 \end{itemize}
 
-\paragraph{$\_\_$host$\_\_$ void UpperHalfToFull(long2* , cuDoubleComplex* , long2* , cuDoubleComplex* , long , long , int )}  
-
-Parameters:
+\paragraph{\cudaglobal \void CopyBack(\hamstruct , \typelongtwoptr, \cuDoubleComplex , \long , \int, \long ) \\ \\}
+\noindent\textbf{Parameters}:
 \begin{description}
-\item[H$\_$pos] (Half) the positions of the values in the Hamiltonian
-\item[H$\_$vals] (Half) the values of the Hamiltonian
-\item[buffer$\_$pos] A buffer array that will be filled with the positions for the full Hamiltonian
-\item[buffer$\_$val] A buffer array that will be filled with the values for the full Hamiltonian
-\item[num$\_$Elem] The number of nonzero elements in the upper half and diagonal
-\item[dim] The dimension of the full Hamiltonian
-\item[lattice$\_$Size] The number of sites
+\item[\hamstruct H$\_$sort] The array of sorted Hamiltonian positions and values
+\item[\typelongtwoptr H$\_$pos] The array of Hamiltonian positions that will be refilled
+\item[\cuDoubleComplex H$\_$vals] The array of Hamiltonian values taht will be refilled
+\item[\long dim] The dimension of the Hamiltonian
+\item[\int lattice$\_$Size] The number of lattice sites
+\item[\long num$\_$Elem] The total number of nonzero elements
 \end{description}
 
-The function proceeds by:
+\noindent\textbf{The function proceeds by:}
+\begin{enumerate}
+\item{Finding where in H$\_$sort the corresponding row starts}
+\item{Filling H$\_$pos and H$\_$vals with the corresponding elements from H$\_$sort}
+\end{enumerate}
+
+Possible Optimizations:
+\begin{itemize}
+\item{There may be a way to use shared memory here}
+\end{itemize}
+
+\paragraph{\host \void UpperHalfToFull(\typelongtwoptr , \cuDoubleComplex , \typelongtwoptr , \cuDoubleComplex , \long , \long , \int ) \\ \\}  
+\noindent\textbf{Parameters}:
+\begin{description}
+\item[\typelongtwoptr H$\_$pos] (Half) the positions of the values in the Hamiltonian
+\item[\cuDoubleComplex H$\_$vals] (Half) the values of the Hamiltonian
+\item[\typelongtwoptr buffer$\_$pos] A buffer array that will be filled with the positions for the full Hamiltonian
+\item[\cuDoubleComplex buffer$\_$val] A buffer array that will be filled with the values for the full Hamiltonian
+\item[\long num$\_$Elem] The number of nonzero elements in the upper half and diagonal
+\item[\long dim] The dimension of the full Hamiltonian
+\item[\int lattice$\_$Size] The number of sites
+\end{description}
+
+\noindent\textbf{The function proceeds by:}
 \begin{enumerate}
 \item{Step through all elements in a row above the current one}
 \item{If one of those elements has the same column index as the current row index, put it in the row array}
@@ -167,7 +211,45 @@ Possible Optimizations:
 \item{There are probably even more bithax to be done}
 \end{itemize}
 
+\paragraph{\cudaglobal \void FullToCOO(\int , \cuDoubleComplex , \typelongtwoptr , \cuDoubleComplex , \typelongptr , \typelongptr, \long) \\ \\}
+\noindent\textbf{Parameters}:
+\begin{description}
+\item[\int num$\_$Elem] The number of nonzero elements
+\item[\cuDoubleComplex H$\_$vals] The array of the Hamiltonian values
+\item[\typelongtwoptr H$\_$pos] The array of the Hamiltonian positions
+\item[\cuDoubleComplex hamil$\_$values] The array that will store only the nonzero Hamiltonian values (for COO form)
+\item[\typelongptr hamil$\_$PosRow] The array that will store the row positions of the nonzero values (for COO form)
+\item[\typelongptr hamil$\_$PosCol] The array that will store the column positions of the nonzero values (for COO form)
+\item[\long dim] The dimension of the Hamiltonian
 
+\end{description}
+
+\noindent\textbf{The function proceeds by:}
+\begin{enumerate}
+\item{Loading the Hamiltonian information into shared memory}
+\item{Copying it back out to the hamil$\_$* arrays}
+\end{enumerate}
+
+\subsection{Things Left To Do}
+\paragraph{Functionality}
+\begin{itemize}
+\item{Get the code to work!}
+\item{FillSparse might be changed so that it's more intuitive to add/change the models}
+\item{More basis-generating functions need to be written}
+\end{itemize}
+\paragraph{Benchmarking}
+\begin{itemize}
+\item{Is it faster to do the basis stuff on or off the GPU?}
+\item{Need to figure out which kernels are slow}
+\item{It may be worthwhile to use asynchronous memory transfers in a couple places because the kernel isn't operating on the set of data that needs to move}
+\item{cudaEvent timers need to be placed around kernel calls to time them}
+\end{itemize}
+
+\subsection{Changing Things}
+Right now the entire process uses double precision. Double precision is much slower on GPU than single precision, but this is becoming less pronounced as the Tesla cards get better. If you want to change to single precision, you'll need to run a find/replace on cuDoubleComplex, changing it to cuFloatComplex. The arrays that use cuDoubleComplex are *$\_$H$\_$vals and hamil$\_$values.\\ 
+To add another model, you'll need to write some functions to describe the bond interactions and then just add an if-statement for the model type which will call to them in FillSparse. If you've got more than two functions (right now there are only two non-diagonal functions) then just refill the shared memory arrays and push into the global memory d$\_$H$\_$*s. FillSparse should be the only function that needs to be changed, because all the others don't call model-specific functions.\\
+If you want to use the full Hamiltonian (not just the S$_z$ sector) you'll need to change a few kernel calls because many cards only allow you to call 65336 blocks at a time. In this case you'll either need to increase the number of threads per block or call the kernel twice, with each kernel handling part of the data. 
+ 
 
 \section{Lanczos}
 

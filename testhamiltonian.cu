@@ -573,13 +573,12 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, hamstruct*
 
         long start = 0;
 
-        for (int i = 0; i < d_dim; i++){
-              start += (H_pos[ idx(row, 0, 2*lattice_Size + 2) ]).y;
-        }
+        if (row < d_dim){
 
-	if (row < d_dim){
-
-		// the basic idea here is to have each x thread go to the ith row, and each y thread go to the jth element of that row. then using a set of __shared__ temp arrays, we read in the Hamiltonian values and do our comparisons n stuff on them
+                for (int i = 0; i < d_dim; i++){
+                        start += (H_pos[ idx(row, 0, 2*lattice_Size + 2) ]).y;
+                }
+                // the basic idea here is to have each x thread go to the ith row, and each y thread go to the jth element of that row. then using a set of __shared__ temp arrays, we read in the Hamiltonian values and do our comparisons n stuff on them
 		const int size1 = 2*lattice_Size + 2;
 		const int size2 = 2*lattice_Size + 1;
 	
@@ -588,32 +587,25 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, hamstruct*
 		
 
 		if (col < size2){
-			s_H_pos[col] = (H_pos[ idx( row, col, size1 ) ]).y;
+			s_H_pos[col] = (H_pos[ idx( row, col + 1, size1 ) ]).y;
 			s_H_vals[col] = H_vals[ idx( row, col, size2) ];
                 
                 }
 
-		if (col == size2){
-			s_H_pos[col] = (H_pos[ idx(row, col, size1) ]).y;
-		} //loading the Hamiltonian information into shared memory
-
-                
+		//loading the Hamiltonian information into shared memory
 
 		__syncthreads(); // have to make sure all loading is done before we start anything else
 
-             
-
 	        if (col < size2){
-			if( (s_H_pos[col+1] != -1) ){
+			if( (s_H_pos[col] != -1) ){
 				(H_sort[start + iter]).row = row;
-                                (H_sort[start + iter]).col = s_H_pos[col+1];
+                                (H_sort[start + iter]).col = s_H_pos[col];
                                 (H_sort[start + iter]).value = s_H_vals[col];
          
 				atomicAdd(&iter,1);
 			}
 		 
 		}
-
 		
 	}
 }
@@ -746,4 +738,3 @@ __global__ void CopyBack(hamstruct* H_sort, long2* H_pos, cuDoubleComplex* H_val
         }
                  
 }
-
