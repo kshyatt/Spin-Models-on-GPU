@@ -280,12 +280,12 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	tpb.x = 32;
         tpb.y = 32;
 
-        hamstruct* d_H_sort;
-        status1 = cudaMalloc(&d_H_sort, num_Elem*sizeof(hamstruct));
-
         std::cout<<"Running CompressSparse"<<std::endl;
        	
-	CompressSparse<<<bpg, tpb>>>(d_H_vals, d_H_pos, d_H_sort, vdim, lattice_Size);
+	CompressSparse<<<bpg, tpb>>>(d_H_vals, d_H_pos, vdim, lattice_Size);
+
+	hamstruct* d_H_sort;
+        status1 = cudaMalloc(&d_H_sort, (2*num_Elem - vdim)*sizeof(hamstruct));
         
         cudaThreadSynchronize();
 
@@ -294,26 +294,33 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
               return 1;
         }
 
+	std::cout<<"Filling out the Hamiltonian"<<std::endl;
+
+        UpperHalfToFull<<<bpg, tpb>>>(d_H_pos, d_H_vals, d_H_sort, num_Elem, vdim, lattice_Size);
+	cudaThreadSynchronize();
+
+	cudaFree(d_H_vals); //cleanup
+	cudaFree(d_H_pos);
+
         //----------------Sorting Hamiltonian--------------------------//
 
         thrust::device_ptr<hamstruct> sort_ptr(d_H_sort);
-
-        thrust::sort(sort_ptr, sort_ptr + num_Elem);
+        std::cout<<"Sorting begun"<<std::endl;
+        thrust::sort(sort_ptr, sort_ptr + num_Elem, ham_sort_function());
         
         //--------------------------------------------------------------
 
         //----------------Copying sorted data back--------------------//
 
-
-        CopyBack<<<vdim, 64>>>(d_H_sort, d_H_pos, d_H_vals, vdim, lattice_Size, num_Elem);
-
+        cudaThreadSynchronize();
         if (cudaPeekAtLastError() != 0){
-                std::cout<<"CopyBack launch failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
+                std::cout<<"Error in sorting! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
                 return 1;
         }
 
+        std::cout<<"Sorting complete"<<std::endl;
 
-	long2* buffer_H_pos;
+        /*long2* buffer_H_pos;
 	cuDoubleComplex* buffer_H_vals;
 
 	status1 = cudaHostAlloc(&buffer_H_pos, vdim*stridepos*sizeof(long2), cudaHostAllocDefault);
@@ -340,7 +347,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         }
 
 	status1 = cudaMemcpy(h_H_pos, buffer_H_pos, vdim*stridepos*sizeof(long2), cudaMemcpyHostToHost);
-	status2 = cudaMemcpy(h_H_vals, buffer_H_vals, vdim*stridepos*sizeof(cuDoubleComplex), cudaMemcpyHostToHost);
+	status2 = cudaMemcpy(h_H_vals, buffer_H_vals, vdim*strideval*sizeof(cuDoubleComplex), cudaMemcpyHostToHost);
 
         if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
                 std::cout<<"Copy of Hamiltonian from buffer to host failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
@@ -350,24 +357,22 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	cudaFreeHost(buffer_H_pos);
 	cudaFreeHost(buffer_H_vals);
 
-        /*ofstream fout;
+        
+        std::ofstream fout;
         fout.open("GPU.txt");
 
 
 	for(int ii = 0; ii < vdim; ii++){
-		num_Elem += (h_H_pos[ idx(ii, 0, stridepos) ]).y;
-                fout<<(h_H_pos[ idx(ii, 0, stridepos) ]).y<<endl;
+		//num_Elem += (h_H_pos[ idx(ii, 0, stridepos) ]).y;
+                fout<<(h_H_pos[ idx(ii, 0, stridepos) ]).y<<std::endl;
 	}
 
-        fout.close();*/
-
-        UpperHalfToFull(h_H_pos, h_H_vals, buffer_H_pos, buffer_H_vals, num_Elem, vdim, lattice_Size);
+        fout.close();
+        
+        
 	
 	cudaFreeHost(h_H_vals);
 	cudaFreeHost(h_H_pos);
-
-	dim3 tpb2 = ( tpb.x);	
-	dim3 bpg2 = ( (2*num_Elem - vdim)/tpb.x );
 
 	status1 = cudaMalloc(&d_H_vals, (2*num_Elem - vdim)*sizeof(cuDoubleComplex));
 	status2 = cudaMalloc(&d_H_pos, (2*num_Elem - vdim)*sizeof(long2));
@@ -380,13 +385,20 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         status1 = cudaMemcpy(d_H_vals, buffer_H_vals, (2*num_Elem - vdim)*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
         status2 = cudaMemcpy(d_H_pos, buffer_H_pos, (2*num_Elem - vdim)*sizeof(long2), cudaMemcpyHostToDevice);
                                                                                        
-	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-            std::cout<<"Hamiltonian copy from host buffer to device failed!"<< cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;     
+	if (status1 != CUDA_SUCCESS) {
+            std::cout<<"Hamiltonian values copy from host buffer to device failed!"<< cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;     
             return 1;                                                                        
+        }
+
+        if (status2 != CUDA_SUCCESS) {
+            std::cout<<"Hamiltonian position copy from host buffer to device failed!"<<std::endl;
+            return 1;
         }
         	
         cudaFreeHost(buffer_H_vals);
         cudaFreeHost(buffer_H_pos);
+	*/
+        num_Elem = 2*num_Elem - vdim;
         
 	status1 = cudaMalloc(&hamil_Values, num_Elem*sizeof(cuDoubleComplex));
 	status2 = cudaMalloc(&hamil_PosRow, num_Elem*sizeof(long));
@@ -398,13 +410,17 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 		std::cout<<"Memory allocation for COO representation failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
 		return 1;
 	}
-        std::cout<<"Running FullToCOO."<<std::endl;
+        
+	dim3 tpb2 = ( tpb.x);	
+	dim3 bpg2 = ( (2*num_Elem - vdim)/tpb.x );
+		
+	std::cout<<"Running FullToCOO."<<std::endl;
 	
-        FullToCOO<<<bpg2, tpb2>>>(num_Elem, d_H_vals, d_H_pos, hamil_Values, hamil_PosRow, hamil_PosCol, vdim); // csr and description initializations happen somewhere else
+        FullToCOO<<<bpg2, tpb2>>>(num_Elem, d_H_sort, hamil_Values, hamil_PosRow, hamil_PosCol, vdim); // csr and description initializations happen somewhere else
 
-
-	cudaFree(d_H_vals); //cleanup
-	cudaFree(d_H_pos);
+        cudaThreadSynchronize();
+	
+	cudaFree(d_H_sort);
        
 
 	return 0;
@@ -571,12 +587,14 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, hamstruct*
 	__shared__ int iter;
 	iter = 0;
 
+        __syncthreads();
+
         long start = 0;
 
         if (row < d_dim){
 
-                for (int i = 0; i < d_dim; i++){
-                        start += (H_pos[ idx(row, 0, 2*lattice_Size + 2) ]).y;
+                for (int i = 0; i < row; i++){
+                        start += (H_pos[ idx(i, 0, 2*lattice_Size + 2) ]).y;
                 }
                 // the basic idea here is to have each x thread go to the ith row, and each y thread go to the jth element of that row. then using a set of __shared__ temp arrays, we read in the Hamiltonian values and do our comparisons n stuff on them
 		const int size1 = 2*lattice_Size + 2;
@@ -598,9 +616,10 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, hamstruct*
 
 	        if (col < size2){
 			if( (s_H_pos[col] != -1) ){
-				(H_sort[start + iter]).row = row;
-                                (H_sort[start + iter]).col = s_H_pos[col];
+                                (H_sort[start + iter]).rowindex = row;
+                                (H_sort[start + iter]).colindex = s_H_pos[col];
                                 (H_sort[start + iter]).value = s_H_vals[col];
+                                (H_sort[start + iter]).dim = d_dim;
          
 				atomicAdd(&iter,1);
 			}
@@ -610,69 +629,35 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, hamstruct*
 	}
 }
 
-//this function takes the upper half form I had from FillSparse and CompressSparse and fills out the bottom half of the matrix - since there are so many comparisons it's probably faster to just do this on CPU
-__host__ void UpperHalfToFull(long2* H_pos, cuDoubleComplex* H_vals, long2* buffer_pos, cuDoubleComplex* buffer_val, long num_Elem, long dim, int lattice_Size) {
+//this function takes the upper half form I had from FillSparse and CompressSparse and fills out the bottom half of the matrix 
+__global__ void UpperHalfToFull(long2* H_pos, cuDoubleComplex* H_vals, hamstruct* H_sort, long num_Elem, long dim, int lattice_Size) {
+
+	long ii = blockDim.x*blockIdx.x + threadIdx.x;
+	int jj = blockDim.y*blockIdx.y + threadIdx.y;
 
 	int stridepos = 2*lattice_Size + 2;
 	int strideval = 2*lattice_Size + 1;
 
-	cudaHostAlloc(&buffer_pos, (2*num_Elem - dim)*sizeof(long2), cudaHostAllocDefault);
-	cudaHostAlloc(&buffer_val, (2*num_Elem - dim)*sizeof(cuDoubleComplex), cudaHostAllocDefault);
+   	unsigned long start = 0;
 
-	unsigned long start = 0;
-
-	for(long ii = 0; ii<dim; ii++){
-                //cout<<start<<endl;         
-		long size = dim - (H_pos[ idx(ii, 0, stridepos) ]).y ; // the maximum number of nonzero elements we could pull from the columns
-		cuDoubleComplex* temp;
-		long* temp_col;
-
-		temp = (cuDoubleComplex*)malloc(size*sizeof(cuDoubleComplex));
-		temp_col = (long*)malloc(size*sizeof(long));
-
-		long iter = 0;
-
-		for(int jj = 0; jj<ii; jj++){//step through all rows above current one
-			for(int kk = 1; kk <= (H_pos[ idx(jj, 0, stridepos) ]).y; kk++){ //step through all elements of that row
-
-				if( (H_pos[ idx(jj, kk, stridepos) ]).y == ii){       
-                                        temp[iter] = H_vals[ idx(jj, kk-1, strideval) ];
-					temp_col[iter] = jj;
-					iter++;
-				}
-
-			}
+	if (ii < dim){
+		for (long kk = 0; kk < ii; kk++){
+			start += 2*(H_pos[ idx(kk, 0, stridepos) ] ).y - 1;
 		}
 
+		(d_H_sort[start]).value = H_vals[ idx(ii, 0, strideval) ];
+		(d_H_sort[start]).rowindex = ii;
+		(d_H_sort[start]).colindex = ii;
+		(d_H_sort[start]).dim = dim; //putting the diagonal element in
 
-		cuDoubleComplex temp_vals[(H_pos[ idx(ii, 0, stridepos) ]).y + iter];
-		long temp_pos[(H_pos[ idx(ii, 0, stridepos) ]).y + iter + 1];
-		temp_pos[0] = iter + (H_pos[ idx(ii , 0, stridepos) ] ).y; //we'll need this number later!
-                //cout<<temp_pos[0]<<endl;
-		for(int ll = 0; ll < temp_pos[0]; ll++){
-                        
-                        if (ll < iter){
-				temp_vals[ll] = temp[ll];
-				temp_pos[ll+1] = temp_col[ll];
+		if(jj < (H_pos[ idx(kk, 0, stridepos) ] ).y){
 
-			}
-			else{
-				temp_vals[ll] = H_vals[ idx(ii, ll - iter, strideval) ];
-				temp_pos[ll+1] = (H_pos[ idx(ii, ll - iter + 1, stridepos) ]).y;
-			}
-                        /*
-                        if (start + ll > 2*num_Elem - dim){
-                                cout<<"Row: "<<ii<<" Buffer Size: "<<2*num_Elem - dim<<" start: "<<start<<" ll: "<<ll<<endl;
+			
+			
 
-                        }*/
-			buffer_val[ start + ll ] = temp_vals[ll];
-			(buffer_pos[ start + ll]).x = ii;
-			(buffer_pos[ start + ll]).y = temp_pos[ll + 1];
-		
-				
-		start += temp_pos[0];
-	}
-    }
+	
+        
+
 } 
 
 /*Function: FullToCOO - takes a full sparse matrix and transforms it into COO format
@@ -731,7 +716,7 @@ __global__ void CopyBack(hamstruct* H_sort, long2* H_pos, cuDoubleComplex* H_val
 
                 if (col < (H_pos[ idx(row, 0, 2*lattice_Size + 2) ]).y){
                         
-                        (H_pos[ idx( row, col + 2, 2*lattice_Size + 2) ]).y = H_sort[start + col].col;
+                        (H_pos[ idx( row, col + 2, 2*lattice_Size + 2) ]).y = H_sort[start + col].colindex;
                         H_vals[ idx( row, col + 1, 2*lattice_Size + 1) ] = H_sort[start + col].value;
                 }
 

@@ -5,7 +5,8 @@
 
 \usepackage{fullpage}
 \usepackage[usenames, dvipsnames]{color}
-\begin{document}
+\begin{document
+}
 \renewcommand{\int}{\textcolor{Green}{int $\,$}}
 \newcommand{\const}{\textcolor{Green}{const $\,$}}
 \renewcommand{\long}{\textcolor{Green}{long $\,$}}
@@ -19,7 +20,9 @@
 \newcommand{\cudaglobal}{\textcolor{Red}{$\_\_$global$\_\_ \; \;$}}
 \newcommand{\device}{\textcolor{Red}{$\_\_$device$\_\_ \; \;$}}
 
+\begin{titlepage}
 \maketitle
+\end{titlepage}
 
 \section{Introduction}
 
@@ -62,7 +65,7 @@ If the function completes successfully, the three hamil$\_*$ arrays will be allo
 Possible Optimizations:
 \begin{itemize}
 \item{Since memory transfers may be the main bottleneck, it might be faster to construct the basis on the GPU - this way there are two fewer arrays to transfer over}
-\item{Filling out the lower half of the matrix may be faster on GPU as well (because of the memory bottleneck)}
+\item{Filling out the lower half of the matrix will most likely be faster on GPU as well (because of the memory bottleneck) - this would eliminate two sets of memory transfers and right now the host function is slow as hell. I can't see any reason to not put it on GPU and use shared memory}
 \end{itemize}
 
 Other Important Things:
