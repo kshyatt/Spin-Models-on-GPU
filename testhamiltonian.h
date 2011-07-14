@@ -64,4 +64,4 @@ __global__ void FullToCOO(long num_Elem, hamstruct* H_sort, cuDoubleComplex* ham
 
 __global__ void GetNumElem(long2* H_pos, int lattice_Size);
 
-//__global__ void CopyBack(hamstruct* H_sort, long2* H_pos, cuDoubleComplex* H_vals, long dim, int lattice_Size, long num_Elem);
+
