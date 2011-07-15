@@ -5,8 +5,7 @@
 
 \usepackage{fullpage}
 \usepackage[usenames, dvipsnames]{color}
-\begin{document
-}
+\begin{document}
 \renewcommand{\int}{\textcolor{Green}{int $\,$}}
 \newcommand{\const}{\textcolor{Green}{const $\,$}}
 \renewcommand{\long}{\textcolor{Green}{long $\,$}}
@@ -65,12 +64,10 @@ If the function completes successfully, the three hamil$\_*$ arrays will be allo
 Possible Optimizations:
 \begin{itemize}
 \item{Since memory transfers may be the main bottleneck, it might be faster to construct the basis on the GPU - this way there are two fewer arrays to transfer over}
-\item{Filling out the lower half of the matrix will most likely be faster on GPU as well (because of the memory bottleneck) - this would eliminate two sets of memory transfers and right now the host function is slow as hell. I can't see any reason to not put it on GPU and use shared memory}
 \end{itemize}
 
 Other Important Things:
 \begin{itemize}
-\item{I created buffer$\_$H$\_*$ because copying from pinned memory to the GPU and back can be up to 2$\times$ faster than regular memory transfer. However since the OS needs pinned memory for other things, we have to be careful not to use too much. If the rest of the system starts to really slow down while running this code, just copy directly to h$\_$H$\_*$ and get rid of the buffers - nothing else should be affected}
 \item{ There's a lot of error checking going on - it's probably possible to outsource this to a function. It uses cudaGetErrorString so people debugging don't have to go do a table lookup.}
 \end{itemize} 
 
@@ -155,7 +152,6 @@ Other things:
 
 \noindent\textbf{The function proceeds by:}
 \begin{enumerate}
-\item{Moves the Hamiltonian information into shared memory}
 \item{Checks to see if the column index of a value is -1}
 \item{If not, the value is put into the sorting array. If yes, nothing is done}
 \item{The sorting array lacks information about how many ``good'' values per row there are, but this doesn't matter because the struct overloading of > and < ensures that row-ordering is preserved }
@@ -164,55 +160,8 @@ Other things:
 Possible Optimizations:
 \begin{itemize}
 \item{If CUDA stores TRUE/FALSE as -1/0, that could make this much easier}
-\item{There's probably a better way to use shared memory here too}
 \end{itemize}
 
-\paragraph{\cudaglobal \void CopyBack(\hamstruct , \typelongtwoptr, \cuDoubleComplex , \long , \int, \long ) \\ \\}
-\noindent\textbf{Parameters}:
-\begin{description}
-\item[\hamstruct H$\_$sort] The array of sorted Hamiltonian positions and values
-\item[\typelongtwoptr H$\_$pos] The array of Hamiltonian positions that will be refilled
-\item[\cuDoubleComplex H$\_$vals] The array of Hamiltonian values taht will be refilled
-\item[\long dim] The dimension of the Hamiltonian
-\item[\int lattice$\_$Size] The number of lattice sites
-\item[\long num$\_$Elem] The total number of nonzero elements
-\end{description}
-
-\noindent\textbf{The function proceeds by:}
-\begin{enumerate}
-\item{Finding where in H$\_$sort the corresponding row starts}
-\item{Filling H$\_$pos and H$\_$vals with the corresponding elements from H$\_$sort}
-\end{enumerate}
-
-Possible Optimizations:
-\begin{itemize}
-\item{There may be a way to use shared memory here}
-\end{itemize}
-
-\paragraph{\host \void UpperHalfToFull(\typelongtwoptr , \cuDoubleComplex , \typelongtwoptr , \cuDoubleComplex , \long , \long , \int ) \\ \\}  
-\noindent\textbf{Parameters}:
-\begin{description}
-\item[\typelongtwoptr H$\_$pos] (Half) the positions of the values in the Hamiltonian
-\item[\cuDoubleComplex H$\_$vals] (Half) the values of the Hamiltonian
-\item[\typelongtwoptr buffer$\_$pos] A buffer array that will be filled with the positions for the full Hamiltonian
-\item[\cuDoubleComplex buffer$\_$val] A buffer array that will be filled with the values for the full Hamiltonian
-\item[\long num$\_$Elem] The number of nonzero elements in the upper half and diagonal
-\item[\long dim] The dimension of the full Hamiltonian
-\item[\int lattice$\_$Size] The number of sites
-\end{description}
-
-\noindent\textbf{The function proceeds by:}
-\begin{enumerate}
-\item{Step through all elements in a row above the current one}
-\item{If one of those elements has the same column index as the current row index, put it in the row array}
-\item{Do this for all rows}
-\end{enumerate}
-
-Possible Optimizations:
-\begin{itemize}
-\item{This might be faster as a GPU function as well - not sure yet}
-\item{There are probably even more bithax to be done}
-\end{itemize}
 
 \paragraph{\cudaglobal \void FullToCOO(\int , \cuDoubleComplex , \typelongtwoptr , \cuDoubleComplex , \typelongptr , \typelongptr, \long) \\ \\}
 \noindent\textbf{Parameters}:
@@ -236,7 +185,6 @@ Possible Optimizations:
 \subsection{Things Left To Do}
 \paragraph{Functionality}
 \begin{itemize}
-\item{Get the code to work!}
 \item{FillSparse might be changed so that it's more intuitive to add/change the models}
 \item{More basis-generating functions need to be written}
 \end{itemize}
@@ -245,7 +193,6 @@ Possible Optimizations:
 \item{Is it faster to do the basis stuff on or off the GPU?}
 \item{Need to figure out which kernels are slow}
 \item{It may be worthwhile to use asynchronous memory transfers in a couple places because the kernel isn't operating on the set of data that needs to move}
-\item{cudaEvent timers need to be placed around kernel calls to time them}
 \end{itemize}
 
 \subsection{Changing Things}

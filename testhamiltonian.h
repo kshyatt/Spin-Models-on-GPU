@@ -26,11 +26,6 @@ struct hamstruct{
 	cuDoubleComplex value;
         long dim;
 
-	/*bool operator>(const hamstruct& rhs)const{return ( (rowindex + colindex*dim) > (rhs.rowindex + rhs.colindex*rhs.dim) ) ;};
-	bool operator<(const hamstruct& rhs)const{return ( (rowindex + colindex*dim) < (rhs.rowindex + rhs.colindex*rhs.dim) ) ;};
-	bool operator>=(const hamstruct& rhs)const{return ( (rowindex + colindex*dim) >= (rhs.rowindex + rhs.colindex*rhs.dim) ) ;};
-	bool operator<=(const hamstruct& rhs)const{return ( (rowindex + colindex*dim) <= (rhs.rowindex + rhs.colindex*rhs.dim) ) ;};*/
-
 };
 
 struct ham_sort_function{
@@ -56,9 +51,7 @@ __device__ long atomicAdd(long* address, long val){
 
 __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDoubleComplex* H_vals, long2* H_pos, long* d_Bond, int lattice_Size, const double JJ);
 
-__global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, long d_dim, const int lattice_Size);
-
-__global__ void UpperHalfToFull(long2* H_pos, cuDoubleComplex* H_vals, hamstruct* H_sort, long num_Elem, long dim, int lattice_Size);
+__global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, hamstruct* H_sort, long d_dim, const int lattice_Size);
 
 __global__ void FullToCOO(long num_Elem, hamstruct* H_sort, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol, long dim);
 
