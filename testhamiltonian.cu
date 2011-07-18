@@ -286,22 +286,22 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
         //std::cout<<"Running CompressSparse"<<std::endl;
 
-        status1 = cudaMemset(num_ptr, 0, sizeof(long));
+        //status1 = cudaMemset(num_ptr, 0, sizeof(long));
 
         hamstruct* d_H_sort;
         status2 = cudaMalloc(&d_H_sort, (2*num_Elem - vdim)*sizeof(hamstruct));
 
-	if (status1 != CUDA_SUCCESS){
+	if (status2 != CUDA_SUCCESS){
                 std::cout<<"Allocating d_H_sort failed! Error: ";
                 std::cout<<cudaGetErrorString( status1 )<<std::endl;
                 return 1;
         }
 
-	if (status2 != CUDA_SUCCESS){
+	/*if (status1 != CUDA_SUCCESS){
 		std::cout<<"Setting d_num_Elem failed! Error: ";
 		std::cout<<cudaGetErrorString( status2 )<<std::endl;
 		return 1;
-	}	
+	}*/	
         cudaEventRecord(start, 0);	
 	CompressSparse<<<bpg, tpb>>>(d_H_vals, d_H_pos, d_H_sort, vdim, lattice_Size);
 	       
@@ -535,41 +535,57 @@ __global__ void CompressSparse(cuDoubleComplex* H_vals, long2* H_pos, hamstruct*
 	long row = blockDim.x*blockIdx.x + threadIdx.x;
         long col = blockDim.y*blockIdx.y + threadIdx.y;
 
+        __shared__ long s_H_pos[33];
+        __shared__ cuDoubleComplex s_H_vals[33];
+
+        __shared__ int iter;
+        iter = 1; 
+
+        __syncthreads();
 
         if (row < d_dim){
         
                 // the basic idea here is to have each x thread go to the ith row, and each y thread go to the jth element of that row. then using a set of __shared__ temp arrays, we read in the Hamiltonian values and do our comparisons n stuff on them
 		const int size1 = 2*lattice_Size + 2;
-		const int size2 = 2*lattice_Size + 1;
+	       	const int size2 = 2*lattice_Size + 1;
+
+                long start = 0;
 	
-		//__shared__ long s_H_pos[34]; //hardcoded for now because c++ sucks - should be able to change this later by putting all these functions in a separate .cu that doesn't use c++ functionality
-		//__shared__ cuDoubleComplex s_H_vals[33];
+                for (long ii = 0; ii < row; ii++){ 
+                        start += 2*(H_pos[idx(ii, 0 , size1) ]).y - 1;
+        	}
 
-		/*if (col < size2){
-			s_H_pos[col] = (H_pos[ idx( row, col + 1, size1 ) ]).y;
-			s_H_vals[col] = H_vals[ idx( row, col, size2) ];
+                if (start > d_num_Elem) printf("%d %d \n", start, d_num_Elem);
+
+                (H_sort[ start ]).rowindex = row;
+                (H_sort[ start ]).colindex = row;
+                (H_sort[ start ]).value = H_vals[ idx( row, 0, size2) ];
+                (H_sort[ start ]).dim = d_dim;
+
+                int temp;
+
+		if (col < size2){
+			s_H_pos[col] = (H_pos[ idx( row, col + 2, size1 ) ]).y;
+			s_H_vals[col] = H_vals[ idx( row, col + 1, size2) ];
                 
-                }*/
-
-		//loading the Hamiltonian information into shared memory
-
-                long temp = d_num_Elem;
-
-	        if (col < size2){
-			if( (H_pos[col + 1]).y != -1 ){
+                        //loading the Hamiltonian information into shared memory
+                	        
+			if( s_H_pos[col] != -1 ){
+                        
+                                temp = iter;
+                                atomicAdd(&iter, 1);
+                                        
+                                (H_sort[ start + temp ]).rowindex = row;
+                                (H_sort[ start + temp ]).colindex = s_H_pos[col];
+                                (H_sort[ start + temp ]).value  = s_H_vals[col];
+                                (H_sort[ start + temp ]).dim = d_dim;
                                 
-                                (H_sort[ temp ]).rowindex = row;
-                                (H_sort[ temp ]).colindex = (H_pos[col + 1]).y;
-                                (H_sort[ temp ]).value  = H_vals[col];
-                                (H_sort[ temp ]).dim = d_dim;
-
-                                atomicAdd(&d_num_Elem, 1);
-                                temp = d_num_Elem;
-                                
-                                (H_sort[ temp ]).rowindex = (H_pos[col + 1]).y;
-                                (H_sort[ temp ]).colindex = row;
-                                (H_sort[ temp ]).value = cuConj(H_vals[col]);
-                                (H_sort[ temp ]).dim = d_dim;                 
+                                temp = iter;
+                                atomicAdd(&iter, 1);
+                                (H_sort[ start + temp ]).rowindex = s_H_pos[col];
+                                (H_sort[ start + temp ]).colindex = row;
+                                (H_sort[ start + temp ]).value = cuConj(s_H_vals[col]);
+                                (H_sort[ start + temp ]).dim = d_dim;                 
 			}
 		 
 		}
