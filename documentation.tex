@@ -53,9 +53,6 @@ There are two codes used to generate the Hamiltonians: hamiltonian.cu and hamilt
 \item{Call function GetNumElem, which finds how many nonzero elements there are}
 \item{Call function CompressSparse, which moves all the nonzero elements and their positions into the array d$\_$H$\_$sort which is an array of hamstructs}
 \item{Sort the Hamiltonian array on the device by using the Thrust library}
-\item{Call function CopyBack, which copies the sorted array information from d$\_$H$\_$sort back to d$\_$H$\_$pos and d$\_$H$\_$vals}
-\item{Call function UpperHalfToFull, which fills out the lower triangular half of the Hamiltonian}
-\item{Copy the Hamiltonian back to the device}
 \item{Call function FulltoCOO, which transforms the representation to COO form}
 \end{enumerate}
 
@@ -191,7 +188,7 @@ Possible Optimizations:
 \paragraph{Benchmarking}
 \begin{itemize}
 \item{Is it faster to do the basis stuff on or off the GPU?}
-\item{Need to figure out which kernels are slow}
+\item{CompressSparse and the sort are the things slowing this down.}
 \item{It may be worthwhile to use asynchronous memory transfers in a couple places because the kernel isn't operating on the set of data that needs to move}
 \end{itemize}
 

@@ -292,13 +292,14 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
               std::cout<<"Error in CompressSparse! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
               return 1;
         }
-        //std::cout<<"Number of nonzero elements: "<<num_Elem<<std::endl;
 
 	cudaFree(d_H_vals); //cleanup
 	cudaFree(d_H_pos);
 
 	status1 = cudaMemcpy(&num_Elem, num_ptr, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
 	num_Elem = 2*num_Elem - vdim;
+
+        std::cout<<"Number of nonzero elements: "<<num_Elem<<std::endl;
 
         if (status1 != CUDA_SUCCESS){
               std::cout<<"Copying number of elements failed! Error: "<<cudaGetErrorString(status1)<<std::endl;
@@ -309,7 +310,10 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         thrust::device_ptr<hamstruct> sort_ptr(d_H_sort);
 
         //std::cout<<"Sorting begun"<<std::endl;
-        
+        size_t memfree;
+        size_t taken;
+        cudaMemGetInfo(&memfree, &taken);
+        std::cout<<"Memory left: "<<memfree<<" and memory taken: "<<taken<<std::endl;
         cudaEventRecord(start,0);
         thrust::sort(sort_ptr, sort_ptr + num_Elem, ham_sort_function());
         
@@ -386,7 +390,9 @@ int main(){
 	int rtn = ConstructSparseMatrix(0, 16, Bond, hamil_Values, hamil_PosRow, hamil_PosCol);
 
 	free(Bond);
-
+        cudaFree(hamil_Values);
+        cudaFree(hamil_PosRow);
+        cudaFree(hamil_PosCol);
 	return rtn;
 }
 /* Function FillSparse: this function takes the empty Hamiltonian arrays and fills them up. Each thread in x handles one ket |i>, and each thread in y handles one site T0
@@ -520,10 +526,10 @@ __global__ void CompressSparse(const cuDoubleComplex* H_vals, const long2* H_pos
 
         __shared__ long s_H_pos[32];
         __shared__ cuDoubleComplex s_H_vals[32];
-        __shared__ hamstruct s_H_sort[32];
+        //__shared__ hamstruct s_H_sort[32];
 
         __shared__ int iter;
-        iter = 0;
+        iter = 1;
 
 	const int size1 = 2*lattice_Size + 2;
        	const int size2 = 2*lattice_Size + 1;
@@ -533,11 +539,17 @@ __global__ void CompressSparse(const cuDoubleComplex* H_vals, const long2* H_pos
         if (row < d_dim){
         
                 // the basic idea here is to have each x thread go to the ith row, and each y thread go to the jth element of that row. then using a set of __shared__ temp arrays, we read in the Hamiltonian values and do our comparisons n stuff on them
+
+		long start = 0;
+	
+                for (long ii = 0; ii < row; ii++){ 
+                        start += 2*(H_pos[ idx(ii, 0 , size1) ]).y - 1 ;
+        	}
 		
-		(H_sort[ row ]).rowindex = row;
-                (H_sort[ row ]).colindex = row;
-                (H_sort[ row ]).value = H_vals[ idx( row, 0, size2) ];
-                (H_sort[ row ]).dim = d_dim; //doing the diagonals
+		(H_sort[ start ]).rowindex = row;
+                (H_sort[ start ]).colindex = row;
+                (H_sort[ start ]).value = H_vals[ idx( row, 0, size2) ];
+                (H_sort[ start ]).dim = d_dim; //doing the diagonals
 
 
 		int temp;
@@ -548,34 +560,21 @@ __global__ void CompressSparse(const cuDoubleComplex* H_vals, const long2* H_pos
 
                 	if (s_H_pos[col] != -1){
 				temp = atomicAdd(&iter, 1);
-				s_H_sort[temp].rowindex = row;
-				s_H_sort[temp].colindex = s_H_pos[col];
-				s_H_sort[temp].value = s_H_vals[col];
-				s_H_sort[temp].dim = d_dim;
+				(H_sort[start + temp]).rowindex = row;
+				(H_sort[start + temp]).colindex = s_H_pos[col];
+				(H_sort[start + temp]).value = s_H_vals[col];
+				(H_sort[start + temp]).dim = d_dim;
+
+				temp = atomicAdd(&iter, 1);
+
+				(H_sort[ start + temp ]).rowindex = s_H_pos[col]; //the conjugate
+                                (H_sort[ start + temp ]).colindex = row;
+                                (H_sort[ start + temp ]).value = make_cuDoubleComplex( (s_H_vals[col]).x , -( s_H_vals[col]).y );
+                                (H_sort[ start + temp ]).dim = d_dim;                 
+			
 			} 
 		}
 
-		long start = d_dim;
-	
-                for (long ii = 0; ii < row; ii++){ 
-                        start += 2*(H_pos[ idx(ii, 0 , size1) ]).y - 1 ;
-        	}
-
-		if (col < (H_pos[ idx(row, 0, size1) ]).y ){
-                                                    
-                                (H_sort[ start + col ]).rowindex = s_H_sort[col].rowindex;
-                                (H_sort[ start + col ]).colindex = s_H_sort[col].colindex;
-                                (H_sort[ start + col ]).value  = s_H_sort[col].value;
-                                (H_sort[ start + col ]).dim = s_H_sort[col].dim;
- 
-                                (H_sort[ start + col ]).rowindex = s_H_sort[col].colindex; //the conjugate
-                                (H_sort[ start + col ]).colindex = s_H_sort[col].rowindex;
-                                (H_sort[ start + col ]).value = make_cuDoubleComplex( (s_H_sort[col].value).x , -( s_H_sort[col].value).y );
-                                (H_sort[ start + col ]).dim = s_H_sort[col].dim;                 
-			
-		 
-		}
-		
 	}
 }
 
