@@ -17,7 +17,7 @@ __host__ __device__ long idx(long i, long j, long lda){
 
 }
 
-__device__ unsigned long long d_num_Elem = 0; //all the diagonal elements
+__device__ long d_num_Elem = 0; //all the diagonal elements
 
 struct hamstruct{
 

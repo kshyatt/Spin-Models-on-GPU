@@ -119,7 +119,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         std::ofstream fout;
         fout.open("testhamiltonian.log"); //creating a log file to store timing information
 
-	unsigned long long num_Elem = 0; // the total number of elements in the matrix, will get this (or an estimate) from the input types
+	long num_Elem = 0; // the total number of elements in the matrix, will get this (or an estimate) from the input types
 	cudaError_t status1, status2, status3;
 
 	long dim = 65536;
@@ -132,8 +132,6 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         */
       
 	//for (int ch=1; ch<lattice_Size; ch++) dim *= 2;
-
-        status1 = cudaSetDeviceFlags(cudaDeviceMapHost);
 
 	int stridepos = 2*lattice_Size + 2;
 	int strideval = 2*lattice_Size + 1;        
@@ -240,7 +238,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         cudaEventRecord(start,0);
 
         status1 = cudaGetSymbolAddress((void**)&num_ptr, (const char *)"d_num_Elem");
-        status2 = cudaMemset(num_ptr, 0, sizeof(unsigned long long));
+        status2 = cudaMemset(num_ptr, 0, sizeof(long));
 
         cudaEventRecord(stop,0);
         cudaEventElapsedTime(&elapsed, start, stop);
@@ -274,14 +272,11 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
                 return 1;
         }
 
-	/*if (status1 != CUDA_SUCCESS){
-		std::cout<<"Setting d_num_Elem failed! Error: ";
-		std::cout<<cudaGetErrorString( status2 )<<std::endl;
-		return 1;
-	}*/	
+        GetNumElem<<<vdim/512 + 1, 512>>>(d_H_pos, lattice_Size);
+        cudaThreadSynchronize();
+
         cudaEventRecord(start, 0);	
 	CompressSparse<<<vdim, 32>>>(d_H_vals, d_H_pos, d_H_sort, vdim, lattice_Size);
-	GetNumElem<<<vdim/512 + 1, 512>>>(d_H_pos, lattice_Size);
         cudaThreadSynchronize();
         cudaEventRecord(stop, 0);
         cudaEventElapsedTime(&elapsed, start, stop);
@@ -296,7 +291,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	cudaFree(d_H_vals); //cleanup
 	cudaFree(d_H_pos);
 
-	status1 = cudaMemcpy(&num_Elem, num_ptr, sizeof(unsigned long long), cudaMemcpyDeviceToHost);
+	status1 = cudaMemcpy(&num_Elem, num_ptr, sizeof(long), cudaMemcpyDeviceToHost);
 	num_Elem = 2*num_Elem - vdim;
 
         std::cout<<"Number of nonzero elements: "<<num_Elem<<std::endl;
@@ -309,11 +304,6 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
         thrust::device_ptr<hamstruct> sort_ptr(d_H_sort);
 
-        //std::cout<<"Sorting begun"<<std::endl;
-        size_t memfree;
-        size_t taken;
-        cudaMemGetInfo(&memfree, &taken);
-        std::cout<<"Memory left: "<<memfree<<" and memory taken: "<<taken<<std::endl;
         cudaEventRecord(start,0);
         thrust::sort(sort_ptr, sort_ptr + num_Elem, ham_sort_function());
         
