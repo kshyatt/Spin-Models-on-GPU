@@ -233,7 +233,26 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
         fout<<"Runtime for FillSparse: "<<elapsed<<std::endl;
 
-        long* num_ptr;
+        long2* h_H_pos;
+        h_H_pos = (long2*)malloc(vdim*stridepos*sizeof(long2));
+
+        status1 = cudaMemcpy(h_H_pos, d_H_pos, vdim*stridepos*sizeof(long2), cudaMemcpyDeviceToHost);
+
+        if (status1 != CUDA_SUCCESS){
+                std::cout<<"Error copying position data! Error: "<<cudaGetErrorString(status1)<<std::endl;
+        }
+
+        std::ofstream fdata;
+        fout.open("GPU.txt");
+        for(long ii = 0; ii < vdim; ii++){
+                fdata<<(h_H_pos[ idx(ii, 0, stridepos) ] ).y<<std::endl;
+                num_Elem += (h_H_pos[ idx(ii, 0, stridepos) ]).y;
+        }
+
+        fdata.close();
+
+
+        /*long* num_ptr;
 
         cudaEventRecord(start,0);
 
@@ -248,7 +267,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
               std::cout<<"Getting and setting d_num_Elem failed! Error: "<<cudaGetErrorString(cudaPeekAtLastError())<<std::endl;
               return 1;
-        }
+        }*/
 
 	status1 = cudaFree(d_basis);
         status2 = cudaFree(d_basis_Position);
@@ -272,8 +291,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
                 return 1;
         }
 
-        GetNumElem<<<vdim/512 + 1, 512>>>(d_H_pos, lattice_Size);
-        cudaThreadSynchronize();
+        //GetNumElem<<<vdim/512 + 1, 512>>>(d_H_pos, lattice_Size);
+        //cudaThreadSynchronize();
 
         cudaEventRecord(start, 0);	
 	CompressSparse<<<vdim, 32>>>(d_H_vals, d_H_pos, d_H_sort, vdim, lattice_Size);
@@ -291,7 +310,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	cudaFree(d_H_vals); //cleanup
 	cudaFree(d_H_pos);
 
-	status1 = cudaMemcpy(&num_Elem, num_ptr, sizeof(long), cudaMemcpyDeviceToHost);
+	//status1 = cudaMemcpy(&num_Elem, num_ptr, sizeof(long), cudaMemcpyDeviceToHost);
 	num_Elem = 2*num_Elem - vdim;
 
         std::cout<<"Number of nonzero elements: "<<num_Elem<<std::endl;
@@ -350,8 +369,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
         cudaEventDestroy(start);
         cudaEventDestroy(stop);
-       
         fout.close();
+
 	return 0;
 }
 
