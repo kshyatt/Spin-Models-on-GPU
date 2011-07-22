@@ -45,8 +45,8 @@ Outputs:  valH - the value of the Hamiltonian
 __device__ cuDoubleComplex HOffBondX(const int si, const long bra, const double JJ){
 
 	cuDoubleComplex valH;
-  	int S0, S1;
-  	int T0, T1;
+  	//int S0, S1;
+  	//int T0, T1;
 
   	valH = make_cuDoubleComplex( JJ*0.5 , 0.); //contribution from the J part of the Hamiltonian
 
@@ -58,8 +58,8 @@ __device__ cuDoubleComplex HOffBondX(const int si, const long bra, const double 
 __device__ cuDoubleComplex HOffBondY(const int si, const long bra, const double JJ){
 
 	cuDoubleComplex valH;
-  	int S0, S1;
-  	int T0, T1;
+  	//int S0, S1;
+  	//int T0, T1;
 
   	valH = make_cuDoubleComplex( JJ*0.5 , 0. ); //contribution from the J part of the Hamiltonian
 
@@ -72,8 +72,8 @@ __device__ cuDoubleComplex HDiagPart(const long bra, int lattice_Size, long3* d_
 
   int S0b,S1b ;  //spins (bra 
   int T0,T1;  //site
-  int P0, P1, P2, P3; //sites for plaquette (Q)
-  int s0p, s1p, s2p, s3p;
+  //int P0, P1, P2, P3; //sites for plaquette (Q)
+  //int s0p, s1p, s2p, s3p;
   cuDoubleComplex valH = make_cuDoubleComplex( 0. , 0.);
 
   for (int Ti=0; Ti<lattice_Size; Ti++){
@@ -235,39 +235,23 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
         long2* h_H_pos;
         h_H_pos = (long2*)malloc(vdim*stridepos*sizeof(long2));
+        cuDoubleComplex* h_H_vals;
+        h_H_vals = (cuDoubleComplex*)malloc(vdim*strideval*sizeof(cuDoubleComplex));
 
         status1 = cudaMemcpy(h_H_pos, d_H_pos, vdim*stridepos*sizeof(long2), cudaMemcpyDeviceToHost);
+        status2 = cudaMemcpy(h_H_vals, d_H_vals, vdim*strideval*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 
         if (status1 != CUDA_SUCCESS){
                 std::cout<<"Error copying position data! Error: "<<cudaGetErrorString(status1)<<std::endl;
         }
 
         std::ofstream fdata;
-        fout.open("GPU.txt");
+        fdata.open("GPU.txt");
         for(long ii = 0; ii < vdim; ii++){
-                fdata<<(h_H_pos[ idx(ii, 0, stridepos) ] ).y<<std::endl;
                 num_Elem += (h_H_pos[ idx(ii, 0, stridepos) ]).y;
         }
-
-        fdata.close();
-
-
-        /*long* num_ptr;
-
-        cudaEventRecord(start,0);
-
-        status1 = cudaGetSymbolAddress((void**)&num_ptr, (const char *)"d_num_Elem");
-        status2 = cudaMemset(num_ptr, 0, sizeof(long));
-
-        cudaEventRecord(stop,0);
-        cudaEventElapsedTime(&elapsed, start, stop);
-
-        fout<<"Time to get and set d_num_Elem: "<<elapsed<<std::endl;
-        
-        if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-              std::cout<<"Getting and setting d_num_Elem failed! Error: "<<cudaGetErrorString(cudaPeekAtLastError())<<std::endl;
-              return 1;
-        }*/
+               
+        num_Elem = 2*num_Elem - vdim;
 
 	status1 = cudaFree(d_basis);
         status2 = cudaFree(d_basis_Position);
@@ -283,7 +267,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         //std::cout<<"Running CompressSparse"<<std::endl;
 
         hamstruct* d_H_sort;
-        status2 = cudaMalloc(&d_H_sort, vdim*strideval*sizeof(hamstruct));
+        status2 = cudaMalloc(&d_H_sort, num_Elem*sizeof(hamstruct));
 
 	if (status2 != CUDA_SUCCESS){
                 std::cout<<"Allocating d_H_sort failed! Error: ";
@@ -293,9 +277,21 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
         //GetNumElem<<<vdim/512 + 1, 512>>>(d_H_pos, lattice_Size);
         //cudaThreadSynchronize();
-
         cudaEventRecord(start, 0);	
-	CompressSparse<<<vdim, 32>>>(d_H_vals, d_H_pos, d_H_sort, vdim, lattice_Size);
+	CompressSparse<<<vdim, 32>>>(d_H_vals, d_H_pos, d_H_sort, vdim, lattice_Size, num_Elem);
+        
+        for(long ii = 0; ii < vdim; ii++){
+                fdata<<(h_H_pos[ idx(ii, 0, stridepos) ]).y<<": ";
+                for(int jj = 1; jj < strideval ; jj++){
+                      if( (h_H_pos[idx(ii, jj, stridepos) ]).y != -1){
+                              fdata<<"("<<(h_H_pos[idx(ii, jj, stridepos)]).y<<","<<(h_H_vals[ idx(ii, jj - 1, strideval) ]).x<<") ";
+                      }
+                }
+
+                fdata<<std::endl;
+        }
+        
+        
         cudaThreadSynchronize();
         cudaEventRecord(stop, 0);
         cudaEventElapsedTime(&elapsed, start, stop);
@@ -311,7 +307,6 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	cudaFree(d_H_pos);
 
 	//status1 = cudaMemcpy(&num_Elem, num_ptr, sizeof(long), cudaMemcpyDeviceToHost);
-	num_Elem = 2*num_Elem - vdim;
 
         std::cout<<"Number of nonzero elements: "<<num_Elem<<std::endl;
 
@@ -367,6 +362,9 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	
 	cudaFree(d_H_sort);
 
+        free(h_H_pos);
+        free(h_H_vals);
+        fdata.close();
         cudaEventDestroy(start);
         cudaEventDestroy(stop);
         fout.close();
@@ -432,9 +430,9 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
         int strideval = 2*lattice_Size + 1;
 
 
-	int si, sj,sk,sl; //spin operators
-	unsigned long tempi, tempj, tempod;
-	cuDoubleComplex tempD;
+	int si, sj;//sk,sl; //spin operators
+	unsigned long tempi, tempod; //tempj;
+	//cuDoubleComplex tempD;
 
         tempi = d_basis[ii];
 
@@ -447,7 +445,7 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
 		(tempbond[T0]).x = d_Bond[T0];
 		(tempbond[T0]).y = d_Bond[lattice_Size + T0];
 		(tempbond[T0]).z = d_Bond[2*lattice_Size + T0];
-		
+		__syncthreads();
 		//Diagonal Part
 
 		temppos[0] = d_basis_Position[tempi];
@@ -490,8 +488,8 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
                  
       		if (d_basis_Position[tempod] > ii){ 
         		temppos[2*T0 + 1] = d_basis_Position[tempod];
-        		tempval[2*T0 + 1] = HOffBondY(T0,tempi, JJ);
-			atomicAdd(&count,1);           
+        		tempval[2*T0 + 1] = make_cuDoubleComplex(JJ*0.5, 0.);//HOffBondY(T0,tempi, JJ);
+			atomicAdd(&count,1);
       		}
 
 		else {
@@ -500,20 +498,21 @@ __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDou
 		}
 
                 //time to write back to global memory
-                __syncthreads;
+                __syncthreads();
 
 		
-                H_vals[ idx(ii, 2*T0, strideval) ] = tempval[2*T0];
-                (H_pos[ idx(ii, 2*T0, stridepos) ]).y = temppos[2*T0];
-                (H_pos[ idx(ii, 2*T0, stridepos) ]).x = ii;                
+                H_vals[ idx(ii, 2*T0 + 1, strideval) ] = tempval[2*T0];
+                (H_pos[ idx(ii, 2*T0 + 2, stridepos) ]).y = temppos[2*T0];
+                (H_pos[ idx(ii, 2*T0 + 2, stridepos) ]).x = ii;                
 
 		(H_pos[ idx(ii, 0, stridepos) ]).x = ii;
                 (H_pos[ idx(ii, 0, stridepos) ]).y = count + 1;
                                
-                (H_pos[ idx(ii, 2*T0 + 1, stridepos) ]).x = ii;
-                (H_pos[ idx(ii, 2*T0 + 1, stridepos) ]).y = temppos[2*T0 + 1];
+                (H_pos[ idx(ii, 2*T0 + 3, stridepos) ]).x = ii;
+                (H_pos[ idx(ii, 2*T0 + 3, stridepos) ]).y = temppos[2*T0 + 1];
                 
-                H_vals[ idx(ii, 2*T0 + 1, strideval) ] = tempval[2*T0 + 1];
+                (H_vals[ idx(ii, 2*T0 + 2, strideval) ]).x = (tempval[2*T0 + 1]).x;
+                (H_vals[ idx(ii, 2*T0 + 2, strideval) ]).y = (tempval[2*T0 + 1]).y;
                                                  
             }//end of T0 
 
@@ -528,7 +527,7 @@ Parameters:	H_vals - an array of Hamiltonian values
 	        lattice_Size - the number of lattice sites
 
 */
-__global__ void CompressSparse(const cuDoubleComplex* H_vals, const long2* H_pos, hamstruct* H_sort, long d_dim, const int lattice_Size){
+__global__ void CompressSparse(const cuDoubleComplex* H_vals, const long2* H_pos, hamstruct* H_sort, long d_dim, const int lattice_Size, const long num_Elem){
 
 	long row = blockIdx.x;
         int col = threadIdx.x;
@@ -554,7 +553,8 @@ __global__ void CompressSparse(const cuDoubleComplex* H_vals, const long2* H_pos
                 for (long ii = 0; ii < row; ii++){ 
                         start += 2*(H_pos[ idx(ii, 0 , size1) ]).y - 1 ;
         	}
-		
+
+                if (start > num_Elem) printf("%d %d \n", start, num_Elem);		
 		(H_sort[ start ]).rowindex = row;
                 (H_sort[ start ]).colindex = row;
                 (H_sort[ start ]).value = H_vals[ idx( row, 0, size2) ];
