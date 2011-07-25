@@ -235,18 +235,18 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
         long2* h_H_pos;
         h_H_pos = (long2*)malloc(vdim*stridepos*sizeof(long2));
-        cuDoubleComplex* h_H_vals;
-        h_H_vals = (cuDoubleComplex*)malloc(vdim*strideval*sizeof(cuDoubleComplex));
+        /*cuDoubleComplex* h_H_vals;
+        h_H_vals = (cuDoubleComplex*)malloc(vdim*strideval*sizeof(cuDoubleComplex));*/
 
         status1 = cudaMemcpy(h_H_pos, d_H_pos, vdim*stridepos*sizeof(long2), cudaMemcpyDeviceToHost);
-        status2 = cudaMemcpy(h_H_vals, d_H_vals, vdim*strideval*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+        //status2 = cudaMemcpy(h_H_vals, d_H_vals, vdim*strideval*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 
         if (status1 != CUDA_SUCCESS){
                 std::cout<<"Error copying position data! Error: "<<cudaGetErrorString(status1)<<std::endl;
         }
 
-        std::ofstream fdata;
-        fdata.open("GPU.txt");
+        //std::ofstream fdata;
+        //fdata.open("GPU.txt");
         for(long ii = 0; ii < vdim; ii++){
                 num_Elem += (h_H_pos[ idx(ii, 0, stridepos) ]).y;
         }
@@ -275,12 +275,12 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
                 return 1;
         }
 
-        //GetNumElem<<<vdim/512 + 1, 512>>>(d_H_pos, lattice_Size);
-        //cudaThreadSynchronize();
+        GetNumElem<<<vdim/512 + 1, 512>>>(d_H_pos, lattice_Size);
+        cudaThreadSynchronize();
         cudaEventRecord(start, 0);	
 	CompressSparse<<<vdim, 32>>>(d_H_vals, d_H_pos, d_H_sort, vdim, lattice_Size, num_Elem);
         
-        for(long ii = 0; ii < vdim; ii++){
+        /*for(long ii = 0; ii < vdim; ii++){
                 fdata<<(h_H_pos[ idx(ii, 0, stridepos) ]).y<<": ";
                 for(int jj = 1; jj < strideval ; jj++){
                       if( (h_H_pos[idx(ii, jj, stridepos) ]).y != -1){
@@ -289,7 +289,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
                 }
 
                 fdata<<std::endl;
-        }
+        }*/
         
         
         cudaThreadSynchronize();
@@ -360,11 +360,23 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
         fout<<"Runtime for FullToCOO: "<<elapsed<<std::endl;
 	
+        long* h_H_rows;
+        h_H_rows = (long*)malloc(num_Elem*sizeof(long));
+        long* h_H_cols;
+        h_H_cols = (long*)malloc(num_Elem*sizeof(long));
+
+        cudaMemcpy(h_H_rows, hamil_PosRow, num_Elem*sizeof(long), cudaMemcpyDeviceToHost);
+        cudaMemcpy(h_H_cols, hamil_PosCol, num_Elem*sizeof(long), cudaMemcpyDeviceToHost);
+
+        for(long ii = 0; ii < num_Elem; ii++){
+          std::cout<<h_H_rows[ii]<<" "<<h_H_cols[ii]<<std::endl;
+        }
+
 	cudaFree(d_H_sort);
 
         free(h_H_pos);
-        free(h_H_vals);
-        fdata.close();
+        //free(h_H_vals);
+        //fdata.close();
         cudaEventDestroy(start);
         cudaEventDestroy(stop);
         fout.close();
@@ -613,5 +625,7 @@ __global__ void GetNumElem(long2* H_pos, int lattice_Size){
 
 	long row = blockIdx.x*blockDim.x + threadIdx.x;
 
-	atomicAdd(&d_num_Elem, (H_pos[ idx(row, 0, 2*lattice_Size + 2) ]).y);
+	atomicAdd(&d_num_Elem, (unsigned long long)(H_pos[ idx(row, 0, 2*lattice_Size + 2) ]).y);
+
+        printf("%llu %llu \n", d_num_Elem, (unsigned long long)(H_pos[ idx(row,0,2*lattice_Size + 2)]).y);
 }
