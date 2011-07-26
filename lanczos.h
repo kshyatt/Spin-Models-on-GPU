@@ -12,6 +12,7 @@
 #include"thrust/copy.h"
 #include"thrust/fill.h"
 #include"thrust/sort.h"
+#include"thrust/device_ptr.h"
 
 using namespace thrust;
 

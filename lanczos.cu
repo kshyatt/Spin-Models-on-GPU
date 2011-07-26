@@ -16,7 +16,7 @@
 // threadIdx.y (or block) means the "y"th thread from the top in the block (or grid)
 
 
-__global__ void zero(double** a, int m){
+/*__global__ void zero(double** a, int m){
   int i = blockDim.x*blockIdx.x + threadIdx.x;
   int j = blockDim.y*blockIdx.y + threadIdx.y;
 
@@ -37,7 +37,7 @@ __global__ void identity(double** a, int m){
 __global__ void arraysalloc(cuDoubleComplex** a, int n, int m){
   int i = threadIdx.x + m;
   a[i] = (cuDoubleComplex*)malloc(n*sizeof(cuDoubleComplex));
-}
+}*/
 
 //Function lanczos: takes a hermitian matrix H, tridiagonalizes it, and finds the n smallest eigenvalues - this version only returns eigenvalues, not
 // eigenvectors. Doesn't use sparse matrices yet either, derp. Should be a very simple change to make using CUSPARSE, which has functions for operations
@@ -72,7 +72,12 @@ void lanczos(const long num_Elem, const cuDoubleComplex* d_H_vals, const int* d_
     std::cout<<"Failed to initialize CUSPARSE! Error: "<<sparsestatus<<std::endl;
   }
 
-  cusparseMatDescr_t H_descr = ( CUSPARSE_MATRIX_TYPE_HERMITIAN, CUSPARSE_FILL_MODE_LOWER, CUSPARSE_DIAG_TYPE_NON_UNIT, CUSPARSE_INDEX_BASE_ZERO);
+  cusparseMatDescr_t H_descr = 0;
+  cusparseCreateMatDescr(&H_descr);
+  cusparseSetMatType(H_descr, CUSPARSE_MATRIX_TYPE_HERMITIAN);
+  cusparseSetMatIndexBase(H_descr, CUSPARSE_INDEX_BASE_ZERO);
+
+  
 
   cudaError_t status1, status2, status3, status4; //this is to throw errors in case things (mostly memory) in the code fail!  
 
@@ -134,21 +139,32 @@ void lanczos(const long num_Elem, const cuDoubleComplex* d_H_vals, const int* d_
   }
   //assignr<<<bpg,tpb>>>(y,0., dim); //a dummy vector of 0s that i can stick in my functions
 
-  linalgstat = cublasZaxpy(linalghandle, dim, -1*d_a_ptr, v0_ptr, sizeof(cuDoubleComplex), v1_ptr, sizeof(cuDoubleComplex));
+  double* double_temp;
+  cudaMalloc(&double_temp, sizeof(double));
+  thrust::device_ptr<double> double_temp_ptr(double_temp);
+
+  cuDoubleComplex* cuDouble_temp;
+  cudaMalloc(&cuDouble_temp, sizeof(cuDoubleComplex));
+  thrust::device_ptr<cuDoubleComplex> cuDouble_temp_ptr(cuDouble_temp);
+
+
+  *cuDouble_temp_ptr = cuCmul(make_cuDoubleComplex(-1., 0), d_a[0]);
+  linalgstat = cublasZaxpy(linalghandle, dim, cuDouble_temp, v0_ptr, sizeof(cuDoubleComplex), v1_ptr, sizeof(cuDoubleComplex));
   
   if (linalgstat != CUBLAS_STATUS_SUCCESS){
     std::cout<<"V1 = V1 - alpha*V0 failed! Error: ";
-    std::cout<<cudaGetErrorString(linalgstat)<<std::endl;
+    std::cout<<linalgstat<<std::endl;
   }
 
-  d_b_ptr = thrust::raw_pointer_cast(&cuCreal(d_b[1]));
-  cublasDznrm2(linalghandle, dim, v1_ptr, sizeof(cuDoubleComplex), d_b_ptr);
-  d_b[1] = make_cuDoubleComplex(sqrt(d_b[1]),0.);
+ 
+  d_b_ptr = thrust::raw_pointer_cast(&d_b[1]);
+  cublasDznrm2(linalghandle, dim, v1_ptr, sizeof(cuDoubleComplex), double_temp);
+  d_b[1] = make_cuDoubleComplex(sqrt(*double_temp_ptr),0.);
   // this function (above) takes the norm
   
   cuDoubleComplex gamma = make_cuDoubleComplex(1./cuCreal(d_b[1]),0.); //alpha = 1/beta in v1 = v1 - alpha*v0
 
-  cublasZaxpy(linalghandle, dim, gamma, v1_ptr, sizeof(cuDoubleComplex), y, sizeof(cuDoubleComplex)); // function performs a*x + y
+  cublasZaxpy(linalghandle, dim, &gamma, v1_ptr, sizeof(cuDoubleComplex), y, sizeof(cuDoubleComplex)); // function performs a*x + y
 
   //Now we're done the first round!
   //*********************************************************************************************************
@@ -189,15 +205,16 @@ void lanczos(const long num_Elem, const cuDoubleComplex* d_H_vals, const int* d_
     d_a_ptr = thrust::raw_pointer_cast(&d_a[iter]);
     cublasZdotc(linalghandle, dim, v1_ptr, sizeof(cuDoubleComplex), v2_ptr, sizeof(cuDoubleComplex), d_a_ptr);
 
-    d_b_ptr = thrust::raw_pointer_cast(&(d_b[iter + 1]));
-
     temp = v1;
 
-    cublasZaxpy( linalghandle, dim, cuCdiv(d_b[iter],d_a[iter]), v0_ptr, sizeof(cuDoubleComplex), temp_ptr, sizeof(cuDoubleComplex));
-    cublasZaxpy( linalghandle, dim, d_a[iter], temp_ptr, sizeof(cuDoubleComplex), v2_ptr, sizeof(cuDoubleComplex));
+    *cuDouble_temp_ptr = cuCdiv(d_b[iter], d_a[iter]);
 
-    cublasDznrm2( linalghandle, dim, v2_ptr, sizeof(cuDoubleComplex), d_b_ptr);
-    d_b[iter + 1] = make_cuDoubleComplex(sqrt(cuCreal(d_b[iter+1])), 0.);
+    cublasZaxpy( linalghandle, dim, cuDouble_temp, v0_ptr, sizeof(cuDoubleComplex), temp_ptr, sizeof(cuDoubleComplex));
+    cublasZaxpy( linalghandle, dim, d_a_ptr, temp_ptr, sizeof(cuDoubleComplex), v2_ptr, sizeof(cuDoubleComplex));
+
+    cublasDznrm2( linalghandle, dim, v2_ptr, sizeof(cuDoubleComplex), double_temp);
+     
+    d_b[iter + 1] = make_cuDoubleComplex(sqrt(*double_temp_ptr), 0.);
     
     gamma = make_cuDoubleComplex(1./cuCreal(d_b[iter+1]),0.);
     cublasZaxpy(linalghandle, dim, &gamma, v2_ptr, sizeof(cuDoubleComplex), y, sizeof(cuDoubleComplex));
@@ -224,7 +241,7 @@ void lanczos(const long num_Elem, const cuDoubleComplex* d_H_vals, const int* d_
 //
 */
     thrust::sort(d_diag.begin(), d_diag.end());
-    thrust::copy(d_diag.begin(), d_diag[num_Eig], d_ordered.begin());
+    thrust::copy(d_diag.begin(), d_diag.begin() + num_Eig, d_ordered.begin());
    
     d_ordered_ptr = thrust::raw_pointer_cast(&d_ordered[num_Eig - 1]);
     status2 = cudaMemcpy(&gs_Energy, d_ordered_ptr, sizeof(double), cudaMemcpyDeviceToHost);
@@ -247,11 +264,11 @@ void lanczos(const long num_Elem, const cuDoubleComplex* d_H_vals, const int* d_
   h_ordered = d_ordered;
 
   for(int i = 0; i < num_Eig; i++){
-    printf("%d \n", h_ordered[i]);
+    std::cout<<h_ordered[i]<<" ";
   } //write out the eigenenergies
-
-  cudaFree(&alpha);
-  cudaFree(&beta);
+  std::cout<<std::endl;
+  cudaFree(double_temp);
+  cudaFree(cuDouble_temp);
   // call the expectation values function
   
   // time to copy back all the eigenvectors

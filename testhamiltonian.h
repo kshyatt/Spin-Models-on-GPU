@@ -8,6 +8,8 @@
 #include<fstream>
 #include"thrust/sort.h"
 #include"thrust/device_ptr.h"
+#include"thrust/device_vector.h"
+#include"thrust/reduce.h"
 
 using namespace thrust;
 
@@ -17,7 +19,7 @@ __host__ __device__ long idx(long i, long j, long lda){
 
 }
 
-__device__ unsigned long long d_num_Elem = 0; //all the diagonal elements
+__device__ long d_num_Elem = 0; //all the diagonal elements
 
 struct hamstruct{
 
@@ -54,4 +56,4 @@ __global__ void CompressSparse(const cuDoubleComplex* H_vals, const long2* H_pos
 
 __global__ void FullToCOO(long num_Elem, hamstruct* H_sort, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol, long dim);
 
-__global__ void GetNumElem(long2* H_pos, int lattice_Size);
+__global__ void Copy(long* thrust_ptr, long2* H_pos, int lattice_Size, long vdim);

@@ -233,25 +233,21 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
         fout<<"Runtime for FillSparse: "<<elapsed<<std::endl;
 
-        long2* h_H_pos;
-        h_H_pos = (long2*)malloc(vdim*stridepos*sizeof(long2));
-        /*cuDoubleComplex* h_H_vals;
-        h_H_vals = (cuDoubleComplex*)malloc(vdim*strideval*sizeof(cuDoubleComplex));*/
+	long* num_ptr;
+	cudaGetSymbolAddress((void**)&num_ptr, (const char*)"d_num_Elem");
+	cudaMemset(num_ptr, 0, sizeof(long));
 
-        status1 = cudaMemcpy(h_H_pos, d_H_pos, vdim*stridepos*sizeof(long2), cudaMemcpyDeviceToHost);
-        //status2 = cudaMemcpy(h_H_vals, d_H_vals, vdim*strideval*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+	thrust::device_ptr<long> thrust_num_ptr(num_ptr);
+	thrust::device_vector<long> num_array(vdim);
+        long* num_array_ptr = raw_pointer_cast(&num_array[0]);
 
-        if (status1 != CUDA_SUCCESS){
-                std::cout<<"Error copying position data! Error: "<<cudaGetErrorString(status1)<<std::endl;
-        }
+        Copy<<<vdim/512 + 1, 512>>>(num_array_ptr, d_H_pos, lattice_Size, vdim);
+	cudaThreadSynchronize();
+        *thrust_num_ptr = thrust::reduce(num_array.begin(), num_array.end());
+	*thrust_num_ptr = 2*(*thrust_num_ptr) - vdim;
 
-        //std::ofstream fdata;
-        //fdata.open("GPU.txt");
-        for(long ii = 0; ii < vdim; ii++){
-                num_Elem += (h_H_pos[ idx(ii, 0, stridepos) ]).y;
-        }
-               
-        num_Elem = 2*num_Elem - vdim;
+	cudaMemcpy(&num_Elem, num_ptr, sizeof(long), cudaMemcpyDeviceToHost);
+	std::cout<<"Number of elements from thrust : "<<num_Elem<<std::endl;
 
 	status1 = cudaFree(d_basis);
         status2 = cudaFree(d_basis_Position);
@@ -264,8 +260,6 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
           return 1;
         }
 
-        //std::cout<<"Running CompressSparse"<<std::endl;
-
         hamstruct* d_H_sort;
         status2 = cudaMalloc(&d_H_sort, num_Elem*sizeof(hamstruct));
 
@@ -274,23 +268,9 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
                 std::cout<<cudaGetErrorString( status1 )<<std::endl;
                 return 1;
         }
-
-        GetNumElem<<<vdim/512 + 1, 512>>>(d_H_pos, lattice_Size);
-        cudaThreadSynchronize();
+      
         cudaEventRecord(start, 0);	
 	CompressSparse<<<vdim, 32>>>(d_H_vals, d_H_pos, d_H_sort, vdim, lattice_Size, num_Elem);
-        
-        /*for(long ii = 0; ii < vdim; ii++){
-                fdata<<(h_H_pos[ idx(ii, 0, stridepos) ]).y<<": ";
-                for(int jj = 1; jj < strideval ; jj++){
-                      if( (h_H_pos[idx(ii, jj, stridepos) ]).y != -1){
-                              fdata<<"("<<(h_H_pos[idx(ii, jj, stridepos)]).y<<","<<(h_H_vals[ idx(ii, jj - 1, strideval) ]).x<<") ";
-                      }
-                }
-
-                fdata<<std::endl;
-        }*/
-        
         
         cudaThreadSynchronize();
         cudaEventRecord(stop, 0);
@@ -306,14 +286,6 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	cudaFree(d_H_vals); //cleanup
 	cudaFree(d_H_pos);
 
-	//status1 = cudaMemcpy(&num_Elem, num_ptr, sizeof(long), cudaMemcpyDeviceToHost);
-
-        std::cout<<"Number of nonzero elements: "<<num_Elem<<std::endl;
-
-        if (status1 != CUDA_SUCCESS){
-              std::cout<<"Copying number of elements failed! Error: "<<cudaGetErrorString(status1)<<std::endl;
-              return 1;
-	}
         //----------------Sorting Hamiltonian--------------------------//
 
         thrust::device_ptr<hamstruct> sort_ptr(d_H_sort);
@@ -360,21 +332,9 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
         fout<<"Runtime for FullToCOO: "<<elapsed<<std::endl;
 	
-        long* h_H_rows;
-        h_H_rows = (long*)malloc(num_Elem*sizeof(long));
-        long* h_H_cols;
-        h_H_cols = (long*)malloc(num_Elem*sizeof(long));
+        cudaFree(d_H_sort);
 
-        cudaMemcpy(h_H_rows, hamil_PosRow, num_Elem*sizeof(long), cudaMemcpyDeviceToHost);
-        cudaMemcpy(h_H_cols, hamil_PosCol, num_Elem*sizeof(long), cudaMemcpyDeviceToHost);
-
-        for(long ii = 0; ii < num_Elem; ii++){
-          std::cout<<h_H_rows[ii]<<" "<<h_H_cols[ii]<<std::endl;
-        }
-
-	cudaFree(d_H_sort);
-
-        free(h_H_pos);
+        //free(h_H_pos);
         //free(h_H_vals);
         //fdata.close();
         cudaEventDestroy(start);
@@ -566,7 +526,7 @@ __global__ void CompressSparse(const cuDoubleComplex* H_vals, const long2* H_pos
                         start += 2*(H_pos[ idx(ii, 0 , size1) ]).y - 1 ;
         	}
 
-                if (start > num_Elem) printf("%d %d \n", start, num_Elem);		
+                //if (start > num_Elem) printf("%d %d \n", start, num_Elem);		
 		(H_sort[ start ]).rowindex = row;
                 (H_sort[ start ]).colindex = row;
                 (H_sort[ start ]).value = H_vals[ idx( row, 0, size2) ];
@@ -621,11 +581,9 @@ __global__ void FullToCOO(long num_Elem, hamstruct* H_sort, cuDoubleComplex* ham
 	}
 }
 
-__global__ void GetNumElem(long2* H_pos, int lattice_Size){
+__global__ void Copy(long* thrust_ptr, long2* H_pos, int lattice_Size, long vdim){
 
-	long row = blockIdx.x*blockDim.x + threadIdx.x;
+  long row = blockIdx.x*blockDim.x + threadIdx.x;
 
-	atomicAdd(&d_num_Elem, (unsigned long long)(H_pos[ idx(row, 0, 2*lattice_Size + 2) ]).y);
-
-        printf("%llu %llu \n", d_num_Elem, (unsigned long long)(H_pos[ idx(row,0,2*lattice_Size + 2)]).y);
+  if (row < vdim) thrust_ptr[row] = (H_pos[ idx(row, 0, 2*lattice_Size + 2) ]).y;
 }
