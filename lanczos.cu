@@ -77,7 +77,14 @@ void lanczos(const long num_Elem, const cuDoubleComplex* d_H_vals, const int* d_
   cusparseSetMatType(H_descr, CUSPARSE_MATRIX_TYPE_HERMITIAN);
   cusparseSetMatIndexBase(H_descr, CUSPARSE_INDEX_BASE_ZERO);
 
-  
+  int* d_H_rowptrs;
+  cudaMalloc(&d_H_rowptrs, (dim + 1)*sizeof(int));
+
+  sparsestatus = cusparseXcoo2csr(sparsehandle, d_H_rows, num_Elem, dim, d_H_rowptrs, CUSPARSE_INDEX_BASE_ZERO);
+
+  if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
+    std::cout<<"Failed to switch from COO to CSR! Error: "<<sparsestatus<<std::endl;
+  }
 
   cudaError_t status1, status2, status3, status4; //this is to throw errors in case things (mostly memory) in the code fail!  
 
@@ -140,11 +147,21 @@ void lanczos(const long num_Elem, const cuDoubleComplex* d_H_vals, const int* d_
   //assignr<<<bpg,tpb>>>(y,0., dim); //a dummy vector of 0s that i can stick in my functions
 
   double* double_temp;
-  cudaMalloc(&double_temp, sizeof(double));
+  status4 = cudaMalloc(&double_temp, sizeof(double));
+  if (status4 != CUDA_SUCCESS){
+    std::cout<<"Error allocating double_temp! Error: ";
+    std::cout<<cudaGetErrorString(status4)<<std::endl;
+  }
+
   thrust::device_ptr<double> double_temp_ptr(double_temp);
 
   cuDoubleComplex* cuDouble_temp;
-  cudaMalloc(&cuDouble_temp, sizeof(cuDoubleComplex));
+  status1 = cudaMalloc(&cuDouble_temp, sizeof(cuDoubleComplex));
+  if (status1 != CUDA_SUCCESS){
+    std::cout<<"Error allocating cuDouble_temp! Error: ";
+    std::cout<<cudaGetErrorString(status4)<<std::endl;
+  }
+
   thrust::device_ptr<cuDoubleComplex> cuDouble_temp_ptr(cuDouble_temp);
 
 
@@ -155,16 +172,25 @@ void lanczos(const long num_Elem, const cuDoubleComplex* d_H_vals, const int* d_
     std::cout<<"V1 = V1 - alpha*V0 failed! Error: ";
     std::cout<<linalgstat<<std::endl;
   }
-
  
   d_b_ptr = thrust::raw_pointer_cast(&d_b[1]);
-  cublasDznrm2(linalghandle, dim, v1_ptr, sizeof(cuDoubleComplex), double_temp);
+  linalgstat = cublasDznrm2(linalghandle, dim, v1_ptr, sizeof(cuDoubleComplex), double_temp);
+  if (linalgstat != CUBLAS_STATUS_SUCCESS){
+    std::cout<<"Getting the norm of v1 failed! Error: ";
+    std::cout<<linalgstat<<std::endl;
+  }
+  
   d_b[1] = make_cuDoubleComplex(sqrt(*double_temp_ptr),0.);
   // this function (above) takes the norm
   
   cuDoubleComplex gamma = make_cuDoubleComplex(1./cuCreal(d_b[1]),0.); //alpha = 1/beta in v1 = v1 - alpha*v0
 
-  cublasZaxpy(linalghandle, dim, &gamma, v1_ptr, sizeof(cuDoubleComplex), y, sizeof(cuDoubleComplex)); // function performs a*x + y
+  linalgstat = cublasZaxpy(linalghandle, dim, &gamma, v1_ptr, sizeof(cuDoubleComplex), y, sizeof(cuDoubleComplex)); // function performs a*x + y
+
+  if (linalgstat != CUBLAS_STATUS_SUCCESS){
+    std::cout<<"Getting 1/gamma * v1 failed! Error: ";
+    std::cout<<linalgstat<<std::endl;
+  }
 
   //Now we're done the first round!
   //*********************************************************************************************************
@@ -200,25 +226,52 @@ void lanczos(const long num_Elem, const cuDoubleComplex* d_H_vals, const int* d_
       printf("Copying last eigenvalue failed \n");
     }
 
-    cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rows, d_H_cols, v1_ptr, beta, v2_ptr); // the Hamiltonian is applied here, in this gross expression
+    sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rows, d_H_cols, v1_ptr, beta, v2_ptr); // the Hamiltonian is applied here, in this gross expression
+
+    if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
+      std::cout<<"Error applying the Hamiltonian in "<<iter<<"th iteration!";
+      std::cout<<"Error: "<<sparsestatus<<std::endl;
+    } 
 
     d_a_ptr = thrust::raw_pointer_cast(&d_a[iter]);
-    cublasZdotc(linalghandle, dim, v1_ptr, sizeof(cuDoubleComplex), v2_ptr, sizeof(cuDoubleComplex), d_a_ptr);
+    linalgstat = cublasZdotc(linalghandle, dim, v1_ptr, sizeof(cuDoubleComplex), v2_ptr, sizeof(cuDoubleComplex), d_a_ptr);
+
+    if (linalgstat != CUBLAS_STATUS_SUCCESS){
+      std::cout<<"Error getting v1 * v2 in "<<iter<<"th iteration! Error: ";
+      std::cout<<linalgstat<<std::endl;
+    }
 
     temp = v1;
 
     *cuDouble_temp_ptr = cuCdiv(d_b[iter], d_a[iter]);
 
-    cublasZaxpy( linalghandle, dim, cuDouble_temp, v0_ptr, sizeof(cuDoubleComplex), temp_ptr, sizeof(cuDoubleComplex));
-    cublasZaxpy( linalghandle, dim, d_a_ptr, temp_ptr, sizeof(cuDoubleComplex), v2_ptr, sizeof(cuDoubleComplex));
+    linalgstat = cublasZaxpy( linalghandle, dim, cuDouble_temp, v0_ptr, sizeof(cuDoubleComplex), temp_ptr, sizeof(cuDoubleComplex));
+    if (linalgstat != CUBLAS_STATUS_SUCCESS){
+      std::cout<<"Error getting (d_b/d_a)*v0 + v1 in "<<iter<<"th iteration!";
+      std::cout<<"Error: "<<linalgstat<<std::endl;
+    }
+    
+    linalgstat = cublasZaxpy( linalghandle, dim, d_a_ptr, temp_ptr, sizeof(cuDoubleComplex), v2_ptr, sizeof(cuDoubleComplex));
+    if (linalgstat != CUBLAS_STATUS_SUCCESS){
+      std::cout<<"Error getting v2 + d_a*v1 in "<<iter<<"th iteration! Error: ";
+      std::cout<<linalgstat<<std::endl;
+    }
 
-    cublasDznrm2( linalghandle, dim, v2_ptr, sizeof(cuDoubleComplex), double_temp);
-     
+    linalgstat = cublasDznrm2( linalghandle, dim, v2_ptr, sizeof(cuDoubleComplex), double_temp);
+    if (linalgstat != CUBLAS_STATUS_SUCCESS){
+      std::cout<<"Error getting norm of v2 in "<<iter<<"th iteration! Error: ";
+      std::cout<<linalgstat<<std::endl;
+    }
+
     d_b[iter + 1] = make_cuDoubleComplex(sqrt(*double_temp_ptr), 0.);
     
     gamma = make_cuDoubleComplex(1./cuCreal(d_b[iter+1]),0.);
-    cublasZaxpy(linalghandle, dim, &gamma, v2_ptr, sizeof(cuDoubleComplex), y, sizeof(cuDoubleComplex));
-    
+    linalgstat = cublasZaxpy(linalghandle, dim, &gamma, v2_ptr, sizeof(cuDoubleComplex), y, sizeof(cuDoubleComplex));
+    if (linalgstat != CUBLAS_STATUS_SUCCESS){ 
+      std::cout<<"Error getting 1/d_b * v2 in "<<iter<<"th iteration! Error: ";
+      std::cout<<linalgstat<<std::endl;
+    }
+
     thrust::copy(v0.begin(), v0.end(), &d_lanczvec[dim*(iter - 1)]);
     thrust::copy(v1.begin(), v1.end(), v0.begin());
     thrust::copy(v2.begin(), v2.end(), v1.begin()); //moving things around

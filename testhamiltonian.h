@@ -1,8 +1,6 @@
 #include<cmath>
 #include<iostream>
 #include<cstdlib>
-#include<vector>
-#include<stdio.h>
 #include"cuda.h"
 #include"cuComplex.h"
 #include<fstream>
@@ -39,16 +37,15 @@ struct ham_sort_function{
 
 };
 
-__device__ long atomicAdd(long* address, long val){
-	unsigned long long int* address_as_ull = (unsigned long long int *)address; 
-	unsigned long long int old = *address_as_ull, assumed;
-	do {
-		assumed = old;
-		old = atomicCAS(address_as_ull, assumed, (long long)(val + (long)(assumed)));
-	} while (assumed != old);
+__host__ long GetBasis(long dim, int lattice_Size, int Sz, long basis_Position[], long basis[]);
 
-	return (long)(old);
-}
+__device__ cuDoubleComplex HOffBondX(const int si, const long bra, const double JJ);
+
+__device__ cuDoubleComplex HOffBondY(const int si, const long bra, const double JJ)
+
+__device__ cuDoubleComplex HDiagPart(const long bra, int lattice_Size, long3* d_Bond, const double JJ)
+
+__host__ long ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol, long* vdim, double JJ, int Sz);
 
 __global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDoubleComplex* H_vals, long2* H_pos, long* d_Bond, int lattice_Size, const double JJ);
 

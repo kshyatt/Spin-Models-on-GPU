@@ -113,7 +113,7 @@ Outputs:  hamil_Values - a pointer to a device array containing the values
 */
 
 
-__host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol){
+__host__ long ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol, long* vdim, double JJ, int Sz){
 
 
         std::ofstream fout;
@@ -123,10 +123,12 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	cudaError_t status1, status2, status3;
 
 	long dim = 65536;
-	long vdim;
+	
 	/*
 	switch (model_Type){
-		case 0: dim = 65536;
+		case 0: 
+			dim = 65536;
+			break;
 		case 1: dim = 10; //guesses
 	}
         */
@@ -148,7 +150,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         cudaEventCreate(&stop);
         
         cudaEventRecord(start,0);
-        vdim = GetBasis(dim, lattice_Size, Sz, basis_Position, basis);
+        *vdim = GetBasis(dim, lattice_Size, Sz, basis_Position, basis);
         cudaEventRecord(stop,0);
 
         float elapsed;
@@ -161,7 +163,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	long* d_basis;
 
 	status1 = cudaMalloc(&d_basis_Position, dim*sizeof(long));
-	status2 = cudaMalloc(&d_basis, vdim*sizeof(long));
+	status2 = cudaMalloc(&d_basis, *vdim*sizeof(long));
 
 	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
 		std::cout<<"Memory allocation for basis arrays failed! Error: ";
@@ -170,7 +172,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	}
 
 	status1 = cudaMemcpy(d_basis_Position, basis_Position, dim*sizeof(long), cudaMemcpyHostToDevice);
-	status2 = cudaMemcpy(d_basis, basis, vdim*sizeof(long), cudaMemcpyHostToDevice);
+	status2 = cudaMemcpy(d_basis, basis, *vdim*sizeof(long), cudaMemcpyHostToDevice);
 
 	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
 		std::cout<<"Memory copy for basis arrays failed! Error: ";
@@ -191,8 +193,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 
 	dim3 bpg;
 
-	if (vdim <= 65336);
-                bpg.x = vdim;
+	if (*vdim <= 65336);
+                bpg.x = *vdim;
         
 	dim3 tpb;
         tpb.x = 32;
@@ -203,8 +205,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         long2* d_H_pos;
         cuDoubleComplex* d_H_vals;
 
-        status1 = cudaMalloc(&d_H_pos, vdim*stridepos*sizeof(long2));
-        status2 = cudaMalloc(&d_H_vals, vdim*strideval*sizeof(cuDoubleComplex));
+        status1 = cudaMalloc(&d_H_pos, *vdim*stridepos*sizeof(long2));
+        status2 = cudaMalloc(&d_H_vals, *vdim*strideval*sizeof(cuDoubleComplex));
 
         if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
               std::cout<<"Memory allocation for device Hamiltonian failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
@@ -214,13 +216,11 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         //the above code should work on devices of any compute capability - YEAAAAH
 
 	// --------------------- Fill up the sparse matrix and compress it to remove extraneous elements ------//
-  
-        double JJ = 1.;
 
         //std::cout<<"Running FillSparse"<<std::endl;
       
         cudaEventRecord(start, 0);
-	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, vdim, d_H_vals, d_H_pos, d_Bond, lattice_Size, JJ);
+	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, *vdim, d_H_vals, d_H_pos, d_Bond, lattice_Size, JJ);
 
         if( cudaPeekAtLastError() != 0 ){
 		std::cout<<"Error in FillSparse! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
@@ -238,13 +238,13 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	cudaMemset(num_ptr, 0, sizeof(long));
 
 	thrust::device_ptr<long> thrust_num_ptr(num_ptr);
-	thrust::device_vector<long> num_array(vdim);
+	thrust::device_vector<long> num_array(*vdim);
         long* num_array_ptr = raw_pointer_cast(&num_array[0]);
 
-        Copy<<<vdim/512 + 1, 512>>>(num_array_ptr, d_H_pos, lattice_Size, vdim);
+        Copy<<<*vdim/512 + 1, 512>>>(num_array_ptr, d_H_pos, lattice_Size, vdim);
 	cudaThreadSynchronize();
         *thrust_num_ptr = thrust::reduce(num_array.begin(), num_array.end());
-	*thrust_num_ptr = 2*(*thrust_num_ptr) - vdim;
+	*thrust_num_ptr = 2*(*thrust_num_ptr) - *vdim;
 
 	cudaMemcpy(&num_Elem, num_ptr, sizeof(long), cudaMemcpyDeviceToHost);
 	std::cout<<"Number of elements from thrust : "<<num_Elem<<std::endl;
@@ -270,7 +270,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         }
       
         cudaEventRecord(start, 0);	
-	CompressSparse<<<vdim, 32>>>(d_H_vals, d_H_pos, d_H_sort, vdim, lattice_Size, num_Elem);
+	CompressSparse<<<*vdim, 32>>>(d_H_vals, d_H_pos, d_H_sort, vdim, lattice_Size, num_Elem);
         
         cudaThreadSynchronize();
         cudaEventRecord(stop, 0);
@@ -324,7 +324,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
 	//std::cout<<"Running FullToCOO."<<std::endl;
 
         cudaEventRecord(start, 0);	
-        FullToCOO<<<num_Elem/512 + 1, 512>>>(num_Elem, d_H_sort, hamil_Values, hamil_PosRow, hamil_PosCol, vdim); // csr and description initializations happen somewhere else
+        FullToCOO<<<num_Elem/512 + 1, 512>>>(num_Elem, d_H_sort, hamil_Values, hamil_PosRow, hamil_PosCol, *vdim); // csr and description initializations happen somewhere else
 
         cudaThreadSynchronize();
         cudaEventRecord(stop, 0);
@@ -341,39 +341,10 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond,
         cudaEventDestroy(stop);
         fout.close();
 
-	return 0;
+	return num_Elem;
 }
 
-int main(){
-        //cudaDeviceSetLimit(cudaLimitMallocHeapSize, 128*1024*1024); //have to set a heap size or malloc()s on the device will fail
-        
-	long* Bond;
-	Bond = (long*)malloc(16*3*sizeof(long));
-	
-	Bond[0] = 0; 	Bond[1] = 1; 	Bond[2] = 2;	Bond[3] = 3;	Bond[4] = 4;	Bond[5] = 5;
-	Bond[6] = 6; 	Bond[7] = 7;	Bond[8] = 8;	Bond[9] = 9;	Bond[10] = 10;	Bond[11] = 11;
-	Bond[12] = 12;	Bond[13] = 13;	Bond[14] = 14;	Bond[15] = 15;	Bond[16] = 1; 	Bond[17] = 2;
-	Bond[18] = 3; 	Bond[19] = 0;	Bond[20] = 5; 	Bond[21] = 6;	Bond[22] = 7;	Bond[23] = 4;
-	Bond[24] = 9;	Bond[25] = 10; 	Bond[26] = 11;	Bond[27] = 8;	Bond[28] = 13;	Bond[29] = 14;
-	Bond[30] = 15; 	Bond[31] = 12; 	Bond[32] = 4;	Bond[33] = 5;	Bond[34] = 6;	Bond[35] = 7;
-	Bond[36] = 8;	Bond[37] = 9;	Bond[38] = 10;	Bond[39] = 11;	Bond[40] = 12;	Bond[41] = 13;
-	Bond[42] = 14;	Bond[43] = 15;	Bond[44] = 0;	Bond[45] = 1;	Bond[46] = 2;	Bond[47] = 3;
 
-	cuDoubleComplex* hamil_Values;
-
-	long* hamil_PosRow;
-
-	long* hamil_PosCol;
-
-
-	int rtn = ConstructSparseMatrix(0, 16, Bond, hamil_Values, hamil_PosRow, hamil_PosCol);
-
-	free(Bond);
-        cudaFree(hamil_Values);
-        cudaFree(hamil_PosRow);
-        cudaFree(hamil_PosCol);
-	return rtn;
-}
 /* Function FillSparse: this function takes the empty Hamiltonian arrays and fills them up. Each thread in x handles one ket |i>, and each thread in y handles one site T0
 Inputs: d_basis_Position - position information about the basis
 	d_basis - other basis infos
