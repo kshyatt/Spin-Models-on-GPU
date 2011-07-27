@@ -16,4 +16,4 @@
 
 using namespace thrust;
 
-void lanczos(const long num_Elem, const cuDoubleComplex* d_H_vals, const int* d_H_rows, const int* d_H_cols, const int dim, int max_Iter, const int num_Eig, const double conv_req);
+void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const int* d_H_rows, const int* d_H_cols, const int dim, int max_Iter, const int num_Eig, const double conv_req);

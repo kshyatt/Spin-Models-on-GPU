@@ -11,20 +11,20 @@
 
 using namespace thrust;
 
-__host__ __device__ long idx(long i, long j, long lda){
+__host__ __device__ int idx(int i, int j, int lda){
 
 	return ( j + (i*lda));
 
 }
 
-__device__ long d_num_Elem = 0; //all the diagonal elements
+__device__ int d_num_Elem = 0; //all the diagonal elements
 
 struct hamstruct{
 
-	long rowindex;
-        long colindex;
+	int rowindex;
+        int colindex;
 	cuDoubleComplex value;
-        long dim;
+        int dim;
 };
 
 struct ham_sort_function{
@@ -37,20 +37,20 @@ struct ham_sort_function{
 
 };
 
-__host__ long GetBasis(long dim, int lattice_Size, int Sz, long basis_Position[], long basis[]);
+__host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], int basis[]);
 
-__device__ cuDoubleComplex HOffBondX(const int si, const long bra, const double JJ);
+__device__ cuDoubleComplex HOffBondX(const int si, const int bra, const double JJ);
 
-__device__ cuDoubleComplex HOffBondY(const int si, const long bra, const double JJ)
+__device__ cuDoubleComplex HOffBondY(const int si, const int bra, const double JJ)
 
-__device__ cuDoubleComplex HDiagPart(const long bra, int lattice_Size, long3* d_Bond, const double JJ)
+__device__ cuDoubleComplex HDiagPart(const int bra, int lattice_Size, int3* d_Bond, const double JJ)
 
-__host__ long ConstructSparseMatrix(int model_Type, int lattice_Size, long* Bond, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol, long* vdim, double JJ, int Sz);
+__host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int* vdim, double JJ, int Sz);
 
-__global__ void FillSparse(long* d_basis_Position, long* d_basis, int dim, cuDoubleComplex* H_vals, long2* H_pos, long* d_Bond, int lattice_Size, const double JJ);
+__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, cuDoubleComplex* H_vals, int2* H_pos, int* d_Bond, int lattice_Size, const double JJ);
 
-__global__ void CompressSparse(const cuDoubleComplex* H_vals, const long2* H_pos, hamstruct* H_sort, long d_dim, const int lattice_Size, const long num_Elem);
+__global__ void CompressSparse(const cuDoubleComplex* H_vals, const int2* H_pos, hamstruct* H_sort, int d_dim, const int lattice_Size, const int num_Elem);
 
-__global__ void FullToCOO(long num_Elem, hamstruct* H_sort, cuDoubleComplex* hamil_Values, long* hamil_PosRow, long* hamil_PosCol, long dim);
+__global__ void FullToCOO(int num_Elem, hamstruct* H_sort, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int dim);
 
-__global__ void Copy(long* thrust_ptr, long2* H_pos, int lattice_Size, long vdim);
+__global__ void Copy(int* thrust_ptr, int2* H_pos, int lattice_Size, int vdim);

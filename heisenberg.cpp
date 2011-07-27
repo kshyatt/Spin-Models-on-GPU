@@ -1,15 +1,14 @@
 #include<iostream>
 #include"testhamiltonian.h"
 #include"lanczos.h"
-#include"data.h"
 #include"lanczos.h"
 #include"cuda.h"
 #include"cuComplex.h"
 
 int main(){
 
-  long* Bond;
-  Bond = (long*)malloc(16*3*sizeof(long));
+  int* Bond;
+  Bond = (int*)malloc(16*3*sizeof(int));
 	
   Bond[0] = 0;    Bond[1] = 1;    Bond[2] = 2;    Bond[3] = 3;    Bond[4] = 4;
   Bond[5] = 5;    Bond[6] = 6;    Bond[7] = 7;    Bond[8] = 8;    Bond[9] = 9;
@@ -24,23 +23,26 @@ int main(){
 
   cuDoubleComplex* hamil_Values;
 
-  long* hamil_PosRow;
+  int* hamil_PosRow;
 
-  long* hamil_PosCol;
+  int* hamil_PosCol;
 
   int nsite = 16;
 
-  long dim;
+  int dim;
 
   int Sz = 0;
   double JJ = 1.;
 
-  long num_Elem = ConstructSparseMatrix( 0, nsite, Bond, hamil_Values, hamil_PosRow, hamil_PosCol, &dim, JJ, Sz );
 
+
+  int num_Elem = ConstructSparseMatrix( 0, nsite, Bond, hamil_Values, hamil_PosRow, hamil_PosCol, &dim, JJ, Sz );
+
+  int rtn = num_Elem;
   if (rtn == 1){
 	return 1;
   }
-
+  rtn = 0;
   free(Bond);
 
   lanczos(num_Elem, hamil_Values, hamil_PosRow, hamil_PosCol, dim, 200, 3, 1e-12);
