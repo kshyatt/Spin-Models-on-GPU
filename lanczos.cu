@@ -52,8 +52,6 @@ __global__ void arraysalloc(cuDoubleComplex** a, int n, int m){
 // Output: h_ordered, the array of the num_Eig smallest eigenvalues, ordered from smallest to largest
 //---------------------------------------------------------------------------------------------------------------------------------------------------        
 
-int main(){}
-
 void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const int* d_H_rows, const int* d_H_cols, const int dim, int max_Iter, const int num_Eig, const double conv_req){
 
   cublasStatus_t linalgstat;

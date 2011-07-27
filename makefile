@@ -4,15 +4,16 @@ LIBS = -lcublas -lcusparse
 OBJS = heisenberg.o testhamiltonian.o lanczos.o
 
 a.out : $(OBJS) 
-          $(CC) $(CFLAGS) $(OBJS) -o a.out $(LIBS)
+	$(CC) $(CFLAGS) $(OBJS) -o a.out $(LIBS)
 
-heisenberg.o : heisenberg.cpp testhamiltonian.h lanczos.h data.h
-          $(CC) $(CFLAGS) -c heisenberg.cpp
+heisenberg.o : heisenberg.cpp testhamiltonian.h lanczos.h 
+	$(CC) $(CFLAGS) -c heisenberg.cpp
 
 lanczos.o : lanczos.cu lanczos.h 
-          $(CC) $(CFLAGS) -c $(LIBS) lanczos.cu
+	$(CC) $(CFLAGS) -c $(LIBS) lanczos.cu
 
 testhamiltonian.o : testhamiltonian.cu testhamiltonian.h
-          $(CC) $(CFLAGS) -c testhamiltonian.cu
+	$(CC) $(CFLAGS) -c testhamiltonian.cu
 
-clean : rm *.o
+clean : 
+	rm *.o

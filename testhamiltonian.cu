@@ -2,6 +2,12 @@
 
 /* NOTE: this function uses FORTRAN style matrices, where the values and positions are stored in a ONE dimensional array! Don't forget this! */
 
+__host__ __device__ int idx(int i, int j, int lda){
+  
+  return (j + (i*lda));
+}
+
+
 /* Function GetBasis - fills two arrays with information about the basis
 Inputs: dim - the initial dimension of the Hamiltonian
 	lattice_Size - the number of sites
@@ -122,7 +128,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	int num_Elem = 0; // the total number of elements in the matrix, will get this (or an estimate) from the input types
 	cudaError_t status1, status2, status3;
 
-	int dim = 65536;
+	//int dim = 65536;
 	
 	/*
 	switch (model_Type){
@@ -132,17 +138,21 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		case 1: dim = 10; //guesses
 	}
         */
-      
-	//for (int ch=1; ch<lattice_Size; ch++) dim *= 2;
+        int dim = 2;
+
+	for (int ch=1; ch<lattice_Size; ch++) dim *= 2;
+
+        std::cout<<"Dimension of full Hamiltonian: "<<dim<<std::endl;
+        if (dim >= INT_MAX){
+          std::cout<<"Error! Dimension greater than maximum integer!"<<std::endl;
+          return 1;
+        }
 
 	int stridepos = 2*lattice_Size + 2;
 	int strideval = 2*lattice_Size + 1;        
 
 	int basis_Position[dim];
 	int basis[dim];
-
-	int Sz = 0;
-
 	//----------------Construct basis and copy it to the GPU --------------------//
 	cudaEvent_t start, stop;
 
@@ -241,7 +251,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	thrust::device_vector<int> num_array(*vdim);
         int* num_array_ptr = raw_pointer_cast(&num_array[0]);
 
-        Copy<<<*vdim/512 + 1, 512>>>(num_array_ptr, d_H_pos, lattice_Size, vdim);
+        Copy<<<*vdim/512 + 1, 512>>>(num_array_ptr, d_H_pos, lattice_Size, *vdim);
 	cudaThreadSynchronize();
         *thrust_num_ptr = thrust::reduce(num_array.begin(), num_array.end());
 	*thrust_num_ptr = 2*(*thrust_num_ptr) - *vdim;
@@ -270,7 +280,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
         }
       
         cudaEventRecord(start, 0);	
-	CompressSparse<<<*vdim, 32>>>(d_H_vals, d_H_pos, d_H_sort, vdim, lattice_Size, num_Elem);
+	CompressSparse<<<*vdim, 32>>>(d_H_vals, d_H_pos, d_H_sort, *vdim, lattice_Size, num_Elem);
         
         cudaThreadSynchronize();
         cudaEventRecord(stop, 0);

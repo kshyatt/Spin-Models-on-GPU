@@ -2,6 +2,7 @@
 #include<iostream>
 #include<cstdlib>
 #include"cuda.h"
+#include<limits.h>
 #include"cuComplex.h"
 #include<fstream>
 #include"thrust/sort.h"
@@ -11,11 +12,7 @@
 
 using namespace thrust;
 
-__host__ __device__ int idx(int i, int j, int lda){
-
-	return ( j + (i*lda));
-
-}
+__host__ __device__ int idx(int i, int j, int lda);
 
 __device__ int d_num_Elem = 0; //all the diagonal elements
 
@@ -41,9 +38,9 @@ __host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], i
 
 __device__ cuDoubleComplex HOffBondX(const int si, const int bra, const double JJ);
 
-__device__ cuDoubleComplex HOffBondY(const int si, const int bra, const double JJ)
+__device__ cuDoubleComplex HOffBondY(const int si, const int bra, const double JJ);
 
-__device__ cuDoubleComplex HDiagPart(const int bra, int lattice_Size, int3* d_Bond, const double JJ)
+__device__ cuDoubleComplex HDiagPart(const int bra, int lattice_Size, int3* d_Bond, const double JJ);
 
 __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int* vdim, double JJ, int Sz);
 
