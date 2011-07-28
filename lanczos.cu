@@ -71,12 +71,26 @@ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const int* d_H
   }
 
   cusparseMatDescr_t H_descr = 0;
-  cusparseCreateMatDescr(&H_descr);
-  cusparseSetMatType(H_descr, CUSPARSE_MATRIX_TYPE_HERMITIAN);
-  cusparseSetMatIndexBase(H_descr, CUSPARSE_INDEX_BASE_ZERO);
+  sparsestatus = cusparseCreateMatDescr(&H_descr);
+  if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
+    std::cout<<"Error creating matrix description: "<<sparsestatus<<std::endl;
+  }
+  sparsestatus = cusparseSetMatType(H_descr, CUSPARSE_MATRIX_TYPE_HERMITIAN);
+  if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
+    std::cout<<"Error setting matrix type: "<<sparsestatus<<std::endl;
+  }
+  sparsestatus = cusparseSetMatIndexBase(H_descr, CUSPARSE_INDEX_BASE_ZERO);
+  if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
+    std::cout<<"Error setting matrix index base: "<<sparsestatus<<std::endl;
+  }
+
+  cudaError_t status1, status2, status3, status4;
 
   int* d_H_rowptrs;
-  cudaMalloc(&d_H_rowptrs, (dim + 1)*sizeof(int));
+  status1 = cudaMalloc(&d_H_rowptrs, (dim + 1)*sizeof(int));
+  if (status1 != CUDA_SUCCESS){ 
+    std::cout<<"Error allocating d_H_rowptrs: "<<cudaGetErrorString(status1)<<std::endl;
+  }
 
   sparsestatus = cusparseXcoo2csr(sparsehandle, d_H_rows, num_Elem, dim, d_H_rowptrs, CUSPARSE_INDEX_BASE_ZERO);
 
@@ -84,20 +98,40 @@ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const int* d_H
     std::cout<<"Failed to switch from COO to CSR! Error: "<<sparsestatus<<std::endl;
   }
 
-  cudaError_t status1, status2, status3, status4; //this is to throw errors in case things (mostly memory) in the code fail!  
+  std::cout<<"Going from COO to CSR complete"<<std::endl;
+  
+  thrust::device_vector<cuDoubleComplex> d_a;
+  try {
+    d_a.resize(max_Iter);
+  }
 
-  thrust::device_vector<cuDoubleComplex> d_a(max_Iter);
-  thrust::device_vector<cuDoubleComplex> d_b(max_Iter);
+  catch( thrust::system_error e) {
+    std::cerr << "Error creating d_a: "<< e.what() <<std::endl;
+    exit(-1);
+  }
+
+  
+  thrust::device_vector<cuDoubleComplex> d_b;
+  try {
+    d_b.resize(max_Iter);
+  }
+
+  catch( thrust::system_error e) {
+    std::cerr << "Error creating d_b: "<< e.what() <<std::endl;
+    exit(-1);
+  }
+
   cuDoubleComplex* d_a_ptr;
   cuDoubleComplex* d_b_ptr; //we need these to pass to kernel functions 
-
-
+  std::cout<<"Creating d_a and d_b complete"<<std::endl;
+  
   int tpb = 256; //threads per block - a conventional number
   int bpg = (dim + tpb - 1)/tpb; //blocks per grid
 
   //Making the "random" starting vector
 
   thrust::device_vector<cuDoubleComplex> d_lanczvec(dim*max_Iter); //this thing is an array of the Lanczos vectors 
+  std::cout<<"Creating d_lanczvec complete"<<std::endl;
 
   thrust::device_vector<cuDoubleComplex> v0(dim);
   thrust::device_vector<cuDoubleComplex> v1(dim);
@@ -105,9 +139,11 @@ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const int* d_H
   cuDoubleComplex* v0_ptr = thrust::raw_pointer_cast(&v0[0]);
   cuDoubleComplex* v1_ptr = thrust::raw_pointer_cast(&v1[0]);
   cuDoubleComplex* v2_ptr = thrust::raw_pointer_cast(&v2[0]);
+  std::cout<<"Creating the three lanczos vectors complete"<<std::endl;
 
   thrust::fill(v0.begin(), v0.end(), make_cuDoubleComplex(1., 0.));//assigning the values of the "random" starting vector
-  
+  std::cout<<"Filling the starting vector complete"<<std::endl;
+
   cuDoubleComplex alpha = make_cuDoubleComplex(1.,0.);
   cuDoubleComplex beta = make_cuDoubleComplex(0.,0.); 
 
@@ -117,7 +153,7 @@ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const int* d_H
     std::cout<<"Getting V1 = H*V0 failed! Error: ";
     std::cout<<sparsestatus<<std::endl;
   }
-
+  std::cout<<"Getting V1 = H*V0 complete"<<std::endl;
   //*********************************************************************************************************
   // This is just the first steps so I can do the rest
   d_a_ptr = raw_pointer_cast(&d_a[0]);  
@@ -142,7 +178,6 @@ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const int* d_H
           std::cout<<"Setting y failed! Error: ";
           std::cout<<cudaGetErrorString(status3)<<std::endl;
   }
-  //assignr<<<bpg,tpb>>>(y,0., dim); //a dummy vector of 0s that i can stick in my functions
 
   double* double_temp;
   status4 = cudaMalloc(&double_temp, sizeof(double));

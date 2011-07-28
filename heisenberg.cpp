@@ -5,6 +5,8 @@
 #include"cuda.h"
 #include"cuComplex.h"
 
+using namespace std;
+
 int main(){
 
   int* Bond;
@@ -37,7 +39,7 @@ int main(){
 
 
   int num_Elem = ConstructSparseMatrix( 0, nsite, Bond, hamil_Values, hamil_PosRow, hamil_PosCol, &dim, JJ, Sz );
-
+  cout<<"ConstructSparseMatrix finished"<<endl;
   int rtn = num_Elem;
   if (rtn == 1){
 	return 1;

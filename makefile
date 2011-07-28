@@ -1,5 +1,5 @@
 CC = nvcc
-CFLAGS = -arch=sm_20
+CFLAGS = -w -g -G -DTHRUST_DEBUG -arch=sm_20
 LIBS = -lcublas -lcusparse
 OBJS = heisenberg.o testhamiltonian.o lanczos.o
 

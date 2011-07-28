@@ -156,9 +156,19 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	//----------------Construct basis and copy it to the GPU --------------------//
 	cudaEvent_t start, stop;
 
-        cudaEventCreate(&start);
-        cudaEventCreate(&stop);
+        status1 = cudaEventCreate(&start);
+        status2 = cudaEventCreate(&stop);
         
+        if (status1 != CUDA_SUCCESS){
+          std::cout<<"Error creating start! Error: "<<cudaGetErrorString(status1)<<std::endl;
+          return 1;
+        }
+
+        if (status2 != CUDA_SUCCESS){
+          std::cout<<"Error creating stop! Error: "<<cudaGetErrorString(status2)<<std::endl;
+          return 1;
+        }
+
         cudaEventRecord(start,0);
         *vdim = GetBasis(dim, lattice_Size, Sz, basis_Position, basis);
         cudaEventRecord(stop,0);
@@ -278,7 +288,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
                 std::cout<<cudaGetErrorString( status1 )<<std::endl;
                 return 1;
         }
-      
+        std::cout<<"CompressSparse running"<<std::endl;      
         cudaEventRecord(start, 0);	
 	CompressSparse<<<*vdim, 32>>>(d_H_vals, d_H_pos, d_H_sort, *vdim, lattice_Size, num_Elem);
         
@@ -297,27 +307,24 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	cudaFree(d_H_pos);
 
         //----------------Sorting Hamiltonian--------------------------//
-
+        std::cout<<"Sorting started"<<std::endl;
         thrust::device_ptr<hamstruct> sort_ptr(d_H_sort);
 
         cudaEventRecord(start,0);
         thrust::sort(sort_ptr, sort_ptr + num_Elem, ham_sort_function());
-        
+      
         //--------------------------------------------------------------
 
         cudaThreadSynchronize();
         cudaEventRecord(stop,0);
         cudaEventElapsedTime(&elapsed, start, stop);
-
+        std::cout<<"Sorting finished"<<std::endl;
         fout<<"Runtime for sorting: "<<elapsed<<std::endl;
 
         if (cudaPeekAtLastError() != 0){
                 std::cout<<"Error in sorting! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
                 return 1;
         }
-
-        //std::cout<<"Sorting complete"<<std::endl;
-
         
 	status1 = cudaMalloc(&hamil_Values, num_Elem*sizeof(cuDoubleComplex));
 	status2 = cudaMalloc(&hamil_PosRow, num_Elem*sizeof(int));
@@ -339,7 +346,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
         cudaThreadSynchronize();
         cudaEventRecord(stop, 0);
         cudaEventElapsedTime(&elapsed, start, stop);
-
+        std::cout<<"FullToCOO finished"<<std::endl;
         fout<<"Runtime for FullToCOO: "<<elapsed<<std::endl;
 	
         cudaFree(d_H_sort);

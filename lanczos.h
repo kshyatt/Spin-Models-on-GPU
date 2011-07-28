@@ -13,6 +13,7 @@
 #include"thrust/fill.h"
 #include"thrust/sort.h"
 #include"thrust/device_ptr.h"
+#include"thrust/system_error.h"
 
 using namespace thrust;
 
