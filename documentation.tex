@@ -7,12 +7,11 @@
 \usepackage[usenames, dvipsnames]{color}
 \begin{document}
 \renewcommand{\int}{\textcolor{Green}{int $\,$}}
+\newcommand{\ptrint}{\textcolor{Green}{int$^\ast \,$}
 \newcommand{\const}{\textcolor{Green}{const $\,$}}
-\renewcommand{\long}{\textcolor{Green}{long $\,$}}
 \newcommand{\double}{\textcolor{Green}{double $\,$}}
-\newcommand{\typelongptr}{\textcolor{Green}{long$^\ast \,$}}
 \newcommand{\void}{\textcolor{Green}{void $\,$}}
-\newcommand{\typelongtwoptr}{\textcolor{Green}{long2$^\ast \,$}}
+\newcommand{\typeinttwoptr}{\textcolor{Green}{int2$^\ast \,$}}
 \newcommand{\cuDoubleComplex}{\textcolor{Green}{cuDoubleComplex$^\ast \,$}}
 \newcommand{\hamstruct}{\textcolor{Green}{hamstruct$^\ast \,$}}
 \newcommand{\host}{\textcolor{Red}{$\_\_$host$\_\_ \; \;$}}
@@ -33,15 +32,15 @@ This document describes code for generating Hamiltonians on lattices and then ap
 
 There are two codes used to generate the Hamiltonians: hamiltonian.cu and hamiltonian.h. The ``builder" function, ConstructSparseMatrix, creates and fills a number and three arrays with information about the Hamiltonian for a certain model and number of sites in the COO format
 
-\paragraph{\host \int ConstructSparseMatrix(\int, \int, \typelongptr, \cuDoubleComplex, \typelongptr, \typelongptr) \\ \\}
+\paragraph{\host \int ConstructSparseMatrix(\int, \int, \ptrint, \cuDoubleComplex, \ptrint, \ptrint) \\ \\}
 \noindent\textbf{Parameters}:
 \begin{description}
 \item[\int model$\_$Type] A value that tells ConstructSparseMatrix to build a Hamiltonian for the spin 1/2 Heisenberg (1), ..., or ... models.
 \item[\int lattice$\_$Size] The number of lattice sites
-\item[\typelongptr Bond] An array containing the bond information for the model we're using 
+\item[\ptrint Bond] An array containing the bond information for the model we're using 
 \item[\cuDoubleComplex hamil$\_$Values] A device pointer that will have an array of Hamiltonian values allocated at it as ConstructSparseMatrix runs
-\item[\typelongptr hamil$\_$PosRow] A device pointer that will have an array of row indices allocated at it as ConstructSparseMatrix runs, in the COO form
-\item[\typelongptr hamil$\_$PosCol] A device pointer that will have an array of column indicies allocated at is as ConstructSparseMatrix runs, in the COO form
+\item[\ptrint hamil$\_$PosRow] A device pointer that will have an array of row indices allocated at it as ConstructSparseMatrix runs, in the COO form
+\item[\ptrint hamil$\_$PosCol] A device pointer that will have an array of column indicies allocated at is as ConstructSparseMatrix runs, in the COO form
 \end{description}
 
 \noindent\textbf{The function proceeds by:}
@@ -50,7 +49,7 @@ There are two codes used to generate the Hamiltonians: hamiltonian.cu and hamilt
 \item{Constructing a basis for the system on the CPU (could maybe move to GPU)}
 \item{Allocating device and host FORTRAN style (1D row-major format) arrays to hold the 2D Hamiltonian matrix on host and device}
 \item{Call function FillSparse, which constructs the Hamiltonian naively and counts the number of nonzero elements per row}
-\item{Call function GetNumElem, which finds how many nonzero elements there are}
+\item{Copying the number of elements per row to a thrust vector, then calling reduce (sum) on them to find how many nonzero elements there are}
 \item{Call function CompressSparse, which moves all the nonzero elements and their positions into the array d$\_$H$\_$sort which is an array of hamstructs}
 \item{Sort the Hamiltonian array on the device by using the Thrust library}
 \item{Call function FulltoCOO, which transforms the representation to COO form}
@@ -90,14 +89,14 @@ Possible Optimizations:
 \item{Using some bithax to get rid of the if statement would probably speed this up a bit}
 \end{itemize}
 
-\paragraph{\cudaglobal \void FillSparse(\typelongptr , \typelongptr , \int, \cuDoubleComplex , \typelongtwoptr , \int , \int , \const \double ) \\ \\ }
+\paragraph{\cudaglobal \void FillSparse(\ptrint , \ptrint , \int, \cuDoubleComplex , \typeinttwoptr , \int , \int , \const \double ) \\ \\ }
 \noindent\textbf{Parameters}:
 \begin{description}
-\item[\typelongptr d$\_$basis$\_$Position] The position information about the basis
-\item[\typelongptr d$\_$basis] The information about the basis
+\item[\ptrint d$\_$basis$\_$Position] The position information about the basis
+\item[\ptrint d$\_$basis] The information about the basis
 \item[\long dim] The dimension of the Hamiltonian
 \item[\cuDoubleComplex H$\_$vals] An empty array that will store the Hamiltonian values
-\item[\typelongtwoptr H$\_$pos] An empty array that will store the Hamiltonian positions
+\item[\typeinttwoptr H$\_$pos] An empty array that will store the Hamiltonian positions
 \item[\int d$\_$Bond] An array that stores the bond information
 \item[\int lattice$\_$Size] The number of sites
 \item[const \double JJ] The coupling constant
@@ -120,28 +119,15 @@ Possible Optimizations:
 
 Other things:
 \begin{itemize}
-\item{H$\_$pos is a typelongptr because this makes later functions easier. The first typelongptr is the row index and the second is the column.}
+\item{H$\_$pos is a \typeinttwoptr because this makes later functions easier. The first \ptrint is the row index and the second is the column.}
 \item{If you want to add in another model, FillSparse needs to have the enum passed to it, and you'll need to write some equivalents of HOffX, HOffY, and HDiagPart. You might have to change the array size as well}
 \end{itemize}
 
-\paragraph{\cudaglobal \void GetNumElem( \typelongtwoptr , \int ) \\ \\}
-\noindent\textbf{Parameters}:
-\begin{description}
-\item[\typelongtwoptr H$\_$pos] The array of Hamiltonian positions
-\item[\int lattice$\_$Size] The number of lattice sites
-\end{description}
-
-\noindent\textbf{The function proceeds by:}
-\begin{enumerate}
-\item{Each thread gets the number of elements in the corresponding row}
-\item{This number is added to a global $\_\_$device$\_\_$ variable called d$\_$num$\_$Elem}
-\end{enumerate}
-
-\paragraph{\cudaglobal \void CompressSparse(\cuDoubleComplex , \typelongtwoptr , \hamstruct , \int , \const \int ) \\ \\}
+\paragraph{\cudaglobal \void CompressSparse(\cuDoubleComplex , \typeinttwoptr , \hamstruct , \int , \const \int ) \\ \\}
 \noindent\textbf{Parameters}:
 \begin{description}
 \item[\cuDoubleComplex H$\_$vals] The array of Hamiltonian values
-\item[\typelongtwoptr H$\_$pos] The array of Hamiltonian positions in the columns
+\item[\typeinttwoptr H$\_$pos] The array of Hamiltonian positions in the columns
 \item[\hamstruct H$\_$sort] The array of ``good'' values to be sorted
 \item[\long dim] The dimension of the Hamiltonian
 \item[\int lattice$\_$Size] The number of sites
@@ -160,15 +146,15 @@ Possible Optimizations:
 \end{itemize}
 
 
-\paragraph{\cudaglobal \void FullToCOO(\int , \cuDoubleComplex , \typelongtwoptr , \cuDoubleComplex , \typelongptr , \typelongptr, \long) \\ \\}
+\paragraph{\cudaglobal \void FullToCOO(\int , \cuDoubleComplex , \typeinttwoptr , \cuDoubleComplex , \ptrint , \ptrint, \long) \\ \\}
 \noindent\textbf{Parameters}:
 \begin{description}
 \item[\int num$\_$Elem] The number of nonzero elements
 \item[\cuDoubleComplex H$\_$vals] The array of the Hamiltonian values
-\item[\typelongtwoptr H$\_$pos] The array of the Hamiltonian positions
+\item[\typeinttwoptr H$\_$pos] The array of the Hamiltonian positions
 \item[\cuDoubleComplex hamil$\_$values] The array that will store only the nonzero Hamiltonian values (for COO form)
-\item[\typelongptr hamil$\_$PosRow] The array that will store the row positions of the nonzero values (for COO form)
-\item[\typelongptr hamil$\_$PosCol] The array that will store the column positions of the nonzero values (for COO form)
+\item[\ptrint hamil$\_$PosRow] The array that will store the row positions of the nonzero values (for COO form)
+\item[\ptrint hamil$\_$PosCol] The array that will store the column positions of the nonzero values (for COO form)
 \item[\long dim] The dimension of the Hamiltonian
 
 \end{description}
@@ -199,6 +185,39 @@ If you want to use the full Hamiltonian (not just the S$_z$ sector) you'll need 
  
 
 \section{Lanczos}
+
+\subsection{Description}
+The code, lanczos.cu, takes as input the three COO arrays describing the Hamiltonian and the number of elements, as well as some parameters to control how long the code runs and its output. It applies the Lanczos method to the Hamiltonian to reduce it to a tridiagonal form and then diagonalize it using the TQLI method.The Lanczos and eigenvectors are all stored so that expectation values can be found as well.  
+
+\paragraph{\host \void lanczos(\const \int , \const \cuDoubleComplex , \const int* , \const int* , \const \int , \int , \const \int , \const double )\\ \\ }
+
+\noindent\textbf{Parameters:}
+\begin{description}
+\item[num$\_$Elem]{The number of nonzero elements in the Hamiltonian}
+\item[d$\_$H$\_$vals]{The array on the GPU that stores the values of the Hamiltonian elements}
+\item[d$\_$H$\_$rows]{The array on the GPU that stores the row indices (in COO format) of the Hamiltonian elements}
+\item[d$\_$H$\_$cols]{The array on the GPU that stores the column indices of the Hamiltonian elements}
+\item[dim]{The dimension of the Hilbert space}
+\item[max$\_$Iter]{The maximum number of iterations we want the Lanczos to run for - this is a soft limit, and will be extended if the algorithm isn't converging fast enough}
+\item[num$\_$Eig]{The number of eigenvalues (from the groundstate up) we want to store/print}
+\itme[conv$\_$req]{The convergence requirement for the eigenvalues between iterations}
+\end{description}
+
+\noindent\textbf{The function proceeds by:}
+\begin{enumerate}
+\item{Transforming the Hamiltonian representation into the CSR format}
+\item{Initializing a description for the cusparse functions}
+\item{Creating thrust vectors to hold the information about the tridiagonal matrix elements and eigenvectors}
+\item{Generating a random starting vector}
+\item{Generating the second Lanczos vector and the starting coefficients}
+\item{Iterating through the generation of Lanczos vectors (generating the three vectors, finding coefficients, then diagonalizing the Hamiltonian) until the difference between the eigenvalues is less than the convergence requirement}
+\item{Printing out the lowest num$\_$Eig eigenvalues}
+\end{enumerate}
+
+\noindent\textbf{Possible Optimizations}
+\begin{itemize}
+\item{Since nearly all of the GPU usage here is handled by CUSPARSE and CUBLAS functions, there's not much kernel tweaking to be done. However, there may be a better way to check convergence and it may be possible to get tqli to run faster}
+\end{itemize}
 
 \section{References}
 
