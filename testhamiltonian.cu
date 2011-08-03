@@ -154,12 +154,12 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	int basis_Position[dim];
 	int basis[dim];
 	//----------------Construct basis and copy it to the GPU --------------------//
-	cudaEvent_t start, stop;
+	//cudaEvent_t start, stop;
 
-        status1 = cudaEventCreate(&start);
-        status2 = cudaEventCreate(&stop);
+        //status1 = cudaEventCreate(&start);
+        //status2 = cudaEventCreate(&stop);
         
-        if (status1 != CUDA_SUCCESS){
+        /*if (status1 != CUDA_SUCCESS){
           std::cout<<"Error creating start! Error: "<<cudaGetErrorString(status1)<<std::endl;
           return 1;
         }
@@ -169,27 +169,31 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
           return 1;
         }
 
-        cudaEventRecord(start,0);
+        cudaEventRecord(start,0);*/
+        std::cout<<"Running GetBasis"<<std::endl;
         *vdim = GetBasis(dim, lattice_Size, Sz, basis_Position, basis);
-        cudaEventRecord(stop,0);
+        //cudaEventRecord(stop,0);
 
-        float elapsed;
+        //float elapsed;
 
-        cudaEventElapsedTime(&elapsed, start, stop);
+        //cudaEventElapsedTime(&elapsed, start, stop);
 
-        fout<<"Run time for GetBasis: "<<elapsed<<std::endl;
+        //fout<<"Run time for GetBasis: "<<elapsed<<std::endl;
 
 	int* d_basis_Position;
 	int* d_basis;
-
+        std::cout<<"Allocating d_basis_Position"<<std::endl;
 	status1 = cudaMalloc(&d_basis_Position, dim*sizeof(int));
-	status2 = cudaMalloc(&d_basis, *vdim*sizeof(int));
+	std::cout<<"Allocated d_basis_Position"<<std::endl;
+        status2 = cudaMalloc(&d_basis, *vdim*sizeof(int));
 
 	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
 		std::cout<<"Memory allocation for basis arrays failed! Error: ";
                 std::cout<<cudaPeekAtLastError()<<std::endl;
 		return 1;
 	}
+
+        std::cout<<"Allocated d_basis"<<std::endl;
 
 	status1 = cudaMemcpy(d_basis_Position, basis_Position, dim*sizeof(int), cudaMemcpyHostToDevice);
 	status2 = cudaMemcpy(d_basis, basis, *vdim*sizeof(int), cudaMemcpyHostToDevice);
@@ -233,13 +237,14 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
               return 1;
         }
 
+        std::cout<<"Allocating d_H"<<std::endl;
         //the above code should work on devices of any compute capability - YEAAAAH
 
 	// --------------------- Fill up the sparse matrix and compress it to remove extraneous elements ------//
 
-        //std::cout<<"Running FillSparse"<<std::endl;
+        std::cout<<"Running FillSparse"<<std::endl;
       
-        cudaEventRecord(start, 0);
+        //cudaEventRecord(start, 0);
 	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, *vdim, d_H_vals, d_H_pos, d_Bond, lattice_Size, JJ);
 
         if( cudaPeekAtLastError() != 0 ){
@@ -248,10 +253,10 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	}
 		
 	cudaThreadSynchronize(); //need to make sure all elements are initialized before I start compression
-        cudaEventRecord(stop, 0);
-        cudaEventElapsedTime(&elapsed, start, stop);
+        //cudaEventRecord(stop, 0);
+        //cudaEventElapsedTime(&elapsed, start, stop);
 
-        fout<<"Runtime for FillSparse: "<<elapsed<<std::endl;
+        //fout<<"Runtime for FillSparse: "<<elapsed<<std::endl;
 
 	int* num_ptr;
 	cudaGetSymbolAddress((void**)&num_ptr, (const char*)"d_num_Elem");
@@ -289,14 +294,14 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
                 return 1;
         }
         std::cout<<"CompressSparse running"<<std::endl;      
-        cudaEventRecord(start, 0);	
+        //cudaEventRecord(start, 0);	
 	CompressSparse<<<*vdim, 32>>>(d_H_vals, d_H_pos, d_H_sort, *vdim, lattice_Size, num_Elem);
         
         cudaThreadSynchronize();
-        cudaEventRecord(stop, 0);
-        cudaEventElapsedTime(&elapsed, start, stop);
+        //cudaEventRecord(stop, 0);
+        //cudaEventElapsedTime(&elapsed, start, stop);
 
-        fout<<"Runtime for CompressSparse: "<<elapsed<<std::endl;
+        //fout<<"Runtime for CompressSparse: "<<elapsed<<std::endl;
 
         if (cudaPeekAtLastError() != 0){
               std::cout<<"Error in CompressSparse! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
@@ -310,16 +315,16 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
         std::cout<<"Sorting started"<<std::endl;
         thrust::device_ptr<hamstruct> sort_ptr(d_H_sort);
 
-        cudaEventRecord(start,0);
+        //cudaEventRecord(start,0);
         thrust::sort(sort_ptr, sort_ptr + num_Elem, ham_sort_function());
       
         //--------------------------------------------------------------
 
         cudaThreadSynchronize();
-        cudaEventRecord(stop,0);
-        cudaEventElapsedTime(&elapsed, start, stop);
+        //cudaEventRecord(stop,0);
+        //cudaEventElapsedTime(&elapsed, start, stop);
         std::cout<<"Sorting finished"<<std::endl;
-        fout<<"Runtime for sorting: "<<elapsed<<std::endl;
+        //fout<<"Runtime for sorting: "<<elapsed<<std::endl;
 
         if (cudaPeekAtLastError() != 0){
                 std::cout<<"Error in sorting! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
@@ -340,22 +345,22 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 				
 	//std::cout<<"Running FullToCOO."<<std::endl;
 
-        cudaEventRecord(start, 0);	
+        //cudaEventRecord(start, 0);	
         FullToCOO<<<num_Elem/512 + 1, 512>>>(num_Elem, d_H_sort, hamil_Values, hamil_PosRow, hamil_PosCol, *vdim); // csr and description initializations happen somewhere else
 
         cudaThreadSynchronize();
-        cudaEventRecord(stop, 0);
-        cudaEventElapsedTime(&elapsed, start, stop);
+        //cudaEventRecord(stop, 0);
+        //cudaEventElapsedTime(&elapsed, start, stop);
         std::cout<<"FullToCOO finished"<<std::endl;
-        fout<<"Runtime for FullToCOO: "<<elapsed<<std::endl;
+        //fout<<"Runtime for FullToCOO: "<<elapsed<<std::endl;
 	
         cudaFree(d_H_sort);
 
         //free(h_H_pos);
         //free(h_H_vals);
         //fdata.close();
-        cudaEventDestroy(start);
-        cudaEventDestroy(stop);
+        //cudaEventDestroy(start);
+        //cudaEventDestroy(stop);
         fout.close();
 
 	return num_Elem;

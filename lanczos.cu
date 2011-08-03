@@ -97,7 +97,7 @@ __host__ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const
   if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
     std::cout<<"Failed to switch from COO to CSR! Error: "<<sparsestatus<<std::endl;
   }
-
+  cudaThreadSynchronize();
   std::cout<<"Going from COO to CSR complete"<<std::endl;
   
   thrust::device_vector<cuDoubleComplex> d_a;
@@ -110,6 +110,11 @@ __host__ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const
     exit(-1);
   }
 
+  catch( std::bad_alloc ){
+    std::cerr<<"Couldn't allocate d_a"<<std::endl;
+    exit(-1);
+  }
+  std::cout<<"Creating d_a complete"<<std::endl;
   
   thrust::device_vector<cuDoubleComplex> d_b;
   try {
@@ -120,17 +125,29 @@ __host__ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const
     std::cerr << "Error creating d_b: "<< e.what() <<std::endl;
     exit(-1);
   }
+  catch( std::bad_alloc ){
+    std::cerr<<"Couldn't allocated d_b"<<std::endl;
+    exit(-1);
+  }
 
   cuDoubleComplex* d_a_ptr;
   cuDoubleComplex* d_b_ptr; //we need these to pass to kernel functions 
-  std::cout<<"Creating d_a and d_b complete"<<std::endl;
+  std::cout<<"Creating d_b complete"<<std::endl;
   
   int tpb = 256; //threads per block - a conventional number
   int bpg = (dim + tpb - 1)/tpb; //blocks per grid
 
   //Making the "random" starting vector
 
-  thrust::device_vector<cuDoubleComplex> d_lanczvec(dim*max_Iter); //this thing is an array of the Lanczos vectors 
+  thrust::device_vector<cuDoubleComplex> d_lanczvec; //this thing is an array of the Lanczos vectors 
+  try{
+    d_lanczvec.resize(dim*max_Iter);
+  }
+  catch( thrust::system_error e){
+    std::cerr<<"Error creating d_lanczvec: "<<e.what()<<std::endl;
+    exit(-1);
+  }
+ 
   std::cout<<"Creating d_lanczvec complete"<<std::endl;
 
   thrust::device_vector<cuDoubleComplex> v0(dim);
