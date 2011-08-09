@@ -99,6 +99,10 @@ __host__ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const
   }
   cudaThreadSynchronize();
   std::cout<<"Going from COO to CSR complete"<<std::endl;
+
+  size_t heap;
+  cudaDeviceGetLimit(&heap, cudaLimitMallocHeapSize);
+  std::cout<<"GPU heap size: "<<heap<<std::endl;
   
   thrust::device_vector<cuDoubleComplex> d_a;
   try {
@@ -110,7 +114,7 @@ __host__ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const
     exit(-1);
   }
 
-  catch( std::bad_alloc ){
+  catch( std::bad_alloc &e){
     std::cerr<<"Couldn't allocate d_a"<<std::endl;
     exit(-1);
   }
@@ -175,12 +179,14 @@ __host__ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const
   // This is just the first steps so I can do the rest
   d_a_ptr = raw_pointer_cast(&d_a[0]);  
   linalgstat = cublasZdotc(linalghandle, dim, v0_ptr, sizeof(cuDoubleComplex), v0_ptr, sizeof(cuDoubleComplex), d_a_ptr);
-  d_b[0] = make_cuDoubleComplex(0.,0.);
+  //d_b[0] = make_cuDoubleComplex(0.,0.);
 
   if (linalgstat != CUBLAS_STATUS_SUCCESS){
     std::cout<<"Getting d_a[0] failed! Error: ";
     std::cout<<linalgstat<<std::endl;
   }
+
+  d_b[0] = make_cuDoubleComplex(0., 0.);
 
   cuDoubleComplex* y;
   status2 = cudaMalloc(&y, dim*sizeof(cuDoubleComplex));

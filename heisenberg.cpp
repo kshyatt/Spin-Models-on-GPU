@@ -24,9 +24,7 @@ int main(){
   Bond[45] = 1;   Bond[46] = 2;   Bond[47] = 3;
 
   cuDoubleComplex* hamil_Values;
-
   int* hamil_PosRow;
-
   int* hamil_PosCol;
 
   int nsite = 16;
@@ -36,9 +34,7 @@ int main(){
   int Sz = 0;
   double JJ = 1.;
 
-
-
-  int num_Elem = ConstructSparseMatrix( 0, nsite, Bond, hamil_Values, hamil_PosRow, hamil_PosCol, &dim, JJ, Sz );
+  const int num_Elem = ConstructSparseMatrix( 0, nsite, Bond, hamil_Values, hamil_PosRow, hamil_PosCol, &dim, JJ, Sz );
   cout<<"ConstructSparseMatrix finished"<<endl;
   int rtn = num_Elem;
   if (rtn == 1){

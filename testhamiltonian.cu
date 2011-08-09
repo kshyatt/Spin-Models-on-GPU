@@ -148,18 +148,17 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
           return 1;
         }
 
-	int stridepos = 2*lattice_Size + 2;
-	int strideval = 2*lattice_Size + 1;        
+	int stride = 2*lattice_Size + 1;        
 
 	int basis_Position[dim];
 	int basis[dim];
 	//----------------Construct basis and copy it to the GPU --------------------//
-	//cudaEvent_t start, stop;
+	cudaEvent_t start, stop;
 
-        //status1 = cudaEventCreate(&start);
-        //status2 = cudaEventCreate(&stop);
+        status1 = cudaEventCreate(&start);
+        status2 = cudaEventCreate(&stop);
         
-        /*if (status1 != CUDA_SUCCESS){
+        if (status1 != CUDA_SUCCESS){
           std::cout<<"Error creating start! Error: "<<cudaGetErrorString(status1)<<std::endl;
           return 1;
         }
@@ -169,16 +168,15 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
           return 1;
         }
 
-        cudaEventRecord(start,0);*/
+        cudaEventRecord(start,0);
         std::cout<<"Running GetBasis"<<std::endl;
         *vdim = GetBasis(dim, lattice_Size, Sz, basis_Position, basis);
-        //cudaEventRecord(stop,0);
+        cudaEventRecord(stop,0);
 
-        //float elapsed;
+        float elapsed;
 
-        //cudaEventElapsedTime(&elapsed, start, stop);
-
-        //fout<<"Run time for GetBasis: "<<elapsed<<std::endl;
+        cudaEventElapsedTime(&elapsed, start, stop);
+        fout<<"Run time for GetBasis: "<<elapsed<<std::endl;
 
 	int* d_basis_Position;
 	int* d_basis;
@@ -229,8 +227,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
         int2* d_H_pos;
         cuDoubleComplex* d_H_vals;
 
-        status1 = cudaMalloc(&d_H_pos, *vdim*stridepos*sizeof(int2));
-        status2 = cudaMalloc(&d_H_vals, *vdim*strideval*sizeof(cuDoubleComplex));
+        status1 = cudaMalloc(&d_H_pos, *vdim*stride*sizeof(int2));
+        status2 = cudaMalloc(&d_H_vals, *vdim*stride*sizeof(cuDoubleComplex));
 
         if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
               std::cout<<"Memory allocation for device Hamiltonian failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
@@ -244,8 +242,11 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 
         std::cout<<"Running FillSparse"<<std::endl;
       
-        //cudaEventRecord(start, 0);
-	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, *vdim, d_H_vals, d_H_pos, d_Bond, lattice_Size, JJ);
+	thrust::device_vector<int> num_array(*vdim);
+        int* num_array_ptr = raw_pointer_cast(&num_array[0]);
+
+        cudaEventRecord(start, 0);
+	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, *vdim, d_H_vals, d_H_pos, num_array_ptr, d_Bond, lattice_Size, JJ);
 
         if( cudaPeekAtLastError() != 0 ){
 		std::cout<<"Error in FillSparse! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
@@ -253,21 +254,17 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	}
 		
 	cudaThreadSynchronize(); //need to make sure all elements are initialized before I start compression
-        //cudaEventRecord(stop, 0);
-        //cudaEventElapsedTime(&elapsed, start, stop);
+        cudaEventRecord(stop, 0);
+        cudaEventElapsedTime(&elapsed, start, stop);
 
-        //fout<<"Runtime for FillSparse: "<<elapsed<<std::endl;
+        fout<<"Runtime for FillSparse: "<<elapsed<<std::endl;
 
 	int* num_ptr;
 	cudaGetSymbolAddress((void**)&num_ptr, (const char*)"d_num_Elem");
 	cudaMemset(num_ptr, 0, sizeof(int));
 
 	thrust::device_ptr<int> thrust_num_ptr(num_ptr);
-	thrust::device_vector<int> num_array(*vdim);
-        int* num_array_ptr = raw_pointer_cast(&num_array[0]);
 
-        Copy<<<*vdim/512 + 1, 512>>>(num_array_ptr, d_H_pos, lattice_Size, *vdim);
-	cudaThreadSynchronize();
         *thrust_num_ptr = thrust::reduce(num_array.begin(), num_array.end());
 	*thrust_num_ptr = 2*(*thrust_num_ptr) - *vdim;
 
@@ -293,43 +290,56 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
                 std::cout<<cudaGetErrorString( status1 )<<std::endl;
                 return 1;
         }
-        std::cout<<"CompressSparse running"<<std::endl;      
-        //cudaEventRecord(start, 0);	
-	CompressSparse<<<*vdim, 32>>>(d_H_vals, d_H_pos, d_H_sort, *vdim, lattice_Size, num_Elem);
-        
-        cudaThreadSynchronize();
-        //cudaEventRecord(stop, 0);
-        //cudaEventElapsedTime(&elapsed, start, stop);
+      
+        cudaStream_t stream[2];
+        for (int i = 0; i < 2; i++){
+          cudaStreamCreate(&stream[i]);
+        }
 
-        //fout<<"Runtime for CompressSparse: "<<elapsed<<std::endl;
+        cudaEventRecord(start, 0);	
+	CompressSparse<<<*vdim, 32, 0, stream[0]>>>(d_H_vals, d_H_pos, num_array_ptr, d_H_sort, *vdim, lattice_Size, num_Elem);
 
         if (cudaPeekAtLastError() != 0){
               std::cout<<"Error in CompressSparse! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
               return 1;
         }
 
-	cudaFree(d_H_vals); //cleanup
+        CopyDiagonals<<<*vdim/512 + 1, 512, 0, stream[1]>>>(d_H_vals, d_H_sort, *vdim, lattice_Size);
+
+        cudaStreamSynchronize(stream[0]);
+	cudaStreamSynchronize(stream[1]);
+        cudaEventRecord(stop, 0);
+        cudaEventElapsedTime(&elapsed, start, stop);
+        fout<<"Runtime for CompressSparse and CopyDiagonals"<<std::endl;
+	
+        for (int i = 0; i < 2; i++){
+          cudaStreamDestroy(stream[i]);
+        }
+        cudaFree(d_H_vals); //cleanup
 	cudaFree(d_H_pos);
 
         //----------------Sorting Hamiltonian--------------------------//
-        std::cout<<"Sorting started"<<std::endl;
+
         thrust::device_ptr<hamstruct> sort_ptr(d_H_sort);
 
-        //cudaEventRecord(start,0);
+        cudaEventRecord(start,0);
         thrust::sort(sort_ptr, sort_ptr + num_Elem, ham_sort_function());
-      
+        
         //--------------------------------------------------------------
 
         cudaThreadSynchronize();
-        //cudaEventRecord(stop,0);
-        //cudaEventElapsedTime(&elapsed, start, stop);
-        std::cout<<"Sorting finished"<<std::endl;
-        //fout<<"Runtime for sorting: "<<elapsed<<std::endl;
+        cudaEventRecord(stop,0);
+        cudaEventElapsedTime(&elapsed, start, stop);
+
+        fout<<"Runtime for sorting: "<<elapsed<<std::endl;
 
         if (cudaPeekAtLastError() != 0){
                 std::cout<<"Error in sorting! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
                 return 1;
         }
+
+        //std::cout<<"Sorting complete"<<std::endl;
+
         
 	status1 = cudaMalloc(&hamil_Values, num_Elem*sizeof(cuDoubleComplex));
 	status2 = cudaMalloc(&hamil_PosRow, num_Elem*sizeof(int));
@@ -343,24 +353,24 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	}
         
 				
-	//std::cout<<"Running FullToCOO."<<std::endl;
+	std::cout<<"Running FullToCOO."<<std::endl;
 
-        //cudaEventRecord(start, 0);	
+        cudaEventRecord(start, 0);	
         FullToCOO<<<num_Elem/512 + 1, 512>>>(num_Elem, d_H_sort, hamil_Values, hamil_PosRow, hamil_PosCol, *vdim); // csr and description initializations happen somewhere else
 
         cudaThreadSynchronize();
-        //cudaEventRecord(stop, 0);
-        //cudaEventElapsedTime(&elapsed, start, stop);
+        cudaEventRecord(stop, 0);
+        cudaEventElapsedTime(&elapsed, start, stop);
         std::cout<<"FullToCOO finished"<<std::endl;
-        //fout<<"Runtime for FullToCOO: "<<elapsed<<std::endl;
+        fout<<"Runtime for FullToCOO: "<<elapsed<<std::endl;
 	
         cudaFree(d_H_sort);
 
         //free(h_H_pos);
         //free(h_H_vals);
         //fdata.close();
-        //cudaEventDestroy(start);
-        //cudaEventDestroy(stop);
+        cudaEventDestroy(start);
+        cudaEventDestroy(stop);
         fout.close();
 
 	return num_Elem;
@@ -379,7 +389,7 @@ Inputs: d_basis_Position - position information about the basis
 
 */
 
-__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, cuDoubleComplex* H_vals, int2* H_pos, int* d_Bond, int lattice_Size, const double JJ){
+__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, cuDoubleComplex* H_vals, int2* H_pos, int* elem_num_array, int* d_Bond, int lattice_Size, const double JJ){
 
 	
 	int ii = blockIdx.x;
@@ -391,9 +401,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, cuDoubl
         __shared__ int temppos[32];
         __shared__ cuDoubleComplex tempval[32]; //going to eliminate a huge number of read/writes to d_Bond, H_vals, H_pos in global memory
 
-        int stridepos = 2*lattice_Size + 2;
-        int strideval = 2*lattice_Size + 1;
-
+        int stride = 2*lattice_Size + 1;
 
 	int si, sj;//sk,sl; //spin operators
 	unsigned int tempi, tempod; //tempj;
@@ -417,12 +425,10 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, cuDoubl
 
 		tempval[0] = HDiagPart(tempi, lattice_Size, tempbond, JJ);
 
-                H_vals[ idx(ii, 0, strideval) ] = tempval[0];
-                (H_pos[ idx(ii, 1, stridepos) ]).y = temppos[0];
-                (H_pos[ idx(ii, 1, stridepos) ]).x = ii;
-                
-                
-
+                H_vals[ idx(ii, 0, stride) ] = tempval[0];
+                (H_pos[ idx(ii, 0, stride) ]).y = temppos[0];
+                (H_pos[ idx(ii, 0, stride) ]).x = ii;
+       
 		//-------------------------------
 		//Horizontal bond ---------------
 		si = (tempbond[T0]).x;
@@ -466,18 +472,18 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, cuDoubl
                 __syncthreads();
 
 		
-                H_vals[ idx(ii, 2*T0 + 1, strideval) ] = tempval[2*T0];
-                (H_pos[ idx(ii, 2*T0 + 2, stridepos) ]).y = temppos[2*T0];
-                (H_pos[ idx(ii, 2*T0 + 2, stridepos) ]).x = ii;                
+                H_vals[ idx(ii, 2*T0 + 1, stride) ] = tempval[2*T0];
+                (H_pos[ idx(ii, 2*T0 + 1, stride) ]).y = temppos[2*T0];
+                (H_pos[ idx(ii, 2*T0 + 1, stride) ]).x = ii;                
 
-		(H_pos[ idx(ii, 0, stridepos) ]).x = ii;
-                (H_pos[ idx(ii, 0, stridepos) ]).y = count + 1;
+	
+                elem_num_array[ii] = count + 1; 
                                
-                (H_pos[ idx(ii, 2*T0 + 3, stridepos) ]).x = ii;
-                (H_pos[ idx(ii, 2*T0 + 3, stridepos) ]).y = temppos[2*T0 + 1];
+                (H_pos[ idx(ii, 2*T0 + 2, stride) ]).x = ii;
+                (H_pos[ idx(ii, 2*T0 + 2, stride) ]).y = temppos[2*T0 + 1];
                 
-                (H_vals[ idx(ii, 2*T0 + 2, strideval) ]).x = (tempval[2*T0 + 1]).x;
-                (H_vals[ idx(ii, 2*T0 + 2, strideval) ]).y = (tempval[2*T0 + 1]).y;
+                (H_vals[ idx(ii, 2*T0 + 2, stride) ]).x = (tempval[2*T0 + 1]).x;
+                (H_vals[ idx(ii, 2*T0 + 2, stride) ]).y = (tempval[2*T0 + 1]).y;
                                                  
             }//end of T0 
 
@@ -492,20 +498,19 @@ Parameters:	H_vals - an array of Hamiltonian values
 	        lattice_Size - the number of lattice sites
 
 */
-__global__ void CompressSparse(const cuDoubleComplex* H_vals, const int2* H_pos, hamstruct* H_sort, int d_dim, const int lattice_Size, const int num_Elem){
+__global__ void CompressSparse(const cuDoubleComplex* H_vals, const int2* H_pos, const int* elem_num_array, hamstruct* H_sort, int d_dim, const int lattice_Size, const int num_Elem){
 
 	int row = blockIdx.x;
         int col = threadIdx.x;
 
         __shared__ int s_H_pos[32];
-        __shared__ cuDoubleComplex s_H_vals[32];
-        //__shared__ hamstruct s_H_sort[32];
+        //__shared__ cuDoubleComplex s_H_vals[32];
+        
 
         __shared__ int iter;
-        iter = 1;
-
-	const int size1 = 2*lattice_Size + 2;
-       	const int size2 = 2*lattice_Size + 1;
+        iter = 0;
+	
+       	int size = 2*lattice_Size + 1;
 
         __syncthreads();
 
@@ -513,43 +518,48 @@ __global__ void CompressSparse(const cuDoubleComplex* H_vals, const int2* H_pos,
         
                 // the basic idea here is to have each x thread go to the ith row, and each y thread go to the jth element of that row. then using a set of __shared__ temp arrays, we read in the Hamiltonian values and do our comparisons n stuff on them
 
-		int start = 0;
+		int start = d_dim;//the diagonals will appear first in d_H_sort
 	
                 for (int ii = 0; ii < row; ii++){ 
-                        start += 2*(H_pos[ idx(ii, 0 , size1) ]).y - 1 ;
+                        start += 2*(elem_num_array[ii]) - 2 ;
         	}
 
                 //if (start > num_Elem) printf("%d %d \n", start, num_Elem);		
-		(H_sort[ start ]).rowindex = row;
-                (H_sort[ start ]).colindex = row;
-                (H_sort[ start ]).value = H_vals[ idx( row, 0, size2) ];
-                (H_sort[ start ]).dim = d_dim; //doing the diagonals
-
-
 		int temp;
 
-                if (col < size2  - 1){
-                        s_H_pos[col] = (H_pos[ idx( row, col + 2, size1 ) ]).y;
-			s_H_vals[col] = H_vals[ idx( row, col + 1, size2) ];
+                if (col < size  - 1){
+                        s_H_pos[col] = (H_pos[ idx( row, col + 1, size ) ]).y;
+			//s_H_vals[col] = H_vals[ idx( row, col + 1, size) ];
 
                 	if (s_H_pos[col] != -1){
 				temp = atomicAdd(&iter, 1);
 				(H_sort[start + temp]).rowindex = row;
 				(H_sort[start + temp]).colindex = s_H_pos[col];
-				(H_sort[start + temp]).value = s_H_vals[col];
+				(H_sort[start + temp]).value = H_vals[ idx( row, col + 1, size) ];
 				(H_sort[start + temp]).dim = d_dim;
 
 				temp = atomicAdd(&iter, 1);
 
 				(H_sort[ start + temp ]).rowindex = s_H_pos[col]; //the conjugate
                                 (H_sort[ start + temp ]).colindex = row;
-                                (H_sort[ start + temp ]).value = make_cuDoubleComplex( (s_H_vals[col]).x , -( s_H_vals[col]).y );
+                                (H_sort[ start + temp ]).value = make_cuDoubleComplex( (H_vals[ idx( row, col + 1, size) ]).x , -((H_vals[ idx( row, col + 1, size) ]).y) );
                                 (H_sort[ start + temp ]).dim = d_dim;                 
-			
-			} 
+			 }
 		}
 
 	}
+}
+
+__global__ void CopyDiagonals( cuDoubleComplex* H_vals, hamstruct* H_sort, const int dim, const int lattice_Size ){
+
+  int row = threadIdx.x + blockIdx.x*blockDim.x;
+
+  if (row < dim){
+    H_sort[row].value = H_vals[idx(row, 0, 2*lattice_Size + 1)];
+    H_sort[row].rowindex = row;
+    H_sort[row].colindex = row;
+    H_sort[row].dim = dim;
+  }
 }
 
 /*Function: FullToCOO - takes a full sparse matrix and transforms it into COO format
@@ -574,9 +584,4 @@ __global__ void FullToCOO(int num_Elem, hamstruct* H_sort, cuDoubleComplex* hami
 	}
 }
 
-__global__ void Copy(int* thrust_ptr, int2* H_pos, int lattice_Size, int vdim){
 
-  int row = blockIdx.x*blockDim.x + threadIdx.x;
-
-  if (row < vdim) thrust_ptr[row] = (H_pos[ idx(row, 0, 2*lattice_Size + 2) ]).y;
-}

@@ -44,10 +44,11 @@ __device__ cuDoubleComplex HDiagPart(const int bra, int lattice_Size, int3* d_Bo
 
 __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int* vdim, double JJ, int Sz);
 
-__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, cuDoubleComplex* H_vals, int2* H_pos, int* d_Bond, int lattice_Size, const double JJ);
+__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, cuDoubleComplex* H_vals, int2* H_pos, int* elem_num_array, int* d_Bond, int lattice_Size, const double JJ);
 
-__global__ void CompressSparse(const cuDoubleComplex* H_vals, const int2* H_pos, hamstruct* H_sort, int d_dim, const int lattice_Size, const int num_Elem);
+__global__ void CompressSparse(const cuDoubleComplex* H_vals, const int2* H_pos, const int* elem_num_array, hamstruct* H_sort, int d_dim, const int lattice_Size, const int num_Elem);
+
+__global__ void CopyDiagonals( cuDoubleComplex* H_vals, hamstruct* H_sort, const int dim, const int lattice_Size );
 
 __global__ void FullToCOO(int num_Elem, hamstruct* H_sort, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int dim);
 
-__global__ void Copy(int* thrust_ptr, int2* H_pos, int lattice_Size, int vdim);
