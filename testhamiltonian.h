@@ -42,7 +42,7 @@ __device__ cuDoubleComplex HOffBondY(const int si, const int bra, const double J
 
 __device__ cuDoubleComplex HDiagPart(const int bra, int lattice_Size, int3* d_Bond, const double JJ);
 
-__host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int* vdim, double JJ, int Sz);
+__host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuDoubleComplex*& hamil_Values, int*& hamil_PosRow, int*& hamil_PosCol, int* vdim, double JJ, int Sz);
 
 __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, cuDoubleComplex* H_vals, int2* H_pos, int* elem_num_array, int* d_Bond, int lattice_Size, const double JJ);
 

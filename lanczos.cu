@@ -52,7 +52,7 @@ __global__ void arraysalloc(cuDoubleComplex** a, int n, int m){
 // Output: h_ordered, the array of the num_Eig smallest eigenvalues, ordered from smallest to largest
 //---------------------------------------------------------------------------------------------------------------------------------------------------        
 
-__host__ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const int* d_H_rows, const int* d_H_cols, const int dim, int max_Iter, const int num_Eig, const double conv_req){
+__host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_rows, int*& d_H_cols, const int dim, int max_Iter, const int num_Eig, const double conv_req){
 
   cublasStatus_t linalgstat;
   //have to initialize the cuBLAS environment, or my program won't work! I could use this later to check for errors as well
@@ -168,7 +168,9 @@ __host__ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const
   cuDoubleComplex alpha = make_cuDoubleComplex(1.,0.);
   cuDoubleComplex beta = make_cuDoubleComplex(0.,0.); 
 
-  sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rows, d_H_cols, v0_ptr, beta, v1_ptr); // the Hamiltonian is applied here
+  cudaThreadSynchronize();
+
+  sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rowptrs, d_H_cols, v0_ptr, beta, v1_ptr); // the Hamiltonian is applied here
 
   if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
     std::cout<<"Getting V1 = H*V0 failed! Error: ";
@@ -176,6 +178,8 @@ __host__ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const
   }
   std::cout<<"Getting V1 = H*V0 complete"<<std::endl;
   //*********************************************************************************************************
+  
+  cudaThreadSynchronize();
   // This is just the first steps so I can do the rest
   d_a_ptr = raw_pointer_cast(&d_a[0]);  
   linalgstat = cublasZdotc(linalghandle, dim, v0_ptr, sizeof(cuDoubleComplex), v0_ptr, sizeof(cuDoubleComplex), d_a_ptr);
@@ -185,6 +189,7 @@ __host__ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const
     std::cout<<"Getting d_a[0] failed! Error: ";
     std::cout<<linalgstat<<std::endl;
   }
+  std::cout<<"Getting d_a[0] complete"<<std::endl;
 
   d_b[0] = make_cuDoubleComplex(0., 0.);
 
@@ -228,6 +233,8 @@ __host__ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const
     std::cout<<"V1 = V1 - alpha*V0 failed! Error: ";
     std::cout<<linalgstat<<std::endl;
   }
+  std::cout<<"V1 = V1 - alpha*V0 complete"<<std::endl;
+
  
   d_b_ptr = thrust::raw_pointer_cast(&d_b[1]);
   linalgstat = cublasDznrm2(linalghandle, dim, v1_ptr, sizeof(cuDoubleComplex), double_temp);
@@ -282,7 +289,7 @@ __host__ void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const
       printf("Copying last eigenvalue failed \n");
     }
 
-    sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rows, d_H_cols, v1_ptr, beta, v2_ptr); // the Hamiltonian is applied here, in this gross expression
+    sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rowptrs, d_H_cols, v1_ptr, beta, v2_ptr); // the Hamiltonian is applied here, in this gross expression
 
     if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
       std::cout<<"Error applying the Hamiltonian in "<<iter<<"th iteration!";

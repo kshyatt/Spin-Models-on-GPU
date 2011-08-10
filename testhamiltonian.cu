@@ -119,7 +119,7 @@ Outputs:  hamil_Values - a pointer to a device array containing the values
 */
 
 
-__host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int* vdim, double JJ, int Sz){
+__host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuDoubleComplex*& hamil_Values, int*& hamil_PosRow, int*& hamil_PosCol, int* vdim, double JJ, int Sz){
 
 
         std::ofstream fout;
@@ -155,43 +155,30 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	//----------------Construct basis and copy it to the GPU --------------------//
 	cudaEvent_t start, stop;
 
-        status1 = cudaEventCreate(&start);
-        status2 = cudaEventCreate(&stop);
+        cudaEventCreate(&start);
+        cudaEventCreate(&stop);
         
-        if (status1 != CUDA_SUCCESS){
-          std::cout<<"Error creating start! Error: "<<cudaGetErrorString(status1)<<std::endl;
-          return 1;
-        }
-
-        if (status2 != CUDA_SUCCESS){
-          std::cout<<"Error creating stop! Error: "<<cudaGetErrorString(status2)<<std::endl;
-          return 1;
-        }
-
         cudaEventRecord(start,0);
-        std::cout<<"Running GetBasis"<<std::endl;
         *vdim = GetBasis(dim, lattice_Size, Sz, basis_Position, basis);
         cudaEventRecord(stop,0);
 
         float elapsed;
 
         cudaEventElapsedTime(&elapsed, start, stop);
+
         fout<<"Run time for GetBasis: "<<elapsed<<std::endl;
 
 	int* d_basis_Position;
 	int* d_basis;
-        std::cout<<"Allocating d_basis_Position"<<std::endl;
+
 	status1 = cudaMalloc(&d_basis_Position, dim*sizeof(int));
-	std::cout<<"Allocated d_basis_Position"<<std::endl;
-        status2 = cudaMalloc(&d_basis, *vdim*sizeof(int));
+	status2 = cudaMalloc(&d_basis, *vdim*sizeof(int));
 
 	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
 		std::cout<<"Memory allocation for basis arrays failed! Error: ";
                 std::cout<<cudaPeekAtLastError()<<std::endl;
 		return 1;
 	}
-
-        std::cout<<"Allocated d_basis"<<std::endl;
 
 	status1 = cudaMemcpy(d_basis_Position, basis_Position, dim*sizeof(int), cudaMemcpyHostToDevice);
 	status2 = cudaMemcpy(d_basis, basis, *vdim*sizeof(int), cudaMemcpyHostToDevice);
@@ -235,12 +222,11 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
               return 1;
         }
 
-        std::cout<<"Allocating d_H"<<std::endl;
         //the above code should work on devices of any compute capability - YEAAAAH
 
 	// --------------------- Fill up the sparse matrix and compress it to remove extraneous elements ------//
 
-        std::cout<<"Running FillSparse"<<std::endl;
+        //std::cout<<"Running FillSparse"<<std::endl;
       
 	thrust::device_vector<int> num_array(*vdim);
         int* num_array_ptr = raw_pointer_cast(&num_array[0]);
@@ -482,9 +468,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, cuDoubl
                 (H_pos[ idx(ii, 2*T0 + 2, stride) ]).x = ii;
                 (H_pos[ idx(ii, 2*T0 + 2, stride) ]).y = temppos[2*T0 + 1];
                 
-                (H_vals[ idx(ii, 2*T0 + 2, stride) ]).x = (tempval[2*T0 + 1]).x;
-                (H_vals[ idx(ii, 2*T0 + 2, stride) ]).y = (tempval[2*T0 + 1]).y;
-                                                 
+                H_vals[ idx(ii, 2*T0 + 2, stride) ] = (tempval[2*T0 + 1]);                                     
             }//end of T0 
 
 	}//end of ii

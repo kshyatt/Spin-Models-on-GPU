@@ -1,7 +1,6 @@
 #include<iostream>
 #include"testhamiltonian.h"
 #include"lanczos.h"
-#include"lanczos.h"
 #include"cuda.h"
 #include"cuComplex.h"
 
