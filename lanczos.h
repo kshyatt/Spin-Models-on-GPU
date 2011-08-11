@@ -1,6 +1,7 @@
 #include<iostream>
 #include<cstdlib>
 #include<cmath>
+#include<exception>
 #include"cuda.h"
 #include"cuda_runtime.h"
 #include"cublas_v2.h"
@@ -17,4 +18,4 @@
 
 using namespace thrust;
 
-void lanczos(const int num_Elem, const cuDoubleComplex* d_H_vals, const int* d_H_rows, const int* d_H_cols, const int dim, int max_Iter, const int num_Eig, const double conv_req);
+__host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_rows, int*& d_H_cols, const int dim, int max_Iter, const int num_Eig, const double conv_req);

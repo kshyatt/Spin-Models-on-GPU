@@ -16,28 +16,33 @@
 // threadIdx.y (or block) means the "y"th thread from the top in the block (or grid)
 
 
-/*__global__ void zero(double** a, int m){
+__global__ void zero(cuDoubleComplex* a, int m){
   int i = blockDim.x*blockIdx.x + threadIdx.x;
-  int j = blockDim.y*blockIdx.y + threadIdx.y;
 
-  if ( i< m && j < m){
-    a[i][j] = 0. ;
+  if ( i < m){
+    a[i] = make_cuDoubleComplex(0., 0.) ;
   }
 }
+
+
+__global__ void zero(double* a, int m){
+  int i = blockDim.x*blockIdx.x + threadIdx.x;
+
+  if ( i < m ){
+    a[i] = 0.;
+  }
+}
+
 // Note: to get the identity matrix, apply the fuction zero above first
-__global__ void identity(double** a, int m){
+__global__ void unitdiag(double* a, int m){
   int i = blockDim.x*blockIdx.x + threadIdx.x;
   
   if (i < m ){
 
-    a[i][i] = 1.;
+    a[i + m*i] = 1.;
   }
 }
 
-__global__ void arraysalloc(cuDoubleComplex** a, int n, int m){
-  int i = threadIdx.x + m;
-  a[i] = (cuDoubleComplex*)malloc(n*sizeof(cuDoubleComplex));
-}*/
 
 //Function lanczos: takes a hermitian matrix H, tridiagonalizes it, and finds the n smallest eigenvalues - this version only returns eigenvalues, not
 // eigenvectors. Doesn't use sparse matrices yet either, derp. Should be a very simple change to make using CUSPARSE, which has functions for operations
@@ -151,18 +156,38 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
     std::cerr<<"Error creating d_lanczvec: "<<e.what()<<std::endl;
     exit(-1);
   }
+
+  cuDoubleComplex* lancz_ptr = thrust::raw_pointer_cast(&d_lanczvec[0]);
  
   std::cout<<"Creating d_lanczvec complete"<<std::endl;
 
-  thrust::device_vector<cuDoubleComplex> v0(dim);
-  thrust::device_vector<cuDoubleComplex> v1(dim);
-  thrust::device_vector<cuDoubleComplex> v2(dim);
-  cuDoubleComplex* v0_ptr = thrust::raw_pointer_cast(&v0[0]);
-  cuDoubleComplex* v1_ptr = thrust::raw_pointer_cast(&v1[0]);
-  cuDoubleComplex* v2_ptr = thrust::raw_pointer_cast(&v2[0]);
+  cuDoubleComplex* v0;
+  cuDoubleComplex* v1;
+  cuDoubleComplex* v2;
+  status1 = cudaMalloc(&v0, dim*sizeof(cuDoubleComplex));
+  status2 = cudaMalloc(&v1, dim*sizeof(cuDoubleComplex));
+  status3 = cudaMalloc(&v2, dim*sizeof(cuDoubleComplex));
+
+  thrust::device_ptr<cuDoubleComplex> v0_ptr(v0);
+  thrust::device_ptr<cuDoubleComplex> v1_ptr(v1);
+  thrust::device_ptr<cuDoubleComplex> v2_ptr(v2);
+
+  //thrust::device_vector<cuDoubleComplex> v0(dim);
+  //thrust::device_vector<cuDoubleComplex> v1(dim);
+  //thrust::device_vector<cuDoubleComplex> v2(dim);
+  //cuDoubleComplex* v0_ptr = thrust::raw_pointer_cast(&v0[0]);
+  //cuDoubleComplex* v1_ptr = thrust::raw_pointer_cast(&v1[0]);
+  //cuDoubleComplex* v2_ptr = thrust::raw_pointer_cast(&v2[0]);
   std::cout<<"Creating the three lanczos vectors complete"<<std::endl;
 
-  thrust::fill(v0.begin(), v0.end(), make_cuDoubleComplex(1., 0.));//assigning the values of the "random" starting vector
+  cuDoubleComplex* host_v0 = (cuDoubleComplex*)malloc(dim*sizeof(cuDoubleComplex));
+  for(int i = 0; i<dim; i++){
+    host_v0[i] = make_cuDoubleComplex(1., 0.);
+  }
+
+  cudaMemcpy(v0, host_v0, dim*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
+
+  //thrust::fill(v0.begin(), v0.end(), make_cuDoubleComplex(1., 0.));//assigning the values of the "random" starting vector
   std::cout<<"Filling the starting vector complete"<<std::endl;
 
   cuDoubleComplex alpha = make_cuDoubleComplex(1.,0.);
@@ -170,21 +195,47 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 
   cudaThreadSynchronize();
 
-  sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rowptrs, d_H_cols, v0_ptr, beta, v1_ptr); // the Hamiltonian is applied here
+  sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rowptrs, d_H_cols, v0, beta, v1); // the Hamiltonian is applied here
 
   if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
     std::cout<<"Getting V1 = H*V0 failed! Error: ";
     std::cout<<sparsestatus<<std::endl;
   }
+  cudaThreadSynchronize();
   std::cout<<"Getting V1 = H*V0 complete"<<std::endl;
+  if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
+    std::cout<<"Getting V1 = H*V0 failed! Error: ";
+    std::cout<<sparsestatus<<std::endl;
+  }
+  if (cudaPeekAtLastError() != 0 ){
+    std::cout<<"Getting V1  = H*V0 failed! Error: ";
+    std::cout<<cudaGetErrorString(cudaPeekAtLastError())<<std::endl;
+  } 
   //*********************************************************************************************************
   
-  cudaThreadSynchronize();
   // This is just the first steps so I can do the rest
-  d_a_ptr = raw_pointer_cast(&d_a[0]);  
-  linalgstat = cublasZdotc(linalghandle, dim, v0_ptr, sizeof(cuDoubleComplex), v0_ptr, sizeof(cuDoubleComplex), d_a_ptr);
-  //d_b[0] = make_cuDoubleComplex(0.,0.);
+  
+  try{ 
+    d_a_ptr = raw_pointer_cast(&d_a[0]);  
+  }
+  catch( thrust::system_error e ){
+    std::cerr<<"Error settng d_a_ptr: "<<e.what()<<std::endl;
+    exit(-1);
+  }
+  std::cout<<"Setting d_a_ptr complete"<<std::endl;
 
+  std::cout<<d_a_ptr<<std::endl;
+  cuDoubleComplex dottemp;
+   
+  linalgstat = cublasZdotc(linalghandle, dim, v1, 1, v0, 1, &dottemp); 
+  if (linalgstat != CUBLAS_STATUS_SUCCESS){
+    std::cout<<"Getting d_a[0] failed! Error: ";
+    std::cout<<linalgstat<<std::endl;
+  }
+  cudaMemcpy(d_a_ptr, &dottemp, sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
+  //d_b[0] = make_cuDoubleComplex(0.,0.);
+  std::cout<<"Getting d_a[0] started"<<std::endl;
+  cudaThreadSynchronize();
   if (linalgstat != CUBLAS_STATUS_SUCCESS){
     std::cout<<"Getting d_a[0] failed! Error: ";
     std::cout<<linalgstat<<std::endl;
@@ -201,11 +252,9 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
           std::cout<<cudaGetErrorString( status2 )<<std::endl;
   }
   
-  status3 = cudaMemset(&y, 0, dim);
-  if( status3 != CUDA_SUCCESS){
-          std::cout<<"Setting y failed! Error: ";
-          std::cout<<cudaGetErrorString(status3)<<std::endl;
-  }
+  zero<<<dim/512 + 1, 512>>>(y, dim);
+  cudaThreadSynchronize();
+  std::cout<<"Zeroing y complete"<<std::endl;
 
   double* double_temp;
   status4 = cudaMalloc(&double_temp, sizeof(double));
@@ -227,28 +276,34 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 
 
   *cuDouble_temp_ptr = cuCmul(make_cuDoubleComplex(-1., 0), d_a[0]);
-  linalgstat = cublasZaxpy(linalghandle, dim, cuDouble_temp, v0_ptr, sizeof(cuDoubleComplex), v1_ptr, sizeof(cuDoubleComplex));
+  std::cout<<"Getting V1 - alpha*V0 started"<<std::endl;
+  
+  cuDoubleComplex axpytemp = cuCmul(make_cuDoubleComplex(-1.,0), d_a[0]);
+  linalgstat = cublasZaxpy(linalghandle, dim, &axpytemp, v0, 1, v1, 1);
   
   if (linalgstat != CUBLAS_STATUS_SUCCESS){
     std::cout<<"V1 = V1 - alpha*V0 failed! Error: ";
     std::cout<<linalgstat<<std::endl;
   }
+  cudaThreadSynchronize();
   std::cout<<"V1 = V1 - alpha*V0 complete"<<std::endl;
 
  
   d_b_ptr = thrust::raw_pointer_cast(&d_b[1]);
-  linalgstat = cublasDznrm2(linalghandle, dim, v1_ptr, sizeof(cuDoubleComplex), double_temp);
+  double normtemp;
+  linalgstat = cublasDznrm2(linalghandle, dim, v1, 1, &normtemp);
+  
   if (linalgstat != CUBLAS_STATUS_SUCCESS){
     std::cout<<"Getting the norm of v1 failed! Error: ";
     std::cout<<linalgstat<<std::endl;
   }
   
-  d_b[1] = make_cuDoubleComplex(sqrt(*double_temp_ptr),0.);
+  d_b[1] = make_cuDoubleComplex(sqrt(normtemp),0.);
   // this function (above) takes the norm
   
   cuDoubleComplex gamma = make_cuDoubleComplex(1./cuCreal(d_b[1]),0.); //alpha = 1/beta in v1 = v1 - alpha*v0
 
-  linalgstat = cublasZaxpy(linalghandle, dim, &gamma, v1_ptr, sizeof(cuDoubleComplex), y, sizeof(cuDoubleComplex)); // function performs a*x + y
+  linalgstat = cublasZaxpy(linalghandle, dim, &gamma, v1, 1, y, 1); // function performs a*x + y
 
   if (linalgstat != CUBLAS_STATUS_SUCCESS){
     std::cout<<"Getting 1/gamma * v1 failed! Error: ";
@@ -273,6 +328,11 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
   double* diag_ptr;
   thrust::device_vector<double> d_offdia(max_Iter);
   double* offdia_ptr;
+  thrust::host_vector<double> h_diag(max_Iter);
+  double* h_diag_ptr = raw_pointer_cast(&h_diag[0]);
+  thrust::host_vector<double> h_offdia(max_Iter);
+  double* h_offdia_ptr = raw_pointer_cast(&h_offdia[0]);
+
 
   thrust::device_vector<cuDoubleComplex> temp(dim);
   cuDoubleComplex* temp_ptr = thrust::raw_pointer_cast(&temp[0]);
@@ -288,74 +348,92 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
     if (status1 != CUDA_SUCCESS){
       printf("Copying last eigenvalue failed \n");
     }
-
-    sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rowptrs, d_H_cols, v1_ptr, beta, v2_ptr); // the Hamiltonian is applied here, in this gross expression
-
+    std::cout<<"Getting V2 = H*V1 for the "<<iter + 1<<"th time"<<std::endl;
+    sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rowptrs, d_H_cols, v1, beta, v2); // the Hamiltonian is applied here, in this gross expression
+    cudaThreadSynchronize();
     if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
       std::cout<<"Error applying the Hamiltonian in "<<iter<<"th iteration!";
       std::cout<<"Error: "<<sparsestatus<<std::endl;
     } 
 
     d_a_ptr = thrust::raw_pointer_cast(&d_a[iter]);
-    linalgstat = cublasZdotc(linalghandle, dim, v1_ptr, sizeof(cuDoubleComplex), v2_ptr, sizeof(cuDoubleComplex), d_a_ptr);
+    std::cout<<"Getting V1*V2 for the "<<iter + 1<<"th time"<<std::endl;
+    linalgstat = cublasZdotc(linalghandle, dim, v1, 1, v2, 1, &dottemp);
+    cudaThreadSynchronize();
+    d_a[iter] = dottemp;
 
     if (linalgstat != CUBLAS_STATUS_SUCCESS){
       std::cout<<"Error getting v1 * v2 in "<<iter<<"th iteration! Error: ";
       std::cout<<linalgstat<<std::endl;
     }
 
-    temp = v1;
+    cudaMemcpy(temp_ptr, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
+    //temp = v1;
 
+    axpytemp = cuCdiv(d_b[iter], d_a[iter]);
     *cuDouble_temp_ptr = cuCdiv(d_b[iter], d_a[iter]);
 
-    linalgstat = cublasZaxpy( linalghandle, dim, cuDouble_temp, v0_ptr, sizeof(cuDoubleComplex), temp_ptr, sizeof(cuDoubleComplex));
+    linalgstat = cublasZaxpy( linalghandle, dim, &axpytemp, v0, 1, temp_ptr, 1);
     if (linalgstat != CUBLAS_STATUS_SUCCESS){
       std::cout<<"Error getting (d_b/d_a)*v0 + v1 in "<<iter<<"th iteration!";
       std::cout<<"Error: "<<linalgstat<<std::endl;
     }
-    
-    linalgstat = cublasZaxpy( linalghandle, dim, d_a_ptr, temp_ptr, sizeof(cuDoubleComplex), v2_ptr, sizeof(cuDoubleComplex));
+    cudaThreadSynchronize();
+    axpytemp = d_a[iter];
+    linalgstat = cublasZaxpy( linalghandle, dim, &axpytemp, temp_ptr, 1, v2, 1);
     if (linalgstat != CUBLAS_STATUS_SUCCESS){
       std::cout<<"Error getting v2 + d_a*v1 in "<<iter<<"th iteration! Error: ";
       std::cout<<linalgstat<<std::endl;
     }
-
-    linalgstat = cublasDznrm2( linalghandle, dim, v2_ptr, sizeof(cuDoubleComplex), double_temp);
+    std::cout<<"Getting norm of V2 for the "<<iter + 1<<"th time"<<std::endl;
+    linalgstat = cublasDznrm2( linalghandle, dim, v2, 1, &normtemp);
     if (linalgstat != CUBLAS_STATUS_SUCCESS){
       std::cout<<"Error getting norm of v2 in "<<iter<<"th iteration! Error: ";
       std::cout<<linalgstat<<std::endl;
     }
 
-    d_b[iter + 1] = make_cuDoubleComplex(sqrt(*double_temp_ptr), 0.);
+    d_b[iter + 1] = make_cuDoubleComplex(sqrt(normtemp), 0.);
     
     gamma = make_cuDoubleComplex(1./cuCreal(d_b[iter+1]),0.);
-    linalgstat = cublasZaxpy(linalghandle, dim, &gamma, v2_ptr, sizeof(cuDoubleComplex), y, sizeof(cuDoubleComplex));
+    linalgstat = cublasZaxpy(linalghandle, dim, &gamma, v2, 1, y, 1);
     if (linalgstat != CUBLAS_STATUS_SUCCESS){ 
       std::cout<<"Error getting 1/d_b * v2 in "<<iter<<"th iteration! Error: ";
       std::cout<<linalgstat<<std::endl;
     }
 
-    thrust::copy(v0.begin(), v0.end(), &d_lanczvec[dim*(iter - 1)]);
-    thrust::copy(v1.begin(), v1.end(), v0.begin());
-    thrust::copy(v2.begin(), v2.end(), v1.begin()); //moving things around
+    lancz_ptr = raw_pointer_cast(&d_lanczvec[dim*(iter - 1)]);
+    std::cout<<"Copying the lanczos vectors"<<std::endl;
+    cudaMemcpy(lancz_ptr, v0, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(v0, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
+    cudaMemcpy(v1, v2, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
+    
+    //thrust::copy(v0.begin(), v0.end(), &d_lanczvec[dim*(iter - 1)]);
+    //thrust::copy(v1.begin(), v1.end(), v0.begin());
+    //thrust::copy(v2.begin(), v2.end(), v1.begin()); //moving things around
 
     d_diag[iter] = cuCreal(d_a[iter]); //adding another spot in the tridiagonal matrix representation
     d_offdia[iter + 1] = cuCreal(d_b[iter + 1]);
 
-  //this tqli stuff is a bunch of crap and needs to be fixed  double** d_H_eigen;
-   /* size_t d_eig_pitch;
+  //this tqli stuff is a bunch of crap and needs to be fixed  
+    double* d_H_eigen;
+    size_t d_eig_pitch;
 
-    status1 = cudaMallocPitch(&d_H_eigen, &d_eig_pitch, iter*sizeof(double), iter);
+    status1 = cudaMalloc(&d_H_eigen, max_Iter*max_Iter*sizeof(double));
     if (status1 != CUDA_SUCCESS){
       printf("tqli eigenvectors matrix memory allocation failed! \n");
     }
     
     zero<<<bpg,tpb>>>(d_H_eigen, iter);
-    identity<<<bpg,tpb>>>(d_H_eigen, iter); //set this matrix to the identity
+    unitdiag<<<bpg,tpb>>>(d_H_eigen, iter); //set this matrix to the identity
+    h_diag = d_diag;
+    h_offdia = d_offdia;
 
-    returned = tqli(d_diag, d_offdia, iter + 1, d_H_eigen); //tqli is in a separate file   
+    double* h_H_eigen = (double*)malloc(max_Iter*max_Iter*sizeof(double));
+    cudaMemcpy(h_H_eigen, d_H_eigen, max_Iter*max_Iter*sizeof(double), cudaMemcpyDeviceToHost);
+    returned = tqli(h_diag_ptr, h_offdia_ptr, iter + 1, h_H_eigen); //tqli is in a separate file   
 //
-*/
+
+    d_diag = h_diag;
     thrust::sort(d_diag.begin(), d_diag.end());
     thrust::copy(d_diag.begin(), d_diag.begin() + num_Eig, d_ordered.begin());
    
@@ -372,8 +450,13 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
       d_b.resize(2*max_Iter);
       d_diag.resize(2*max_Iter);
       d_offdia.resize(2*max_Iter);
+      h_diag.resize(2*max_Iter);
+      h_offdia.resize(2*max_Iter);
       d_lanczvec.resize(2*max_Iter*dim);
-    }   
+      max_Iter *= 2;
+    }
+    cudaFree(d_H_eigen);
+       
   } 
 
   thrust::host_vector<double> h_ordered(num_Eig);
@@ -404,6 +487,9 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
   if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
     printf("CUSPARSE failed to release handle! \n");
   }
+  cudaFree(v0);
+  cudaFree(v1);
+  cudaFree(v2);
 }
 // things left to do:
 // write a thing (separate file) to call routines to find expectation values, should be faster on GPU 

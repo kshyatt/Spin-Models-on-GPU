@@ -12,6 +12,9 @@ heisenberg.o : heisenberg.cpp testhamiltonian.h
 lanczos.o : lanczos.cu lanczos.h
 	$(CC) $(CFLAGS) -c $(LIBS) lanczos.cu
 
+tqli.o : tqli.c tqli.h
+	$(CC) $(CFLAGS) -c tqli.c
+
 testhamiltonian.o : testhamiltonian.cu testhamiltonian.h
 	$(CC) $(CFLAGS) -c testhamiltonian.cu
 

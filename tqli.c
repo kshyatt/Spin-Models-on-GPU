@@ -10,7 +10,7 @@
 
 double pythag(double a, double b);
 
-int tqli(double d[], double e[], int n, double **z)
+int tqli(double* d, double* e, int n, double *z)
 
 {
  
