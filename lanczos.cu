@@ -182,7 +182,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 
   cuDoubleComplex* host_v0 = (cuDoubleComplex*)malloc(dim*sizeof(cuDoubleComplex));
   for(int i = 0; i<dim; i++){
-    host_v0[i] = make_cuDoubleComplex(1., 0.);
+    host_v0[i] = make_cuDoubleComplex(1./sqrt(dim), 0.);
   }
 
   cudaMemcpy(v0, host_v0, dim*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
@@ -232,6 +232,9 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
     std::cout<<"Getting d_a[0] failed! Error: ";
     std::cout<<linalgstat<<std::endl;
   }
+
+  std::cout<<dottemp.x<<" "<<dottemp.y<<std::endl;
+
   cudaMemcpy(d_a_ptr, &dottemp, sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
   //d_b[0] = make_cuDoubleComplex(0.,0.);
   std::cout<<"Getting d_a[0] started"<<std::endl;
@@ -274,13 +277,13 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 
   thrust::device_ptr<cuDoubleComplex> cuDouble_temp_ptr(cuDouble_temp);
 
-
   *cuDouble_temp_ptr = cuCmul(make_cuDoubleComplex(-1., 0), d_a[0]);
   std::cout<<"Getting V1 - alpha*V0 started"<<std::endl;
   
   cuDoubleComplex axpytemp = cuCmul(make_cuDoubleComplex(-1.,0), d_a[0]);
+
   linalgstat = cublasZaxpy(linalghandle, dim, &axpytemp, v0, 1, v1, 1);
-  
+  std::cout<<axpytemp.x<<" "<<axpytemp.y<<std::endl;
   if (linalgstat != CUBLAS_STATUS_SUCCESS){
     std::cout<<"V1 = V1 - alpha*V0 failed! Error: ";
     std::cout<<linalgstat<<std::endl;
@@ -288,9 +291,17 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
   cudaThreadSynchronize();
   std::cout<<"V1 = V1 - alpha*V0 complete"<<std::endl;
 
+  double normtemp;
+  linalgstat = cublasDznrm2(linalghandle, dim, v1, 1, &normtemp);
+  normalize<<<dim/512 + 1, 512>>>(v1, dim, normtemp);
+
+  /*cudaMemcpy(host_v0, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+  for(int i = 0; i < dim; i++){
+      std::cout<<host_v0[i].x<<" "<<host_v0[i].y<<std::endl;
+  }*/
  
   d_b_ptr = thrust::raw_pointer_cast(&d_b[1]);
-  double normtemp;
+  
   linalgstat = cublasDznrm2(linalghandle, dim, v1, 1, &normtemp);
   
   if (linalgstat != CUBLAS_STATUS_SUCCESS){
@@ -332,12 +343,11 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
   double* h_diag_ptr = raw_pointer_cast(&h_diag[0]);
   thrust::host_vector<double> h_offdia(max_Iter);
   double* h_offdia_ptr = raw_pointer_cast(&h_offdia[0]);
-
-
+  
   thrust::device_vector<cuDoubleComplex> temp(dim);
   cuDoubleComplex* temp_ptr = thrust::raw_pointer_cast(&temp[0]);
 
-  double eigtemp = 0.;
+  double eigtemp = -1.;
 
   while( fabs(gs_Energy - eigtemp)> conv_req){ //this is a cleaner version than what was in the original - way fewer if statements
 
@@ -406,6 +416,10 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
     cudaMemcpy(lancz_ptr, v0, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
     cudaMemcpy(v0, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
     cudaMemcpy(v1, v2, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
+    /*cudaMemcpy(host_v0, v0, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+    for(int i = 0; i < dim; i++){
+      std::cout<<host_v0[i].x<<" "<<host_v0[i].y<<std::endl;
+    }*/
     
     //thrust::copy(v0.begin(), v0.end(), &d_lanczvec[dim*(iter - 1)]);
     //thrust::copy(v1.begin(), v1.end(), v0.begin());
@@ -430,7 +444,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 
     double* h_H_eigen = (double*)malloc(max_Iter*max_Iter*sizeof(double));
     cudaMemcpy(h_H_eigen, d_H_eigen, max_Iter*max_Iter*sizeof(double), cudaMemcpyDeviceToHost);
-    returned = tqli(h_diag_ptr, h_offdia_ptr, iter + 1, h_H_eigen); //tqli is in a separate file   
+    returned = tqli(h_diag_ptr, h_offdia_ptr, iter + 1, max_Iter, h_H_eigen); //tqli is in a separate file   
 //
 
     d_diag = h_diag;
@@ -494,3 +508,82 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 // things left to do:
 // write a thing (separate file) to call routines to find expectation values, should be faster on GPU 
 // make the tqli thing better!
+
+__global__ void normalize(cuDoubleComplex* v, const int size, double norm){
+  int i = threadIdx.x + blockIdx.x*blockDim.x;
+  if (i < size){
+    v[i] = cuCdiv(v[i], make_cuDoubleComplex(norm, 0. ));
+  }
+}
+
+int tqli(double* d, double* e, int n, int max_Iter, double *z)
+
+{
+ 
+  int m,l,iter,i,k;
+  double s,r,p,g,f,dd,c,b;
+  for (i=1;i<n;i++){
+     e[i-1]=e[i];
+  }
+  e[n-1]=0.0;
+  for (l=0;l<n-1;l++) {
+    iter=0;
+    do {
+      for (m=l;m<n-1;m++) {
+        dd=fabs(d[m])+fabs(d[m+1]);
+        
+        if ((double)(fabs(e[m])+dd) == dd) break;
+        
+      }
+      if (m != l) {
+        if (iter++ == 30){
+		printf("Too many iterations in tqli \n");
+		return 1;
+	}
+        g=(d[l+1]-d[l])/(2.0*e[l]);
+        r=pythag(g,1.0);
+        g=d[m]-d[l]+e[l]/(g+SIGN(r,g));
+        
+        s=c=1.0;
+        p=0.0;
+        for (i=m-1;i>=l;i--) {
+  
+          f=s*e[i];
+          b=c*e[i];
+          e[i+1]=(r=pythag(f,g));
+          if (r == 0.0) {
+    
+            d[i+1] -= p;
+            e[m]=0.0;
+            break;
+          }
+          s=f/r;
+          c=g/r;
+          g=d[i+1]-p;
+          r=(d[i]-g)*s+2.0*c*b;
+          d[i+1]=g+(p=s*r);
+          g=c*r-b;
+  /* Next loop can be omitted if eigenvectors not wanted*/
+          /*for (k=1;k<=n;k++) {
+    
+            f=z[k*max_Iter + i+1];
+            z[k*max_Iter + i+1]=s*z[k*max_Iter + i]+c*f;
+            z[k*max_Iter + i]=c*z[k*max_Iter + i]-s*f;
+          }*/
+        }
+        if (r == 0.0 && i >= l) continue;
+        d[l] -= p;
+        e[l]=g;
+        e[m]=0.0;
+      }
+    } while (m != l);
+  }
+}
+
+double pythag(double a, double b){
+  double absa, absb;
+  absa=fabs(a);
+  absb=fabs(b);
+  if (absa > absb) return absa*sqrt(1.0+(absb/absa)*(absb/absa));
+  else return (absb == 0.0 ? 0.0 : absb*sqrt(1.0+(absa/absb)*(absa/absb)));
+}
