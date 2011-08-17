@@ -1,7 +1,8 @@
 #include<iostream>
 #include<cstdlib>
 #include<cmath>
-#include<exception>
+#include<fstream>
+#include<iomanip>
 #include"cuda.h"
 #include"cuda_runtime.h"
 #include"cublas_v2.h"
