@@ -274,8 +274,8 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
   cudaThreadSynchronize();
   std::cout<<"V1 = V1 - alpha*V0 complete"<<std::endl;
 
-  //linalgstat = cublasDznrm2(linalghandle, dim, v1, 1, &normtemp);
-  //normalize<<<dim/512 + 1, 512>>>(v1, dim, normtemp);
+  linalgstat = cublasDznrm2(linalghandle, dim, v1, 1, &normtemp);
+  
   cudaThreadSynchronize();
   if (linalgstat != CUBLAS_STATUS_SUCCESS){
     std::cout<<"Getting the norm of v1 failed! Error: ";
@@ -284,19 +284,15 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
   
   d_b_ptr = thrust::raw_pointer_cast(&d_b[1]);
   
-  d_b[1] = make_cuDoubleComplex(sqrt(normtemp),0.);
+  d_b[1] = make_cuDoubleComplex(normtemp,0.);
   // this function (above) takes the norm
   
+  normtemp = 1./normtemp;
   cuDoubleComplex gamma = make_cuDoubleComplex(1./cuCreal(d_b[1]),0.); //alpha = 1/beta in v1 = v1 - alpha*v0
-
-  normalize<<<dim/512 + 1, 512>>>(v1, dim, cuCreal(d_b[1]));
+  
+  cublasZdscal(linalghandle, dim, &normtemp, v1, 1);
   cudaThreadSynchronize();
-
-  cudaMemcpy(host_v0, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
-  for(int i = 0; i <dim; i++){
-    fout<<cuCreal(host_v0[i])<<std::endl;
-  }
-
+  
   //Now we're done the first round!
   //*********************************************************************************************************
 
@@ -356,20 +352,21 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
     cudaMemcpy(temp_ptr, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
     //temp = v1;
 
-    axpytemp = cuCdiv(d_b[iter], d_a[iter]);
+    axpytemp = cuCmul(make_cuDoubleComplex(-1., 0.), d_b[iter]);
     
-    linalgstat = cublasZaxpy( linalghandle, dim, &axpytemp, v0, 1, temp_ptr, 1);
+    linalgstat = cublasZaxpy( linalghandle, dim, &axpytemp, v0, 1, v2, 1);
     if (linalgstat != CUBLAS_STATUS_SUCCESS){
       std::cout<<"Error getting (d_b/d_a)*v0 + v1 in "<<iter<<"th iteration!";
       std::cout<<"Error: "<<linalgstat<<std::endl;
     }
     cudaThreadSynchronize();
-    axpytemp = d_a[iter];
-    linalgstat = cublasZaxpy( linalghandle, dim, &axpytemp, temp_ptr, 1, v2, 1);
+    axpytemp = cuCmul(make_cuDoubleComplex(-1., 0.), d_a[iter]);
+    linalgstat = cublasZaxpy( linalghandle, dim, &axpytemp, v1, 1, v2, 1);
     if (linalgstat != CUBLAS_STATUS_SUCCESS){
       std::cout<<"Error getting v2 + d_a*v1 in "<<iter<<"th iteration! Error: ";
       std::cout<<linalgstat<<std::endl;
     }
+
     std::cout<<"Getting norm of V2 for the "<<iter + 1<<"th time"<<std::endl;
     linalgstat = cublasDznrm2( linalghandle, dim, v2, 1, &normtemp);
     if (linalgstat != CUBLAS_STATUS_SUCCESS){
@@ -377,26 +374,32 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
       std::cout<<linalgstat<<std::endl;
     }
 
-    d_b[iter + 1] = make_cuDoubleComplex(sqrt(normtemp), 0.);
-    
-    gamma = make_cuDoubleComplex(1./cuCreal(d_b[iter+1]),0.);
-    linalgstat = cublasZaxpy(linalghandle, dim, &gamma, v2, 1, y, 1);
+    d_b[iter + 1] = make_cuDoubleComplex(normtemp, 0.);
+    gamma = make_cuDoubleComplex(1./normtemp,0.);
+    linalgstat = cublasZscal(linalghandle, dim, &gamma, v2, 1);
     if (linalgstat != CUBLAS_STATUS_SUCCESS){ 
       std::cout<<"Error getting 1/d_b * v2 in "<<iter<<"th iteration! Error: ";
       std::cout<<linalgstat<<std::endl;
     }
 
-    linalgstat = cublasDznrm2(linalghandle, dim, v2, 1, &normtemp);
-    normalize<<<dim/512 + 1, 512>>>(v2, dim, normtemp);
-    cudaThreadSynchronize();
+    //linalgstat = cublasDznrm2(linalghandle, dim, v2, 1, &normtemp);
+    //normalize<<<dim/512 + 1, 512>>>(v2, dim, normtemp);
+    //cudaThreadSynchronize();
+
+		if (iter == 1){
+			cudaMemcpy(host_v0, v2, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+			for(int i = 0; i<dim; i++){
+				fout<<cuCreal(host_v0[i])<<std::endl;
+    	}
+		}
 
     lancz_ptr = raw_pointer_cast(&d_lanczvec[dim*(iter - 1)]);
     std::cout<<"Copying the lanczos vectors"<<std::endl;
     cudaMemcpy(lancz_ptr, v0, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
     cudaMemcpy(v0, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
     cudaMemcpy(v1, v2, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
-
-    fout<<std::setprecision(12)<<cuCreal(d_a[iter])<<" "<<cuCreal(d_b[iter + 1])<<std::endl;    
+    
+    //fout<<std::setprecision(12)<<cuCreal(d_a[iter])<<" "<<cuCreal(d_b[iter + 1])<<std::endl;    
 
     //thrust::copy(v0.begin(), v0.end(), &d_lanczvec[dim*(iter - 1)]);
     //thrust::copy(v1.begin(), v1.end(), v0.begin());
