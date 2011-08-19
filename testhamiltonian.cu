@@ -309,14 +309,20 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
         thrust::device_ptr<hamstruct> sort_ptr(d_H_sort);
 
         cudaEventRecord(start,0);
-        thrust::sort(sort_ptr, sort_ptr + num_Elem, ham_sort_function());
+        try{ 
+					thrust::sort(sort_ptr, sort_ptr + num_Elem, ham_sort_function());
+				}
+				catch( std::bad_alloc &e ){
+					std::cerr<<"Couldn't sort: "<<e.what()<<std::endl;
+					exit(-1);
+				}
         
         //--------------------------------------------------------------
 
         cudaThreadSynchronize();
         cudaEventRecord(stop,0);
         cudaEventElapsedTime(&elapsed, start, stop);
-
+	std::cout<<"Sorting complete"<<std::endl;
         fout<<"Runtime for sorting: "<<elapsed<<std::endl;
 
         if (cudaPeekAtLastError() != 0){

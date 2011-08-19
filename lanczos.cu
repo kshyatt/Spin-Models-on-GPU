@@ -59,9 +59,7 @@ __global__ void unitdiag(double* a, int m){
 
 __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_rows, int*& d_H_cols, const int dim, int max_Iter, const int num_Eig, const double conv_req){
 
-  std::ofstream fout;
-  fout.open("lanczos.txt");
-
+  
   cublasStatus_t linalgstat;
   //have to initialize the cuBLAS environment, or my program won't work! I could use this later to check for errors as well
   cublasHandle_t linalghandle;
@@ -321,6 +319,8 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 
   double eigtemp = 0.;
 
+  thrust::host_vector<double> h_ordered(num_Eig);
+
   while( fabs(gs_Energy - eigtemp) > conv_req || iter < 10){ //this is a cleaner version than what was in the original - way fewer if statements
 
     iter++;
@@ -382,48 +382,37 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
       std::cout<<linalgstat<<std::endl;
     }
 
-    //linalgstat = cublasDznrm2(linalghandle, dim, v2, 1, &normtemp);
-    //normalize<<<dim/512 + 1, 512>>>(v2, dim, normtemp);
-    //cudaThreadSynchronize();
-
-		if (iter == 1){
-			cudaMemcpy(host_v0, v2, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
-			for(int i = 0; i<dim; i++){
-				fout<<cuCreal(host_v0[i])<<std::endl;
-    	}
-		}
-
     lancz_ptr = raw_pointer_cast(&d_lanczvec[dim*(iter - 1)]);
     std::cout<<"Copying the lanczos vectors"<<std::endl;
     cudaMemcpy(lancz_ptr, v0, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
     cudaMemcpy(v0, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
     cudaMemcpy(v1, v2, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
     
-    //fout<<std::setprecision(12)<<cuCreal(d_a[iter])<<" "<<cuCreal(d_b[iter + 1])<<std::endl;    
-
-    //thrust::copy(v0.begin(), v0.end(), &d_lanczvec[dim*(iter - 1)]);
-    //thrust::copy(v1.begin(), v1.end(), v0.begin());
-    //thrust::copy(v2.begin(), v2.end(), v1.begin()); //moving things around
-
-    d_diag[iter] = cuCreal(d_a[iter]); //adding another spot in the tridiagonal matrix representation
-    d_offdia[iter + 1] = cuCreal(d_b[iter + 1]);
+    for (int i = 0; i <= iter; i++){
+			d_diag[i] = cuCreal(d_a[i]); //adding another spot in the tridiagonal matrix representation
+    	d_offdia[i] = cuCreal(d_b[i]);
+		}
 
   //this tqli stuff is a bunch of crap and needs to be fixed  
-    double* d_H_eigen;
-    size_t d_eig_pitch;
+    //double* d_H_eigen;
+    //size_t d_eig_pitch;
 
-    status1 = cudaMalloc(&d_H_eigen, max_Iter*max_Iter*sizeof(double));
+    /*status1 = cudaMalloc(&d_H_eigen, max_Iter*max_Iter*sizeof(double));
     if (status1 != CUDA_SUCCESS){
       printf("tqli eigenvectors matrix memory allocation failed! \n");
     }
     
     zero<<<(iter*iter)/512 + 1, 512>>>(d_H_eigen, iter*iter);
-    unitdiag<<<iter/512 + 1, 512>>>(d_H_eigen, iter); //set this matrix to the identity
+    unitdiag<<<iter/512 + 1, 512>>>(d_H_eigen, iter); //set this matrix to the identity */
     h_diag = d_diag;
     h_offdia = d_offdia;
 
     double* h_H_eigen = (double*)malloc(max_Iter*max_Iter*sizeof(double));
-    cudaMemcpy(h_H_eigen, d_H_eigen, max_Iter*max_Iter*sizeof(double), cudaMemcpyDeviceToHost);
+    //cudaMemcpy(h_H_eigen, d_H_eigen, max_Iter*max_Iter*sizeof(double), cudaMemcpyDeviceToHost);
+    for (int ii=1;ii<=iter;ii++){
+        h_offdia[ii-1] = h_offdia[ii];
+    }
+    h_offdia[iter] = 0;
     returned = tqli(h_diag_ptr, h_offdia_ptr, iter + 1, max_Iter, h_H_eigen); //tqli is in a separate file   
 //
     d_diag = h_diag;
@@ -432,8 +421,10 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
    
     d_ordered_ptr = thrust::raw_pointer_cast(&d_ordered[num_Eig - 1]);
     status2 = cudaMemcpy(&gs_Energy, d_ordered_ptr, sizeof(double), cudaMemcpyDeviceToHost);
+    
+    h_ordered = d_ordered;
 
-    if (status2 != CUDA_SUCCESS){
+		if (status2 != CUDA_SUCCESS){
       printf("Copying the eigenvalue failed! \n");
     }
 
@@ -448,13 +439,11 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
       d_lanczvec.resize(2*max_Iter*dim);
       max_Iter *= 2;
     }
-    cudaFree(d_H_eigen);
+    //cudaFree(d_H_eigen);
        
   } 
 
-  thrust::host_vector<double> h_ordered(num_Eig);
-  h_ordered = d_ordered;
-
+  
   for(int i = 0; i < num_Eig; i++){
     std::cout<<h_ordered[i]<<" ";
   } //write out the eigenenergies
@@ -482,7 +471,6 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
   cudaFree(v1);
   cudaFree(v2);
 
-  fout.close();
 }
 // things left to do:
 // write a thing (separate file) to call routines to find expectation values, should be faster on GPU 
@@ -501,63 +489,60 @@ int tqli(double* d, double* e, int n, int max_Iter, double *z)
  
   int m,l,iter,i,k;
   double s,r,p,g,f,dd,c,b;
-  for (i=1;i<n;i++){
-     e[i-1]=e[i];
-  }
-  e[n-1]=0.0;
-  for (l=0;l<n-1;l++) {
+
+  for (l=0;l<n;l++) {
     iter=0;
-    do {
-      for (m=l;m<n-1;m++) {
-        dd=fabs(d[m])+fabs(d[m+1]);
-        
-        if ((double)(fabs(e[m])+dd) == dd) break;
-        
+    do { 
+      for (m=l;m<n-1;m++) { 
+	dd=fabs(d[m])+fabs(d[m+1]);
+	if (fabs(e[m])+dd == dd) break;
       }
-      if (m != l) {
-        if (iter++ == 30){
-		printf("Too many iterations in tqli \n");
-		return 1;
+      if (m!=l) { 
+	if (iter++ == 30) { 
+	  std::cout <<"Too many iterations in tqli() \n";
+	  return 0;
 	}
-        g=(d[l+1]-d[l])/(2.0*e[l]);
-        r=pythag(g,1.0);
-        g=d[m]-d[l]+e[l]/(g+SIGN(r,g));
-        
-        s=c=1.0;
-        p=0.0;
-        for (i=m-1;i>=l;i--) {
-  
-          f=s*e[i];
-          b=c*e[i];
-          e[i+1]=(r=pythag(f,g));
-          if (r == 0.0) {
-    
-            d[i+1] -= p;
-            e[m]=0.0;
-            break;
-          }
-          s=f/r;
-          c=g/r;
-          g=d[i+1]-p;
-          r=(d[i]-g)*s+2.0*c*b;
-          d[i+1]=g+(p=s*r);
-          g=c*r-b;
-  /* Next loop can be omitted if eigenvectors not wanted*/
-          /*for (k=1;k<=n;k++) {
-    
-            f=z[k*max_Iter + i+1];
-            z[k*max_Iter + i+1]=s*z[k*max_Iter + i]+c*f;
-            z[k*max_Iter + i]=c*z[k*max_Iter + i]-s*f;
-          }*/
-        }
-        if (r == 0.0 && i >= l) continue;
-        d[l] -= p;
-        e[l]=g;
-        e[m]=0.0;
+	g=(d[l+1]-d[l])/(2.0*e[l]);
+	r=sqrt((g*g)+1.0);
+	g=d[m]-d[l]+e[l]/(g+SIGN(r,g));
+	s=c=1.0;
+	p=0.0;
+	for (i=m-1;i>=l;i--) { 
+	  f=s*e[i];
+	  b=c*e[i];
+	  if (fabs(f) >= fabs(g)) { 
+	    c=g/f;r=sqrt((c*c)+1.0);
+	    e[i + 1]=f*r;
+	    c *= (s=1.0/r);
+	  }
+	  else { 
+	    s=f/g;r=sqrt((s*s)+1.0);
+	    e[i+1]=g*r;
+	    s *= (c=1.0/r);
+	  }
+	  g=d[i+1]-p;
+	  r=(d[i]-g)*s+2.0*c*b;
+	  p=s*r;
+	  d[i+1]=g+p;
+	  g=c*r-b;
+	  /*EVECTS*/
+	  /*
+	    for (k=0;k<n;k++) { 
+	      f=z(k,i+1);
+	      z(k,i+1)=s*z(k,i)+c*f;
+	      z(k,i)=c*z(k,i)-s*f;
+	    }
+	  */
+	}
+	d[l]=d[l]-p;
+	e[l]=g;
+	e[m]=0.0;
       }
-    } while (m != l);
+    } while (m!=l);
   }
+  return 1;
 }
+
 
 double pythag(double a, double b){
   double absa, absb;
