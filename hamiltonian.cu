@@ -160,7 +160,7 @@ Outputs:  hamil_Values - a pointer to a device array containing the values
 __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int* vdim, double JJ, int Sz){
 
 
-		//cudaSetDevice(1);
+	//cudaSetDevice(1);
 
 	int num_Elem = 0; // the total number of elements in the matrix, will get this (or an estimate) from the input types
 	cudaError_t status1, status2, status3;
@@ -233,7 +233,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	tpb.x = 32;
 	//these are going to need to depend on dim and Nsize
       
-	thrust::device_vector<int> num_array(*vdim);
+	thrust::device_vector<int> num_array(*vdim, 1);
 	int* num_array_ptr = raw_pointer_cast(&num_array[0]);
 
 	hamstruct* d_H_sort;
@@ -244,8 +244,6 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
                 std::cout<<cudaGetErrorString( status1 )<<std::endl;
                 return 1;
 	}
-
-
 
 	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, *vdim, d_H_sort, num_array_ptr, d_Bond, lattice_Size, JJ);
 
@@ -289,7 +287,6 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		return 1;
 	}
 
-        
 	status1 = cudaMalloc(&hamil_Values, num_Elem*sizeof(cuDoubleComplex));
 	status2 = cudaMalloc(&hamil_PosRow, num_Elem*sizeof(int));
 	status3 = cudaMalloc(&hamil_PosCol, num_Elem*sizeof(int));
@@ -313,8 +310,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 Inputs: d_basis_Position - position information about the basis
 	d_basis - other basis infos
 	d_dim - the number of kets
-	H_vals - an array that will store the values
-	H_pos - an array that will store the positions of things
+	H_sort - an array that will store the Hamiltonian
 	d_Bond - the bond information
 	d_lattice_Size - the number of lattice sites
 	JJ - the coupling parameter 
@@ -327,15 +323,14 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 	int ii = blockIdx.x;
 	int T0 = threadIdx.x;
 
-  __shared__ int3 tempbond[16];
-  __shared__ int count[32];
-	//atomicExch(&count, 0);
-  __shared__ int temppos[16];
-  __shared__ cuDoubleComplex tempval[16]; //going to eliminate a huge number of read/writes to d_Bond, H_vals, H_pos in global memory
+	__shared__ int3 tempbond[16];
+	__shared__ int count[32];
+	__shared__ int temppos[16];
+	__shared__ cuDoubleComplex tempval[16];
 	__shared__ uint tempi[16];
 	__shared__ uint tempod[16];
 
-  int stride = 4*lattice_Size + 1;
+	int stride = 4*lattice_Size + 1;
 	int tempcount;
 	int site = T0%(lattice_Size);
 	count[T0] = 0;
@@ -344,11 +339,11 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 	//unsigned int tempi; //tempod; //tempj;
 	//cuDoubleComplex tempD;
 
-  tempi[site] = d_basis[ii];
+	tempi[site] = d_basis[ii];
 
 	__syncthreads();
 
-  bool compare;
+	bool compare;
 
 	if( ii < dim ){
     		
@@ -381,7 +376,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 			compare = (d_basis_Position[tempod[site]] > ii);
 			temppos[site] = (compare == 1) ? d_basis_Position[tempod[site]] : -1;
 			tempval[site] = HOffBondX(site, tempi[site], JJ);
-			atomicAdd(&count[T0], compare);
+			count[T0] += compare;
 			tempcount = 1 + (T0/lattice_Size);
 
 			H_sort[ idx(ii, 4*site + tempcount, stride) ].value = (T0/lattice_Size) ? tempval[site] : cuConj(tempval[site]);
@@ -401,7 +396,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 			temppos[site] = (compare == 1) ? d_basis_Position[tempod[site]] : -1;
 			tempval[site] = HOffBondY(site,tempi[site], JJ);
 			
-			atomicAdd(&count[T0], compare);
+			count[T0] += compare;
 			//printf("%d %d \n", count, compare);
 
 			tempcount = 1 + (T0/lattice_Size);
@@ -410,15 +405,12 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 			H_sort[ idx(ii, 4*site + 2 + tempcount, stride) ].colindex = (T0/lattice_Size) ? temppos[site] : ii;
 			H_sort[ idx(ii, 4*site + 2 + tempcount, stride) ].rowindex = (T0/lattice_Size) ? ii : temppos[site];
 			H_sort[ idx(ii, 4*site + 2 + tempcount, stride) ].dim = dim;   
-			elem_num_array[ii] = 1;
 			__syncthreads();
 
 			atomicAdd(&elem_num_array[ii], count[T0]);
 
-		
 	}//end of ii
 }//end of FillSparse
-
 
 /*Function: FullToCOO - takes a full sparse matrix and transforms it into COO format
 Inputs - num_Elem - the total number of nonzero elements
@@ -430,8 +422,6 @@ Inputs - num_Elem - the total number of nonzero elements
 __global__ void FullToCOO(int num_Elem, hamstruct* H_sort, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int dim){
 
 	int i = threadIdx.x + blockDim.x*blockIdx.x;
-
-	int start = 0;
 
 	if (i < num_Elem){
 			
