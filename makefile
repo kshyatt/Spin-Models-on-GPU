@@ -1,5 +1,5 @@
 CC = nvcc
-CFLAGS = -w -g -G -arch=sm_20
+CFLAGS = -w -O3 -arch=sm_20
 LIBS = -lcublas -lcusparse
 OBJS = heisenberg.o lanczos.o testhamiltonian.o 
 

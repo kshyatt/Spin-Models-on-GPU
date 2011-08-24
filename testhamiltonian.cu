@@ -140,13 +140,12 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 
 	for (int ch=1; ch<lattice_Size; ch++) dim *= 2;
 
-	std::cout<<"Dimension of full Hamiltonian: "<<dim<<std::endl;
 	if (dim >= INT_MAX){
 		std::cout<<"Error! Dimension greater than maximum integer!"<<std::endl;
 		return 1;
 	}
 
-	int stride = 2*lattice_Size + 1;        
+	int stride = 4*lattice_Size + 1;        
 
 	int basis_Position[dim];
 	int basis[dim];
@@ -195,11 +194,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
         tpb.x = 32;
         //these are going to need to depend on dim and Nsize
 
-	int* num_array;
-	cudaMalloc(&num_array, *vdim*sizeof(int));
-	thrust::device_ptr<int> num_array_ptr(num_array);
-	//thrust::device_vector<int> num_array(*vdim, 1);
-	//int* num_array_ptr = raw_pointer_cast(&num_array[0]);
+	thrust::device_vector<int> num_array(*vdim, 1);
+	int* num_array_ptr = raw_pointer_cast(&num_array[0]);
 
 	hamstruct* d_H_sort;
 	status2 = cudaMalloc(&d_H_sort, *vdim*stride*sizeof(hamstruct));
@@ -210,20 +206,19 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
                 return 1;
 	}
 
-	//int* num_ptr;
-	//cudaGetSymbolAddress((void**)&num_ptr, (const char*)"d_num_Elem");
-	//cudaMemset(num_ptr, 0, sizeof(int));
+	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, *vdim, d_H_sort, num_array_ptr, d_Bond, lattice_Size, JJ);
 
-	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, *vdim, d_H_sort, num_array, d_Bond, lattice_Size, JJ);
-
+	if( cudaPeekAtLastError() != 0 ){
+		std::cout<<"Error in FillSparse! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
+		return 1;
+	}
+		
 	cudaThreadSynchronize();
 
 	if( cudaPeekAtLastError() != 0 ){
 		std::cout<<"Error in FillSparse! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
 		return 1;
 	}
-
-	std::cout<<"Finished FillSparse"<<std::endl;
 
 	/*thrust::host_vector<int> h_num_array(*vdim);
 	h_num_array = num_array;
@@ -232,11 +227,10 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	}*/
 	fout.close();
 
-	num_Elem = thrust::reduce(num_array_ptr, num_array_ptr + *vdim);
+	num_Elem = thrust::reduce(num_array.begin(), num_array.end());
 
 	//cudaMemcpy(&num_Elem, num_ptr, sizeof(int), cudaMemcpyDeviceToHost);
 
-	std::cout<<num_Elem<<std::endl;
 	status1 = cudaFree(d_basis);
 	status2 = cudaFree(d_basis_Position);
 	status3 = cudaFree(d_Bond); // we don't need these later on
@@ -379,7 +373,6 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 			H_sort[ idx(ii, 4*site + 2 + tempcount, stride) ].rowindex = (T0/lattice_Size) ? ii : temppos[site];
 			H_sort[ idx(ii, 4*site + 2 + tempcount, stride) ].dim = dim;   
 			__syncthreads();
-			printf("About to add %dth row \n", ii);
 
 			atomicAdd(&elem_num_array[ii], count[T0]);
 

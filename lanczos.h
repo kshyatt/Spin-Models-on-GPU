@@ -8,7 +8,6 @@
 #include"cublas_v2.h"
 #include"cusparse.h"
 #include"cuComplex.h"
-#include"tqli.h"
 #include"thrust/device_vector.h"
 #include"thrust/host_vector.h"
 #include"thrust/copy.h"
