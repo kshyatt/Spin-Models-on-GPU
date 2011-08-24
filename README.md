@@ -7,22 +7,21 @@ Date: July 15 2011
 Introduction
 -------------------
 This code is intended to simulate the 2D Heisenberg model on a 4 x 4 square lattice. 
-It generates the sparse Hamiltonian and then applies the Lanczos method to it. 
+It generates the sparse Hamiltonian in COO format and then applies the Lanczos method to it. 
 
-The GPU code (testhamiltonian) is based off of the CPU code (GenHam) written by Roger Melko. 
-
-I want to extend the Hamiltonian generating code to work with different lattice sizes and different models (XY, etc).
+The GPU code (testhamiltonian) is based off of CPU code written by Roger Melko. 
 
 What Works and What Doesn't
 -------------------------------------
-The makefile is used to compile the CPU code. All the CPU code (ED_Lan, Lanczos_07, GenHam, lapack, param) works. 
+The makefile will compile all the code. See nVidia's nvcc guide for more compiler flags you can pass. 
 
-The CUDA files testhamiltonian.cu and testhamiltonian.h can be compiled and run.
-lanczos.cu will compile but will probably not run.
+Right now testhamiltonian and lanczos should work to deliver the correct eigenvalues.
 
-To compile testhamiltonian.cu:
-
-nvcc -arch=sm_20 testhamiltonian.cu
-
-
-
+To Do
+--------------------------------------
+* Add more model possibilities to testhamiltonian
+* Improve the sorting speeds on testhamiltonian
+* Change the way lanczos looks for convergence
+* Improve the diagonalization scheme in lanczos
+* Add benchmarking information
+* Add stream functionality (allow multiple Hamiltonians to be constructed at once, multiple Lanczos methods running simulaneously)
