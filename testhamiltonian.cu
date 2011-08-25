@@ -124,8 +124,6 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	int num_Elem = 0; // the total number of elements in the matrix, will get this (or an estimate) from the input types
 	cudaError_t status1, status2, status3;
 
-	std::ofstream fout;
-	fout.open("testhamiltonian.log");
 	//int dim = 65536;
 	
 	/*
@@ -225,7 +223,6 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	for(int i = 0; i< *vdim; i++){
 		fout<<h_num_array[i]<<std::endl;
 	}*/
-	fout.close();
 
 	num_Elem = thrust::reduce(num_array.begin(), num_array.end());
 
@@ -268,7 +265,26 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	
 	FullToCOO<<<num_Elem/512 + 1, 512>>>(num_Elem, d_H_sort, hamil_Values, hamil_PosRow, hamil_PosCol, *vdim); // csr and description initializations happen somewhere else
 	
-	cudaFree(d_H_sort);	
+	cudaFree(d_H_sort);
+
+	cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex)); 
+	int* h_rows = (int*)malloc(num_Elem*sizeof(int));
+	int* h_cols = (int*)malloc(num_Elem*sizeof(int));
+
+	cudaMemcpy(h_vals, hamil_Values, num_Elem*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_rows, hamil_PosRow, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_cols, hamil_PosCol, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
+
+	std::ofstream fout;
+	fout.open("testhamiltonian.log");
+	
+	for(int i = 0; i < num_Elem; i++){
+		fout<<"("<<h_rows[i]<<","<<h_cols[i]<<")";
+		fout<<" - "<<h_vals[i].x<<std::endl;
+	}
+
+	fout.close();
+	
 
 	return num_Elem;
 }
