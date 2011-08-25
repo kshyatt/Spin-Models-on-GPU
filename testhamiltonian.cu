@@ -126,7 +126,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 
 	std::ofstream fout;
 	fout.open("testhamiltonian.log");
-	//int dim = 65536;
+	const int dim = 65536;
 	
 	/*
 	switch (model_Type){
@@ -136,14 +136,14 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		case 1: dim = 10; //guesses
 	}
         */
-        int dim = 2;
+    //    int dim = 2;
 
-	for (int ch=1; ch<lattice_Size; ch++) dim *= 2;
+	//for (int ch=1; ch<lattice_Size; ch++) dim *= 2;
 
-	if (dim >= INT_MAX){
+	/*if (dim >= INT_MAX){
 		std::cout<<"Error! Dimension greater than maximum integer!"<<std::endl;
 		return 1;
-	}
+	}*/
 
 	int stride = 4*lattice_Size + 1;        
 
@@ -294,8 +294,8 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 	__shared__ int count[32];
 	__shared__ int temppos[16];
 	__shared__ cuDoubleComplex tempval[16];
-	__shared__ uint tempi[16];
-	__shared__ uint tempod[16];
+	__shared__ unsigned int tempi[16];
+	__shared__ unsigned int tempod[16];
 
 	int stride = 4*lattice_Size + 1;
 	int tempcount;
