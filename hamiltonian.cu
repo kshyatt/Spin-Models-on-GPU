@@ -221,7 +221,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 
 	dim3 bpg;
 
-	bpg.x = *vdim/1024 + 1;
+	bpg.x = (*vdim*stride)/1024 + 1;
         
 	dim3 tpb;
 	tpb.x = 1024;
@@ -252,11 +252,11 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	cudaGetSymbolAddress((void**)&num_ptr, (const char*)"d_num_Elem");
 	cudaMemset(num_ptr, 0, sizeof(int));
 
-	thrust::device_ptr<int> thrust_num_ptr(num_ptr);
-	*thrust_num_ptr = thrust::reduce(num_array.begin(), num_array.end());
+	//thrust::device_ptr<int> thrust_num_ptr(num_ptr);
+	num_Elem = thrust::reduce(num_array.begin(), num_array.end());
 
-	cudaMemcpy(&num_Elem, num_ptr, sizeof(int), cudaMemcpyDeviceToHost);
-
+	//cudaMemcpy(&num_Elem, num_ptr, sizeof(int), cudaMemcpyDeviceToHost);
+	std::cout<<num_Elem<<std::endl;
 	status1 = cudaFree(d_basis);
 	status2 = cudaFree(d_basis_Position);
 	status3 = cudaFree(d_Bond); // we don't need these later on
@@ -296,6 +296,24 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	
 	cudaFree(d_H_sort);	
 
+	/*cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex)); 
+	int* h_rows = (int*)malloc(num_Elem*sizeof(int));
+	int* h_cols = (int*)malloc(num_Elem*sizeof(int));
+
+	cudaMemcpy(h_vals, hamil_Values, num_Elem*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_rows, hamil_PosRow, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_cols, hamil_PosCol, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
+
+	std::ofstream fout;
+	fout.open("hamiltonian.log");
+	
+	for(int i = 0; i < num_Elem; i++){
+		fout<<"("<<h_rows[i]<<","<<h_cols[i]<<")";
+		fout<<" - "<<h_vals[i].x<<std::endl;
+	}
+
+	fout.close();*/
+
 	return num_Elem;
 }
 
@@ -314,26 +332,26 @@ Inputs: d_basis_Position - position information about the basis
 __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstruct* H_sort, int* elem_num_array, int* d_Bond, const int lattice_Size, const double JJ){
 
 	int ii = (blockDim.x/32)*blockIdx.x + threadIdx.x/32;
-	int jj = threadIdx.x;
+	int jj = threadIdx.x%512;
 	int T0 = threadIdx.x%32;
 
 	__shared__ int3 tempbond[16];
-	__shared__ int count[1024];
-	__shared__ int temppos[1024];
-	__shared__ cuDoubleComplex tempval[1024];
-	//__shared__ uint tempi[32];
+	int count;
+	__shared__ int temppos[512];
+	__shared__ cuDoubleComplex tempval[512];
+	__shared__ uint tempi[1024];
 	__shared__ uint tempod[1024];
 
 	int stride = 4*lattice_Size + 1;
 	int tempcount;
 	int site = T0%(lattice_Size);
-	count[T0] = 0;
+	count = 0;
 
 	int si, sj;//sk,sl; //spin operators
-	unsigned int tempi; //tempod; //tempj;
+	//unsigned int tempi;// tempod; //tempj;
 	//cuDoubleComplex tempD;
 
-	tempi = d_basis[ii];
+	tempi[threadIdx.x] = d_basis[ii];
 
 	__syncthreads();
 
@@ -349,59 +367,60 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 				__syncthreads();
 				//Diagonal Part
 
-				temppos[jj] = d_basis_Position[tempi];
+				temppos[jj] = d_basis_Position[tempi[threadIdx.x]];
 	
-				tempval[jj] = HDiagPart(tempi, lattice_Size, tempbond, JJ);
+				tempval[jj] = HDiagPart(tempi[threadIdx.x], lattice_Size, tempbond, JJ);
 
 				H_sort[ idx(ii, 0, stride) ].value = tempval[jj];
 				H_sort[ idx(ii, 0, stride) ].colindex = temppos[jj];
 				H_sort[ idx(ii, 0, stride) ].rowindex = ii;
-			H_sort[ idx(ii, 0, stride) ].dim = dim;
+				H_sort[ idx(ii, 0, stride) ].dim = dim;
                 
-			//-------------------------------
-			//Horizontal bond ---------------
-			si = (tempbond[site]).x;
-			tempod[jj] = tempi;
-			sj = (tempbond[site]).y;
+				//-------------------------------
+				//Horizontal bond ---------------
+				si = (tempbond[site]).x;
+				tempod[threadIdx.x] = tempi[threadIdx.x];
+				sj = (tempbond[site]).y;
 		
-			tempod[jj] ^= (1<<si);   //toggle bit 
-			tempod[jj] ^= (1<<sj);   //toggle bit 
+				tempod[threadIdx.x] ^= (1<<si);   //toggle bit 
+				tempod[threadIdx.x] ^= (1<<sj);   //toggle bit 
 	
-			compare = (d_basis_Position[tempod[jj]] > ii);
-			temppos[jj] = (compare == 1) ? d_basis_Position[tempod[jj]] : -1;
-			tempval[jj] = HOffBondX(site, tempi, JJ);
-			count[T0] += compare;
-			tempcount = 1 + (T0/lattice_Size);
+				compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
+				temppos[jj] = (compare == 1) ? d_basis_Position[tempod[threadIdx.x]] : -1;
+				tempval[jj] = HOffBondX(site, tempi[threadIdx.x], JJ);
+				
+				count += (int)compare;
+				tempcount = 1 + (T0/lattice_Size);
 
-			H_sort[ idx(ii, 4*site + tempcount, stride) ].value = (T0/lattice_Size) ? tempval[T0] : cuConj(tempval[T0]);
-			H_sort[ idx(ii, 4*site + tempcount, stride) ].colindex = (T0/lattice_Size) ? temppos[T0] : ii;
-			H_sort[ idx(ii, 4*site + tempcount, stride) ].rowindex = (T0/lattice_Size) ? ii : temppos[T0];
+			H_sort[ idx(ii, 4*site + tempcount, stride) ].value = (T0/lattice_Size) ? tempval[jj] : cuConj(tempval[jj]);
+			H_sort[ idx(ii, 4*site + tempcount, stride) ].colindex = (T0/lattice_Size) ? temppos[jj] : ii;
+			H_sort[ idx(ii, 4*site + tempcount, stride) ].rowindex = (T0/lattice_Size) ? ii : temppos[jj];
 			H_sort[ idx(ii, 4*site + tempcount, stride) ].dim = dim;
 
 
 			//Vertical bond -----------------
-			tempod[jj] = tempi;
+			tempod[threadIdx.x] = tempi[threadIdx.x];
 			sj = (tempbond[site]).z;
 
-			tempod[jj] ^= (1<<si);   //toggle bit 
-			tempod[jj] ^= (1<<sj);   //toggle bit
+			tempod[threadIdx.x] ^= (1<<si);   //toggle bit 
+			tempod[threadIdx.x] ^= (1<<sj);   //toggle bit
                  
-			compare = (d_basis_Position[tempod[jj]] > ii);
-			temppos[jj] = (compare == 1) ? d_basis_Position[tempod[jj]] : -1;
-			tempval[jj] = HOffBondY(site,tempi, JJ);
+			compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
+			temppos[jj] = (compare == 1) ? d_basis_Position[tempod[threadIdx.x]] : -1;
+			tempval[jj] = HOffBondY(site,tempi[threadIdx.x], JJ);
 			
-			count[T0] += compare;
+			count += (int)compare;
 			//printf("%d %d \n", count, compare);
 
 			tempcount = 1 + (T0/lattice_Size);
 
-			H_sort[ idx(ii, 4*site + 2 + tempcount, stride) ].value = (T0/lattice_Size) ? tempval[T0] : cuConj(tempval[T0]);
-			H_sort[ idx(ii, 4*site + 2 + tempcount, stride) ].colindex = (T0/lattice_Size) ? temppos[T0] : ii;
-			H_sort[ idx(ii, 4*site + 2 + tempcount, stride) ].rowindex = (T0/lattice_Size) ? ii : temppos[T0];
+			H_sort[ idx(ii, 4*site + 2 + tempcount, stride) ].value = (T0/lattice_Size) ? tempval[jj] : cuConj(tempval[jj]);
+			H_sort[ idx(ii, 4*site + 2 + tempcount, stride) ].colindex = (T0/lattice_Size) ? temppos[jj] : ii;
+			H_sort[ idx(ii, 4*site + 2 + tempcount, stride) ].rowindex = (T0/lattice_Size) ? ii : temppos[jj];
 			H_sort[ idx(ii, 4*site + 2 + tempcount, stride) ].dim = dim;   
 			__syncthreads();
 
-			atomicAdd(&elem_num_array[ii], count[T0]);
+			atomicAdd(&elem_num_array[ii], count);
 		}
 	}//end of ii
 }//end of FillSparse
