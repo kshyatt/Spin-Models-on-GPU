@@ -20,7 +20,7 @@ int* Bond;
   Bond[40] = 12;  Bond[41] = 13;  Bond[42] = 14;  Bond[43] = 15;  Bond[44] = 0;
   Bond[45] = 1;   Bond[46] = 2;   Bond[47] = 3;
 
-  cuDoubleComplex* hamil_Values;
+  cuComplex* hamil_Values;
 
   int* hamil_PosRow;
 
@@ -86,39 +86,39 @@ Outputs:  valH - the value of the Hamiltonian
 
 */
 
-__device__ cuDoubleComplex HOffBondX(const int si, const int bra, const double JJ){
+__device__ cuComplex HOffBondX(const int si, const int bra, const double JJ){
 
-	cuDoubleComplex valH;
+	cuComplex valH;
   	//int S0, S1;
   	//int T0, T1;
 
-  	valH = make_cuDoubleComplex( JJ*0.5 , 0.); //contribution from the J part of the Hamiltonian
+  	valH = make_cuComplex( JJ*0.5 , 0.); //contribution from the J part of the Hamiltonian
 
   	return valH;
 
 
 } 
 
-__device__ cuDoubleComplex HOffBondY(const int si, const int bra, const double JJ){
+__device__ cuComplex HOffBondY(const int si, const int bra, const double JJ){
 
-	cuDoubleComplex valH;
+	cuComplex valH;
   	//int S0, S1;
   	//int T0, T1;
 
-  	valH = make_cuDoubleComplex( JJ*0.5 , 0. ); //contribution from the J part of the Hamiltonian
+  	valH = make_cuComplex( JJ*0.5 , 0. ); //contribution from the J part of the Hamiltonian
 
   	return valH;
 
 
 }
 
-__device__ cuDoubleComplex HDiagPart(const int bra, int lattice_Size, int3* d_Bond, const double JJ){
+__device__ cuComplex HDiagPart(const int bra, int lattice_Size, int3* d_Bond, const double JJ){
 
   int S0b,S1b ;  //spins (bra 
   int T0,T1;  //site
   //int P0, P1, P2, P3; //sites for plaquette (Q)
   //int s0p, s1p, s2p, s3p;
-  cuDoubleComplex valH = make_cuDoubleComplex( 0. , 0.);
+  cuComplex valH = make_cuComplex( 0. , 0.);
 
   for (int Ti=0; Ti<lattice_Size; Ti++){
     //***HEISENBERG PART
@@ -157,7 +157,7 @@ Outputs:  hamil_Values - a pointer to a device array containing the values
 */
 
 
-__host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int* vdim, double JJ, int Sz){
+__host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int* vdim, double JJ, int Sz){
 
 
 	//cudaSetDevice(1);
@@ -286,7 +286,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		return 1;
 	}
 
-	status1 = cudaMalloc(&hamil_Values, num_Elem*sizeof(cuDoubleComplex));
+	status1 = cudaMalloc(&hamil_Values, num_Elem*sizeof(cuComplex));
 	status2 = cudaMalloc(&hamil_PosRow, num_Elem*sizeof(int));
 	status3 = cudaMalloc(&hamil_PosCol, num_Elem*sizeof(int));
 
@@ -301,11 +301,11 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	
 	cudaFree(d_H_sort);	
 
-	/*cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex)); 
+	/*cuComplex* h_vals = (cuComplex*)malloc(num_Elem*sizeof(cuComplex)); 
 	int* h_rows = (int*)malloc(num_Elem*sizeof(int));
 	int* h_cols = (int*)malloc(num_Elem*sizeof(int));
 
-	cudaMemcpy(h_vals, hamil_Values, num_Elem*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_vals, hamil_Values, num_Elem*sizeof(cuComplex), cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_rows, hamil_PosRow, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_cols, hamil_PosCol, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
 
@@ -362,7 +362,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 	__shared__ int3 tempbond[16];
 	int count;
 	__shared__ int temppos[1024];
-	__shared__ cuDoubleComplex tempval[1024];
+	__shared__ cuComplex tempval[1024];
 	__shared__ uint tempi[1024];
 	__shared__ uint tempod[1024];
 
@@ -373,7 +373,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 
 	int si, sj;//sk,sl; //spin operators
 	//unsigned int tempi;// tempod; //tempj;
-	//cuDoubleComplex tempD;
+	//cuComplex tempD;
 
 	tempi[threadIdx.x] = d_basis[ii];
 
@@ -416,7 +416,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 				count += (int)compare;
 				tempcount = (T0/lattice_Size);
 
-				H_sort[ idx(ii, 4*site + tempcount + dim, stride) ].value = (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
+				H_sort[ idx(ii, 4*site + tempcount + dim, stride) ].value = (T0/lattice_Size) ? tempval[threadIdx.x] : cuConjf(tempval[threadIdx.x]);
 				H_sort[ idx(ii, 4*site + tempcount + dim, stride) ].colindex = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
 				H_sort[ idx(ii, 4*site + tempcount + dim, stride) ].rowindex = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
 				H_sort[ idx(ii, 4*site + tempcount + dim, stride) ].dim = dim;
@@ -436,7 +436,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 				count += (int)compare;
 				tempcount = (T0/lattice_Size);
 
-				H_sort[ idx(ii, 4*site + 2 + tempcount + dim, stride) ].value = (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
+				H_sort[ idx(ii, 4*site + 2 + tempcount + dim, stride) ].value = (T0/lattice_Size) ? tempval[threadIdx.x] : cuConjf(tempval[threadIdx.x]);
 				H_sort[ idx(ii, 4*site + 2 + tempcount + dim, stride) ].colindex = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
 				H_sort[ idx(ii, 4*site + 2 + tempcount + dim, stride) ].rowindex = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
 				H_sort[ idx(ii, 4*site + 2 + tempcount + dim, stride) ].dim = dim;   
@@ -454,7 +454,7 @@ Inputs - num_Elem - the total number of nonzero elements
 	 hamil_Values - a 1D array that will store the values for the COO form
 
 */
-__global__ void FullToCOO(int num_Elem, hamstruct* H_sort, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int dim){
+__global__ void FullToCOO(int num_Elem, hamstruct* H_sort, cuComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int dim){
 
 	int i = threadIdx.x + blockDim.x*blockIdx.x;
 
