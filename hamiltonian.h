@@ -5,16 +5,16 @@
 #include<limits.h>
 #include"cuComplex.h"
 #include<fstream>
-#include"thrust/sort.h"
-#include"thrust/device_ptr.h"
-#include"thrust/device_vector.h"
-#include"thrust/host_vector.h"
-#include"thrust/reduce.h"
+//#include"thrust/sort.h"
+//#include"thrust/device_ptr.h"
+//#include"thrust/device_vector.h"
+//#include"thrust/host_vector.h"
+//#include"thrust/reduce.h"
 #include "../../../util/cucpp.h"			// MGPU utility classes
 #include "../../../inc/mgpusort.hpp"
 
-
-using namespace thrust;
+using namespace std;
+//using namespace thrust;
 
 __host__ __device__ int idx(int i, int j, int lda);
 
