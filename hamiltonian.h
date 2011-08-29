@@ -10,6 +10,8 @@
 #include"thrust/device_vector.h"
 #include"thrust/host_vector.h"
 #include"thrust/reduce.h"
+#include "../../../util/cucpp.h"			// MGPU utility classes
+#include "../../../inc/mgpusort.hpp"
 
 
 using namespace thrust;

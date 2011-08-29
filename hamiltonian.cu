@@ -273,6 +273,14 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		return 1;
 	}
 
+
+	sortEngine_t engine;
+	sortStatus_t status = sortCreateEngine("../../src/cubin/", &engine);
+
+	sortArray(engine, );
+
+	sortReleaseEngine(engine);
+	
 	//----------------Sorting Hamiltonian--------------------------//
 	
 	thrust::device_ptr<hamstruct> sort_ptr(d_H_sort);
