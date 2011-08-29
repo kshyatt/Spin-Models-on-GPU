@@ -20,13 +20,11 @@ __device__ int d_num_Elem = 12870; //all the diagonal elements
 
 struct hamstruct{
 
-	int rowindex;
         int colindex;
 	cuComplex value;
-        int dim;
 };
 
-struct ham_sort_function{
+/*struct ham_sort_function{
 
         __host__ __device__ bool operator()(hamstruct a, hamstruct b){
 		if (a.rowindex == -1 || a.colindex == -1) return false;
@@ -36,7 +34,7 @@ struct ham_sort_function{
         	return (a.colindex + a.rowindex*a.dim) < (b.colindex + b.rowindex*b.dim);
         }
 
-};
+};*/
 
 __host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], int basis[]);
 
@@ -48,9 +46,9 @@ __device__ cuComplex HDiagPart(const int bra, int lattice_Size, int3* d_Bond, co
 
 __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int* vdim, double JJ, int Sz);
 
-__global__ void FillDiagonals(int* d_basis, int dim, hamstruct* d_H_sort, int* d_Bond, int lattice_Size, double JJ);
+__global__ void FillDiagonals(int* d_basis, int dim, int* H_keys, hamstruct* H_values, int* d_Bond, int lattice_Size, double JJ);
 
-__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstruct* H_sort, int* d_Bond, const int lattice_Size, const double JJ);
+__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_keys, hamstruct* H_values, int* d_Bond, const int lattice_Size, const double JJ);
 
-__global__ void FullToCOO(int num_Elem, hamstruct* H_sort, cuComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int dim);
+__global__ void FullToCOO(int num_Elem, int* H_keys, hamstruct* H_values, cuComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int dim);
 
