@@ -50,7 +50,9 @@ __device__ cuDoubleComplex HDiagPart(const int bra, int lattice_Size, int3* d_Bo
 
 __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuDoubleComplex*& hamil_Values, int*& hamil_PosRow, int*& hamil_PosCol, int* vdim, double JJ, int Sz);
 
-__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstruct* H_sort, int* num_elem_array, int* d_Bond, int lattice_Size, const double JJ);
+__global__ void FillDiagonals(int* d_basis, int dim, hamstruct* d_H_sort, int* d_Bond, int lattice_Size, double JJ);
+
+__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstruct* H_sort, int* d_Bond, int lattice_Size, const double JJ);
 
 __global__ void FullToCOO(int num_Elem, hamstruct* H_sort, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int dim);
 
