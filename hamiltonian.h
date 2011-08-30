@@ -2,17 +2,18 @@
 #include<iostream>
 #include<cstdlib>
 #include"cuda.h"
-#include<limits.h>
+//#include<limits.h>
 #include"cuComplex.h"
 #include<fstream>
-#include"thrust/sort.h"
-#include"thrust/device_ptr.h"
-#include"thrust/device_vector.h"
-#include"thrust/host_vector.h"
-#include"thrust/reduce.h"
+//#include"thrust/sort.h"
+//#include"thrust/device_ptr.h"
+//#include"thrust/device_vector.h"
+//#include"thrust/host_vector.h"
+//#include"thrust/reduce.h"
+#include "../../../util/cucpp.h"            // MGPU utility classes
+#include "../../../inc/mgpusort.hpp"        // MGPU Sort with C++ wrappers
 
-
-using namespace thrust;
+using namespace std;
 
 __host__ __device__ int idx(int i, int j, int lda);
 
@@ -38,17 +39,17 @@ struct hamstruct{
 
 __host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], int basis[]);
 
-__device__ cuComplex HOffBondX(const int si, const int bra, const double JJ);
+__device__ float HOffBondX(const int si, const int bra, const float JJ);
 
-__device__ cuComplex HOffBondY(const int si, const int bra, const double JJ);
+__device__ float HOffBondY(const int si, const int bra, const float JJ);
 
-__device__ cuComplex HDiagPart(const int bra, int lattice_Size, int3* d_Bond, const double JJ);
+__device__ float HDiagPart(const int bra, int lattice_Size, int3* d_Bond, const float JJ);
 
-__host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int* vdim, double JJ, int Sz);
+__host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int* vdim, float JJ, int Sz);
 
-__global__ void FillDiagonals(int* d_basis, int dim, int* H_keys, hamstruct* H_values, int* d_Bond, int lattice_Size, double JJ);
+__global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, float* H_values, int* d_Bond, int lattice_Size, float JJ);
 
-__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_keys, hamstruct* H_values, int* d_Bond, const int lattice_Size, const double JJ);
+__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_rows, int* H_cols, float* H_values, int* d_Bond, const int lattice_Size, const float JJ);
 
-__global__ void FullToCOO(int num_Elem, int* H_keys, hamstruct* H_values, cuComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int dim);
+__global__ void FullToCOO(int num_Elem, float* H_values, cuComplex* hamil_Values, int dim);
 
