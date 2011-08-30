@@ -10,10 +10,18 @@
 //#include"thrust/device_vector.h"
 //#include"thrust/host_vector.h"
 //#include"thrust/reduce.h"
+<<<<<<< HEAD
 #include "../../../util/cucpp.h"            // MGPU utility classes
 #include "../../../inc/mgpusort.hpp"        // MGPU Sort with C++ wrappers
 
 using namespace std;
+=======
+#include "../../../util/cucpp.h"			// MGPU utility classes
+#include "../../../inc/mgpusort.hpp"
+
+using namespace std;
+//using namespace thrust;
+>>>>>>> 14d4c37dcc9509e951662a69a0ba8cfaf3c84e53
 
 __host__ __device__ int idx(int i, int j, int lda);
 

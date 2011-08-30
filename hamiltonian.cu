@@ -279,6 +279,24 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		return 1;
 	}
 
+
+	sortEngine_t engine;
+	sortStatus_t status = sortCreateEngine("../../src/cubin/", &engine);
+
+	sortData_t tempdata;
+	sortCreateData(engine, *vdim*stride, 1, &tempdata);
+
+	cudaMemcpy(tempdata->keys, d_H_keys, *vdim*stride*sizeof(int), cudaMemcpyDeviceToDevice);
+	cudaMemcpy(tempdata->values, d_H_values, *vdim*stride*sizeof(hamstruct), cudaMemcpyDeviceToDevice);
+
+	sortDevice(engine, tempdata);
+
+	cudaMemcpy(d_H_keys, tempdata->keys , num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
+	cudaMemcpy(d_H_values, tempdata->values , num_Elem*sizeof(hamstruct), cudaMemcpyDeviceToDevice);
+
+	sortDestroyData(deviceData);
+
+	sortReleaseEngine(engine);
 	//----------------Sorting Hamiltonian--------------------------//
 	
 	sortEngine_t engine;
