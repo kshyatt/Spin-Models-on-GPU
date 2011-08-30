@@ -30,11 +30,11 @@ struct ham_sort_function{
 
 	__host__ __device__ bool operator()(hamstruct a, hamstruct b){
 
-		if (a.rowindex == -1) return false;
-		if (b.rowindex == -1) return true;
-		if (a.colindex == -1) return false;
-		if (b.colindex == -1) return true;
-		else return ( (a.colindex + a.rowindex*a.dim) < (b.colindex + b.rowindex*b.dim) );
+		//if (a.rowindex == -1) return false;
+		//if (b.rowindex == -1) return true;
+		//if (a.colindex == -1) return false;
+		//if (b.colindex == -1) return true;
+		return ( (a.colindex + a.rowindex*a.dim) < (b.colindex + b.rowindex*b.dim) );
         
         }
 

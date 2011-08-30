@@ -29,8 +29,8 @@ struct hamstruct{
 struct ham_sort_function{
 
         __host__ __device__ bool operator()(hamstruct a, hamstruct b){
-		if (a.rowindex == -1 || a.colindex == -1) return false;
-		if (b.rowindex == -1 || b.colindex == -1) return true;
+		//if (a.rowindex == -1 || a.colindex == -1) return false;
+		//if (b.rowindex == -1 || b.colindex == -1) return true;
 
 		//return ( (a.colindex == -1 || a.rowindex == -1) ? true : ( (a.colindex + a.rowindex*a.dim) < (b.colindex + b.rowindex*b.dim) ) );
         	return (a.colindex + a.rowindex*a.dim) < (b.colindex + b.rowindex*b.dim);

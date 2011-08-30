@@ -261,7 +261,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	cudaGetSymbolAddress((void**)&num_ptr, (const char*)"d_num_Elem");
 
 	cudaMemcpy(&num_Elem, num_ptr, sizeof(int), cudaMemcpyDeviceToHost);
-	std::cout<<num_Elem<<std::endl;
+	//std::cout<<num_Elem<<std::endl;
 	status1 = cudaFree(d_basis);
 	status2 = cudaFree(d_basis_Position);
 	status3 = cudaFree(d_Bond); // we don't need these later on
@@ -368,6 +368,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 
 	int stride = 4*lattice_Size;
 	int tempcount;
+	int rowtemp;
 	int site = T0%(lattice_Size);
 	count = 0;
 
@@ -410,15 +411,16 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 				tempod[threadIdx.x] ^= (1<<sj);   //toggle bit 
 	
 				compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
-				temppos[threadIdx.x] = (compare == 1) ? d_basis_Position[tempod[threadIdx.x]] : -1;
+				temppos[threadIdx.x] = (compare == 1) ? d_basis_Position[tempod[threadIdx.x]] : dim;
 				tempval[threadIdx.x] = HOffBondX(site, tempi[threadIdx.x], JJ);
 				
+				rowtemp = (compare == 1) ? ii : dim;
 				count += (int)compare;
 				tempcount = (T0/lattice_Size);
 
 				H_sort[ idx(ii, 4*site + tempcount + dim, stride) ].value = (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
-				H_sort[ idx(ii, 4*site + tempcount + dim, stride) ].colindex = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
-				H_sort[ idx(ii, 4*site + tempcount + dim, stride) ].rowindex = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
+				H_sort[ idx(ii, 4*site + tempcount + dim, stride) ].colindex = (T0/lattice_Size) ? temppos[threadIdx.x] : rowtemp;
+				H_sort[ idx(ii, 4*site + tempcount + dim, stride) ].rowindex = (T0/lattice_Size) ? rowtemp : temppos[threadIdx.x];
 				H_sort[ idx(ii, 4*site + tempcount + dim, stride) ].dim = dim;
 
 
@@ -430,15 +432,16 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstru
 				tempod[threadIdx.x] ^= (1<<sj);   //toggle bit
                  
 				compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
-				temppos[threadIdx.x] = (compare == 1) ? d_basis_Position[tempod[threadIdx.x]] : -1;
+				temppos[threadIdx.x] = (compare == 1) ? d_basis_Position[tempod[threadIdx.x]] : dim;
 				tempval[threadIdx.x] = HOffBondY(site,tempi[threadIdx.x], JJ);
 			
+				rowtemp = (compare == 1) ? ii : dim;
 				count += (int)compare;
 				tempcount = (T0/lattice_Size);
 
 				H_sort[ idx(ii, 4*site + 2 + tempcount + dim, stride) ].value = (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
-				H_sort[ idx(ii, 4*site + 2 + tempcount + dim, stride) ].colindex = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
-				H_sort[ idx(ii, 4*site + 2 + tempcount + dim, stride) ].rowindex = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
+				H_sort[ idx(ii, 4*site + 2 + tempcount + dim, stride) ].colindex = (T0/lattice_Size) ? temppos[threadIdx.x] : rowtemp;
+				H_sort[ idx(ii, 4*site + 2 + tempcount + dim, stride) ].rowindex = (T0/lattice_Size) ? rowtemp : temppos[threadIdx.x];
 				H_sort[ idx(ii, 4*site + 2 + tempcount + dim, stride) ].dim = dim;   
 				__syncthreads();
 
