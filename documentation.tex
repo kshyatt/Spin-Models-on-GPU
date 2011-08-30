@@ -5,6 +5,7 @@
 
 \usepackage{fullpage}
 \usepackage[usenames, dvipsnames]{color}
+\usepackage{hyperref}
 \begin{document}
 \renewcommand{\int}{\textcolor{Green}{int $\,$}}
 \newcommand{\ptrint}{\textcolor{Green}{int$^\ast \,$}
@@ -225,6 +226,9 @@ The code, lanczos.cu, takes as input the three COO arrays describing the Hamilto
 \item{Since nearly all of the GPU usage here is handled by CUSPARSE and CUBLAS functions, there's not much kernel tweaking to be done. However, there may be a better way to check convergence and it may be possible to get tqli to run faster}
 \end{itemize}
 
-\section{References}
-
+\section{References/Further Reading}
+\begin{itemize}
+\item{\href{http://developer.download.nvidia.com/compute/DevZone/docs/html/C/doc/CUDA_C_Programming_Guide.pdf}{CUDA C Programming Guide}}
+\item{\href{http://developer.download.nvidia.com/compute/DevZone/docs/html/CUDALibraries/doc/CUBLAS_Library.pdf}{CUBLAS Library Guide}}
+\item{\href{http://developer.download.nvidia.com/compute/DevZone/docs/html/CUDALibraries/doc/CUSPARSE_Library.pdf}{CUSPARSE Library Guide}}
 \end{document}
