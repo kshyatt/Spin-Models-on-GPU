@@ -90,6 +90,29 @@ Possible Optimizations:
 \item{Using some bithax to get rid of the if statement would probably speed this up a bit}
 \end{itemize}
 
+\paragraph{\cudaglobal \void FillDiagonals(\ptrint , \int , \ptrint , \ptrint , \cuDoubleComplex , \ptrint , \int , \double) \\ \\}
+\noindent\textbf{Parameters}
+\begin{description}
+\item[\ptrint \texttt{d$\_$basis}] The information about the basis
+\item[\int \texttt{dim}] The dimension of the Hilbert space
+\item[\hamstruct \texttt{H$\_$sort}] The container array for the Hamiltonian
+\item[\ptrint \texttt{d$\_$Bond}] The bond information
+\item[\int \texttt{lattice$\_$Size}] The number of lattice sites
+\item[\double \texttt{JJ}] The coupling constant
+\end{description}
+
+\textbf{The function proceeds by:}
+\begin{enumerate}
+\item{Copying the bond information into shared memory}
+\item{Figuring out what the value of the diagonal element is}
+\item{Copying back the information to global memory}
+\end{enumerate}
+
+\textbf{Other Things}
+\begin{itemize}
+\item{This function exists because before, in \texttt{FillSparse}, each thread was finding the diagonal element and writing it to one location per row. This wasn't very efficient so I moved that part of the calculation here.}
+\end{itemize}
+
 \paragraph{\cudaglobal \void FillSparse(\ptrint , \ptrint , \int, \hamstruct, \int , \int , \const \double ) \\ \\ }
 \noindent\textbf{Parameters}:
 \begin{description}
@@ -106,8 +129,8 @@ Possible Optimizations:
 \begin{enumerate}
 \item{Creating some indexing variables, depending where we are in the block/thread structure}
 \item{Creating shared memory arrays to store the positions, values, and the intermediate information needed to generate them}
-\item{Copy the bond data into shared memory}
-\item{Construct the diagonal, off-x, and off-y components of the Hamiltonian in shared memory}
+\item{Copying the bond data into shared memory}
+\item{Construct the off-x, and off-y components of the Hamiltonian in shared memory}
 \item{Copy the Hamiltonian information back to global memory}
 \end{enumerate}
 
@@ -119,6 +142,7 @@ Possible Optimizations:
 
 Other things:
 \begin{itemize}
+\item{Note that each block actually handles several rows of the Hamiltonian - if you want to change the lattice size to somethis that \emph{is not} a power of 2, you'll need to force some threads to idle since each warp is 32 threads and we want to keep the threads in each warp executing the same instructions}
 \item{If you want to add in another model, \texttt{FillSparse} needs to have the enum passed to it, and you'll need to write some equivalents of \texttt{HOffX}, \texttt{HOffY}, and \texttt{HDiagPart}. You might have to change the array size as well}
 \end{itemize}
 
