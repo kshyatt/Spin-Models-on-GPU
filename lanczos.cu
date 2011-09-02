@@ -252,7 +252,6 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
   cuDoubleComplex axpytemp = cuCmul(make_cuDoubleComplex(-1.,0), d_a[0]);
 
   linalgstat = cublasZaxpy(linalghandle, dim, &axpytemp, v0, 1, v1, 1);
-  std::cout<<axpytemp.x<<" "<<axpytemp.y<<std::endl;
   if (linalgstat != CUBLAS_STATUS_SUCCESS){
     std::cout<<"V1 = V1 - alpha*V0 failed! Error: ";
     std::cout<<linalgstat<<std::endl;
