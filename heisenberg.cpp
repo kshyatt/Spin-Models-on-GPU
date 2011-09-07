@@ -34,7 +34,7 @@ int main(){
   double JJ = 1.;
 
   const int num_Elem = ConstructSparseMatrix( 0, nsite, Bond, hamil_Values, hamil_PosRow, hamil_PosCol, &dim, JJ, Sz );
-  cout<<"ConstructSparseMatrix finished"<<endl;
+  //cout<<"ConstructSparseMatrix finished"<<endl;
   int rtn = num_Elem;
   if (rtn == 1){
 	return 1;

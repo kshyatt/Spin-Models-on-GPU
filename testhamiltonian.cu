@@ -240,7 +240,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 
 	cudaMemcpy(&num_Elem, num_ptr, sizeof(int), cudaMemcpyDeviceToHost);
 
-	std::cout<<num_Elem<<std::endl;
+	//std::cout<<num_Elem<<std::endl;
 
 	status1 = cudaFree(d_basis);
 	status2 = cudaFree(d_basis_Position);
