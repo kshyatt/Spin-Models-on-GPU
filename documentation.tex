@@ -25,13 +25,16 @@
 
 \section{Introduction}
 
-This document describes code for generating Hamiltonians on lattices and then applying the Lanczos procedure to them to approximate the low energy spectrum of the Hamiltonians. There are two main files: hamiltonian.cu, and lanczos.cu. The Hamiltonian generation is treated first. For each major function in the files, the function prototype is given first, then a description of each of its parameters, a description of the steps the function takes and what it actually does, and some possible optimizations that could be implemented. Notes are also included about what other functions would be affected by changes to the function in question.
+This document describes code for generating Hamiltonians describing the Heisenberg model on 2D lattices and then applying the Lanczos procedure to them to approximate the low energy spectrum of the Hamiltonians. 
+There are two main files: \texttt{hamiltonian.cu}, and \texttt{lanczos.cu}. The Hamiltonian generation is treated first. 
+For each major function in the files, the function prototype is given first, then a description of each of its parameters, a description of the steps the function takes and what it actually does, and some possible optimizations that could be implemented. 
+Notes are also included about what other functions would be affected by changes to the function in question.
 
 \section{Hamiltonian Generation}
 
 \subsection{General Description}
 
-There are two codes used to generate the Hamiltonians: hamiltonian.cu and hamiltonian.h. The ``builder" function, ConstructSparseMatrix, creates and fills a number and three arrays with information about the Hamiltonian for a certain model and number of sites in the COO format
+There are two codes used to generate the Hamiltonians: \texttt{testhamiltonian.cu} and \texttt{testhamiltonian.h}. The ``builder" function, \texttt{ConstructSparseMatrix}, creates and fills a number and three arrays with information about the Hamiltonian for a certain model and number of sites in the COO format (which stores the number of elements and three arrays: the values, the row indices, and the column indices):
 
 \paragraph{\host \int ConstructSparseMatrix(\int, \int, \ptrint, \cuDoubleComplex, \ptrint, \ptrint) \\ \\}
 \noindent\textbf{Parameters}:
