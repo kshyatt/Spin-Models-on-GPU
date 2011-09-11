@@ -226,8 +226,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	//these are going to need to depend on dim and Nsize
      
  
-	thrust::device_vector<int> num_array(*vdim, 1);
-	int* num_array_ptr = raw_pointer_cast(&num_array[0]);
+	//thrust::device_vector<int> num_array(*vdim, 1);
+	//int* num_array_ptr = raw_pointer_cast(&num_array[0]);
 
 	int rounded_size = ((*vdim*stride/2048) + 1)*2048;
 
@@ -279,33 +279,15 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		return 1;
 	}
 
-
-	sortEngine_t engine;
-	sortStatus_t status = sortCreateEngine("../../src/cubin/", &engine);
-
-	sortData_t tempdata;
-	sortCreateData(engine, *vdim*stride, 1, &tempdata);
-
-	cudaMemcpy(tempdata->keys, d_H_keys, *vdim*stride*sizeof(int), cudaMemcpyDeviceToDevice);
-	cudaMemcpy(tempdata->values, d_H_values, *vdim*stride*sizeof(hamstruct), cudaMemcpyDeviceToDevice);
-
-	sortDevice(engine, tempdata);
-
-	cudaMemcpy(d_H_keys, tempdata->keys , num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
-	cudaMemcpy(d_H_values, tempdata->values , num_Elem*sizeof(hamstruct), cudaMemcpyDeviceToDevice);
-
-	sortDestroyData(deviceData);
-
-	sortReleaseEngine(engine);
 	//----------------Sorting Hamiltonian--------------------------//
 	
 	sortEngine_t engine;
-	sortStatus_t sortstatus = sortCreateEngine("../../src/cubin/", &engine);
+	sortStatus_t sortstatus = sortCreateEngine("sort/sort/src/cubin64/", &engine);
 
 	MgpuSortData sortdata;
-	sortdata.AttachKey(d_H_rows);
-	sortdata.AttachVal(0, d_H_cols);
-	sortdata.AttachVal(1, d_H_values);
+	sortdata.AttachKey((uint*)d_H_rows);
+	sortdata.AttachVal(0, (uint*)d_H_cols);
+	sortdata.AttachVal(1, (uint*)d_H_values);
 
 	sortdata.Alloc(engine, num_Elem, 2);
 
@@ -325,8 +307,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		return 1;
 	}
 
-	cudaMemcpy(hamil_PosRow, sortdata.keys[0], num_Elem*sizeof(int));
-	cudaMemcpy(hamil_PosCol, sortdata.values1[0], num_Elem*sizeof(int));
+	cudaMemcpy(hamil_PosRow, (int*)sortdata.keys[0], num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
+	cudaMemcpy(hamil_PosCol, (int*)sortdata.values1[0], num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
 
 	//thrust::device_ptr<hamstruct> sort_ptr(d_H_sort);
 
@@ -340,7 +322,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	}*/
 
 	
-	FullToCOO<<<num_Elem/512 + 1, 512>>>(num_Elem, sortData.values2[0], hamil_Values, *vdim); // csr and description initializations happen somewhere else
+	FullToCOO<<<num_Elem/512 + 1, 512>>>(num_Elem, (float*)sortdata.values2[0], hamil_Values, *vdim); // csr and description initializations happen somewhere else
 
 	cudaFree(d_H_rows);
 	cudaFree(d_H_cols);
@@ -400,7 +382,7 @@ Inputs: d_basis_Position - position information about the basis
 
 */
 
-__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_rows, int* H_cols, float* H_values, int* d_Bond, const int lattice_Size, const double JJ){
+__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_rows, int* H_cols, float* H_values, int* d_Bond, const int lattice_Size, const float JJ){
 
 	int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size);
 	int T0 = threadIdx.x%(2*lattice_Size);
