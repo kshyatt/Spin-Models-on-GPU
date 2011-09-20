@@ -343,6 +343,8 @@ cudaMemcpy(hamil_PosCol, (int*)sortdata.values1[0], num_Elem*sizeof(int), cudaMe
 
 	fout.close();
 
+	sortReleaseEngine(engine);
+
 	return num_Elem;
 }
 
@@ -394,6 +396,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 	int tempcount;
 	int site = T0%(lattice_Size);
 	count = 0;
+	int rowtemp;
 
 	int si, sj;//sk,sl; //spin operators
 	//unsigned int tempi;// tempod; //tempj;
@@ -433,15 +436,17 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 			tempod[threadIdx.x] ^= (1<<sj); //toggle bit
 
 			compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
-			temppos[threadIdx.x] = (compare == 1) ? d_basis_Position[tempod[threadIdx.x]] : dim;
+			temppos[threadIdx.x] = d_basis_Position[tempod[threadIdx.x]];
 			tempval[threadIdx.x] = HOffBondX(site, tempi[threadIdx.x], JJ);
 
 			count += (int)compare;
 			tempcount = (T0/lattice_Size);
+			rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];			
+			rowtemp = (compare) ? rowtemp : dim;
 
 			H_vals[ idx(ii, 4*site + tempcount + dim, stride) ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
 			H_cols[ idx(ii, 4*site + tempcount + dim, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
-			H_rows[ idx(ii, 4*site + tempcount + dim, stride) ] = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
+			H_rows[ idx(ii, 4*site + tempcount + dim, stride) ] = rowtemp;
 
 //Vertical bond -----------------
 			tempod[threadIdx.x] = tempi[threadIdx.x];
@@ -451,15 +456,18 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 			tempod[threadIdx.x] ^= (1<<sj); //toggle bit
                  
 			compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
-			temppos[threadIdx.x] = (compare == 1) ? d_basis_Position[tempod[threadIdx.x]] : dim;
+			temppos[threadIdx.x] = d_basis_Position[tempod[threadIdx.x]];
 			tempval[threadIdx.x] = HOffBondY(site,tempi[threadIdx.x], JJ);
 
 			count += (int)compare;
 			tempcount = (T0/lattice_Size);
+			rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];			
+			rowtemp = (compare) ? rowtemp : dim;
+
 
 			H_vals[ idx(ii, 4*site + 2 + tempcount + dim, stride) ] =  tempval[threadIdx.x]; // (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
 			H_cols[ idx(ii, 4*site + 2 + tempcount + dim, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
-			H_rows[ idx(ii, 4*site + 2 + tempcount + dim, stride) ] = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
+			H_rows[ idx(ii, 4*site + 2 + tempcount + dim, stride) ] = rowtemp;
 			
 			__syncthreads();
 
