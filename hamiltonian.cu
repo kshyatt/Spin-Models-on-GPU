@@ -229,6 +229,8 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	int* d_H_rows;
 	int* d_H_cols;
 	float* d_H_vals;
+
+	int padded_dim = (*vdim/1024 + 1)*1024;
 	
 	cudaMalloc(&d_H_rows, *vdim*stride*sizeof(int));
 	cudaMalloc(&d_H_cols, *vdim*stride*sizeof(int));
@@ -243,7 +245,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		return 1;
 	}*/
 	
-	FillDiagonals<<<*vdim/512 + 1, 512>>>(d_basis, *vdim, d_H_rows, d_H_cols, d_H_vals, d_Bond, lattice_Size, JJ);
+	FillDiagonals<<<*vdim/1024 + 1, 1024>>>(d_basis, *vdim, d_H_rows, d_H_cols, d_H_vals, d_Bond, lattice_Size, JJ);
 
 	cudaThreadSynchronize();
 
@@ -283,11 +285,15 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	sortStatus_t sortstatus = sortCreateEngine("sort/sort/src/cubin64/", &engine);
 
 	MgpuSortData sortdata;
+
+	
 	sortdata.AttachKey((uint*)d_H_rows);
 	sortdata.AttachVal(0, (uint*)d_H_cols);
 	sortdata.AttachVal(1, (uint*)d_H_vals);
 
-	sortdata.Alloc(engine, num_Elem, 2);
+	int sortnumber = ((*vdim*stride/2048) + 1)*2048;
+
+	sortdata.Alloc(engine, sortnumber, 2);
 
 	sortdata.firstBit = 0;
 	sortdata.endBit = 8*sizeof(dim);
@@ -326,7 +332,7 @@ cudaMemcpy(hamil_PosCol, (int*)sortdata.values1[0], num_Elem*sizeof(int), cudaMe
 	cudaFree(d_H_cols);
 	cudaFree(d_H_vals);
 
-	cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex));
+	/*cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex));
 	int* h_rows = (int*)malloc(num_Elem*sizeof(int));
 	int* h_cols = (int*)malloc(num_Elem*sizeof(int));
 
@@ -341,7 +347,7 @@ cudaMemcpy(hamil_PosCol, (int*)sortdata.values1[0], num_Elem*sizeof(int), cudaMe
 		fout<<" - "<<h_vals[i].x<<std::endl;
 	}
 
-	fout.close();
+	fout.close();*/
 
 	sortReleaseEngine(engine);
 
@@ -436,7 +442,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 			tempod[threadIdx.x] ^= (1<<sj); //toggle bit
 
 			compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
-			temppos[threadIdx.x] = d_basis_Position[tempod[threadIdx.x]];
+			temppos[threadIdx.x] = (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
 			tempval[threadIdx.x] = HOffBondX(site, tempi[threadIdx.x], JJ);
 
 			count += (int)compare;
@@ -456,14 +462,13 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 			tempod[threadIdx.x] ^= (1<<sj); //toggle bit
                  
 			compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
-			temppos[threadIdx.x] = d_basis_Position[tempod[threadIdx.x]];
+			temppos[threadIdx.x] =  (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
 			tempval[threadIdx.x] = HOffBondY(site,tempi[threadIdx.x], JJ);
 
 			count += (int)compare;
 			tempcount = (T0/lattice_Size);
 			rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];			
 			rowtemp = (compare) ? rowtemp : dim;
-
 
 			H_vals[ idx(ii, 4*site + 2 + tempcount + dim, stride) ] =  tempval[threadIdx.x]; // (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
 			H_cols[ idx(ii, 4*site + 2 + tempcount + dim, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
