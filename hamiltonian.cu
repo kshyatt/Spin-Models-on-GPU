@@ -218,23 +218,24 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		return 1;
 	}
 
+	int padded_dim = (*vdim/1024 + 1)*1024;
+	int raw_size = (padded_dim + 4*lattice_Size*(*vdim));
+
 	dim3 bpg;
 
-	bpg.x = (*vdim*stride)/1024 + 1;
+	bpg.x = (4*lattice_Size*(*vdim))/512 + 1;
         
 	dim3 tpb;
-	tpb.x = 1024;
+	tpb.x = 512;
 	//these are going to need to depend on dim and Nsize
      
 	int* d_H_rows;
 	int* d_H_cols;
 	float* d_H_vals;
-
-	int padded_dim = (*vdim/1024 + 1)*1024;
 	
-	cudaMalloc(&d_H_rows, *vdim*stride*sizeof(int));
-	cudaMalloc(&d_H_cols, *vdim*stride*sizeof(int));
-	cudaMalloc(&d_H_vals, *vdim*stride*sizeof(float));
+	cudaMalloc(&d_H_rows, raw_size*sizeof(int));
+	cudaMalloc(&d_H_cols, raw_size*sizeof(int));
+	cudaMalloc(&d_H_vals, raw_size*sizeof(float));
 
 	/*hamstruct* d_H_sort;
 	status2 = cudaMalloc(&d_H_sort, *vdim*stride*sizeof(hamstruct));
@@ -245,7 +246,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		return 1;
 	}*/
 	
-	FillDiagonals<<<*vdim/1024 + 1, 1024>>>(d_basis, *vdim, d_H_rows, d_H_cols, d_H_vals, d_Bond, lattice_Size, JJ);
+	FillDiagonals<<<*vdim/512 + 1, tpb>>>(d_basis, *vdim, d_H_rows, d_H_cols, d_H_vals, d_Bond, lattice_Size, JJ);
 
 	cudaThreadSynchronize();
 
@@ -291,7 +292,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	sortdata.AttachVal(0, (uint*)d_H_cols);
 	sortdata.AttachVal(1, (uint*)d_H_vals);
 
-	int sortnumber = ((*vdim*stride/2048) + 1)*2048;
+	int sortnumber = ((raw_size/2048) + 1)*2048;
 
 	sortdata.Alloc(engine, sortnumber, 2);
 
@@ -324,7 +325,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	}
 
 	cudaMemcpy(hamil_PosRow, (int*)sortdata.keys[0], num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
-cudaMemcpy(hamil_PosCol, (int*)sortdata.values1[0], num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
+	cudaMemcpy(hamil_PosCol, (int*)sortdata.values1[0], num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
 
 	FullToCOO<<<num_Elem/512 + 1, 512>>>(num_Elem, (float*)sortdata.values2[0], hamil_Values, *vdim); // csr and description initializations happen somewhere else
 
@@ -332,11 +333,11 @@ cudaMemcpy(hamil_PosCol, (int*)sortdata.values1[0], num_Elem*sizeof(int), cudaMe
 	cudaFree(d_H_cols);
 	cudaFree(d_H_vals);
 
-	/*cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex));
+	cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex));
 	int* h_rows = (int*)malloc(num_Elem*sizeof(int));
 	int* h_cols = (int*)malloc(num_Elem*sizeof(int));
 
-	cudaMemcpy(h_vals, hamil_Values, num_Elem*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+	/*cudaMemcpy(h_vals, hamil_Values, num_Elem*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_rows, hamil_PosRow, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_cols, hamil_PosCol, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
 
@@ -373,6 +374,11 @@ __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, f
 		H_cols[row] = row;
 
 	}
+
+	else {
+		H_rows[row] = dim;
+	}
+
 }
 
 /* Function FillSparse: this function takes the empty Hamiltonian arrays and fills them up. Each thread in x handles one ket |i>, and each thread in y handles one site T0
@@ -391,18 +397,28 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 	int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size);
 	int T0 = threadIdx.x%(2*lattice_Size);
 
+	#if __CUDA_ARCH__ < 200
+		const int array_size = 512;
+	#elif __CUDA_ARCH__ >= 200
+		const int array_size = 1024;
+	#else
+       		#error your mom
+	#endif
+
 	__shared__ int3 tempbond[16];
 	int count;
-	__shared__ int temppos[1024];
-	__shared__ float tempval[1024];
-	__shared__ uint tempi[1024];
-	__shared__ uint tempod[1024];
+	__shared__ int temppos[array_size];
+	__shared__ float tempval[array_size];
+	__shared__ uint tempi[array_size];
+	__shared__ uint tempod[array_size];
 
 	int stride = 4*lattice_Size;
 	int tempcount;
 	int site = T0%(lattice_Size);
 	count = 0;
 	int rowtemp;
+
+	int start = (dim/array_size + 1)*array_size;
 
 	int si, sj;//sk,sl; //spin operators
 	//unsigned int tempi;// tempod; //tempj;
@@ -415,7 +431,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 	bool compare;
 
 	if( ii < dim ){
-		if (site < lattice_Size){
+		if (T0 < 2*lattice_Size){
 			//Putting bond info in shared memory
 			(tempbond[site]).x = d_Bond[site];
 			(tempbond[site]).y = d_Bond[lattice_Size + site];
@@ -450,9 +466,9 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 			rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];			
 			rowtemp = (compare) ? rowtemp : dim;
 
-			H_vals[ idx(ii, 4*site + tempcount + dim, stride) ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
-			H_cols[ idx(ii, 4*site + tempcount + dim, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
-			H_rows[ idx(ii, 4*site + tempcount + dim, stride) ] = rowtemp;
+			H_vals[ idx(ii, 4*site + tempcount + start, stride) ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
+			H_cols[ idx(ii, 4*site + tempcount + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
+			H_rows[ idx(ii, 4*site + tempcount + start, stride) ] = rowtemp;
 
 //Vertical bond -----------------
 			tempod[threadIdx.x] = tempi[threadIdx.x];
@@ -470,9 +486,9 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 			rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];			
 			rowtemp = (compare) ? rowtemp : dim;
 
-			H_vals[ idx(ii, 4*site + 2 + tempcount + dim, stride) ] =  tempval[threadIdx.x]; // (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
-			H_cols[ idx(ii, 4*site + 2 + tempcount + dim, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
-			H_rows[ idx(ii, 4*site + 2 + tempcount + dim, stride) ] = rowtemp;
+			H_vals[ idx(ii, 4*site + 2 + tempcount + start, stride) ] =  tempval[threadIdx.x]; // (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
+			H_cols[ idx(ii, 4*site + 2 + tempcount + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
+			H_rows[ idx(ii, 4*site + 2 + tempcount + start, stride) ] = rowtemp;
 			
 			__syncthreads();
 
