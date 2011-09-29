@@ -275,8 +275,8 @@ int dim = 2;
 	status3 = cudaMalloc(&hamil_PosCol, num_Elem*sizeof(int));
 
 	if ( (status1 != CUDA_SUCCESS) ||
-			 (status2 != CUDA_SUCCESS) ||
-			 (status3 != CUDA_SUCCESS) ){
+	     (status2 != CUDA_SUCCESS) ||
+	     (status3 != CUDA_SUCCESS) ){
 		std::cout<<"Memory allocation for COO representation failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
 		return 1;
 	}
