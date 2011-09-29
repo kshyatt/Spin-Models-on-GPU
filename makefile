@@ -1,6 +1,6 @@
 CC = nvcc
 CFLAGS = -w -O3 -arch=sm_20
-LIBS = -lcublas -lcusparse
+LIBS = -lcublas -lcusparse -Lsort/sort/gnu/release -lmgpusort -lcuda -lcudart
 OBJS = heisenberg.o lanczos.o testhamiltonian.o 
 
 a.out : $(OBJS) 
@@ -13,7 +13,7 @@ lanczos.o : lanczos.cu lanczos.h
 	$(CC) $(CFLAGS) -c $(LIBS) lanczos.cu
 
 testhamiltonian.o : testhamiltonian.cu testhamiltonian.h
-	$(CC) $(CFLAGS) -c testhamiltonian.cu
+	$(CC) $(CFLAGS) -c $(LIBS) testhamiltonian.cu
 
 clean : 
 	rm *.o

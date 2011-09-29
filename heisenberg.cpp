@@ -31,7 +31,7 @@ int main(){
   int dim;
 
   int Sz = 0;
-  double JJ = 1.;
+  float JJ = 1.;
 
   const int num_Elem = ConstructSparseMatrix( 0, nsite, Bond, hamil_Values, hamil_PosRow, hamil_PosCol, &dim, JJ, Sz );
   cout<<"ConstructSparseMatrix finished"<<endl;

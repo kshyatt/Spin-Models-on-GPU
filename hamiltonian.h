@@ -18,7 +18,7 @@ __host__ __device__ int idx(int i, int j, int lda);
 
 __device__ int d_num_Elem = 12870; //all the diagonal elements
 
-struct hamstruct{
+/*struct hamstruct{
 
 	int rowindex;
 	int colindex;
@@ -36,7 +36,7 @@ struct ham_sort_function{
 		return (a.colindex + a.rowindex*a.dim) < (b.colindex + b.rowindex*b.dim);
 	}
 
-};
+};*/
 
 
 __host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], int basis[]);
