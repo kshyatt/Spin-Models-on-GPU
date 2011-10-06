@@ -185,11 +185,13 @@ int dim = 2;
 	dim3 tpb;
 	tpb.x = 512;
 	//these are going to need to depend on dim and Nsize
-     
+
+        int* d_H_keys;     
 	int* d_H_rows;
 	int* d_H_cols;
 	float* d_H_vals;
 	
+        cudaMalloc(&d_H_keys, raw_size*sizeof(int));
 	cudaMalloc(&d_H_rows, raw_size*sizeof(int));
 	cudaMalloc(&d_H_cols, raw_size*sizeof(int));
 	cudaMalloc(&d_H_vals, raw_size*sizeof(float));
@@ -203,7 +205,7 @@ int dim = 2;
 		return 1;
 	}*/
 	
-	FillDiagonals<<<*vdim/512 + 1, tpb>>>(d_basis, *vdim, d_H_rows, d_H_cols, d_H_vals, d_Bond, lattice_Size, JJ);
+	FillDiagonals<<<*vdim/512 + 1, tpb>>>(d_basis, *vdim, d_H_keys, d_H_rows, d_H_cols, d_H_vals, d_Bond, lattice_Size, JJ);
 
 	cudaThreadSynchronize();
 
@@ -212,7 +214,7 @@ int dim = 2;
 		return 1;
 	}
 
-	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, *vdim, d_H_rows, d_H_cols, d_H_vals, d_Bond, lattice_Size, JJ);
+	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, *vdim, d_H_keys, d_H_rows, d_H_cols, d_H_vals, d_Bond, lattice_Size, JJ);
 
 	cudaThreadSynchronize();
 
@@ -245,13 +247,14 @@ int dim = 2;
 	MgpuSortData sortdata;
 
 	
-	sortdata.AttachKey((uint*)d_H_rows);
-	sortdata.AttachVal(0, (uint*)d_H_cols);
-	sortdata.AttachVal(1, (uint*)d_H_vals);
+	sortdata.AttachKey((uint*) d_H_keys);
+        sortdata.AttachVal(0, (uint*)d_H_rows);
+	sortdata.AttachVal(1, (uint*)d_H_cols);
+	sortdata.AttachVal(2, (uint*)d_H_vals);
 
 	int sortnumber = ((raw_size/2048) + 1)*2048;
 
-	sortdata.Alloc(engine, sortnumber, 2);
+	sortdata.Alloc(engine, sortnumber, 3);
 
 	sortdata.firstBit = 0;
 	sortdata.endBit = 8*sizeof(dim);
@@ -281,25 +284,26 @@ int dim = 2;
 		return 1;
 	}
 
-	cudaMemcpy(hamil_PosRow, (int*)sortdata.keys[0], num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
-	cudaMemcpy(hamil_PosCol, (int*)sortdata.values1[0], num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
+	cudaMemcpy(hamil_PosRow, (int*)sortdata.values1[0], num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
+	cudaMemcpy(hamil_PosCol, (int*)sortdata.values2[0], num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
 
-	FullToCOO<<<num_Elem/512 + 1, 512>>>(num_Elem, (float*)sortdata.values2[0], hamil_Values, *vdim); // csr and description initializations happen somewhere else
+	FullToCOO<<<num_Elem/512 + 1, 512>>>(num_Elem, (float*)sortdata.values3[0], hamil_Values, *vdim); // csr and description initializations happen somewhere else
 
+        cudaFree(d_H_keys);
 	cudaFree(d_H_rows);
 	cudaFree(d_H_cols);
 	cudaFree(d_H_vals);
 
-	cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex));
+	/*cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex));
 	int* h_rows = (int*)malloc(num_Elem*sizeof(int));
 	int* h_cols = (int*)malloc(num_Elem*sizeof(int));
 
-	/*cudaMemcpy(h_vals, hamil_Values, num_Elem*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_vals, hamil_Values, num_Elem*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_rows, hamil_PosRow, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_cols, hamil_PosCol, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
 
 	std::ofstream fout;
-	fout.open("hamiltonian.log");
+	fout.open("testhamiltonian.log");
 	for(int i = 0; i < num_Elem; i++){
 		fout<<"("<<h_rows[i]<<","<<h_cols[i]<<")";
 		fout<<" - "<<h_vals[i].x<<std::endl;
@@ -312,7 +316,7 @@ int dim = 2;
 	return num_Elem;
 }
 
-__global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, int lattice_Size, float JJ){
+__global__ void FillDiagonals(int* d_basis, int dim, int* H_keys, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, int lattice_Size, float JJ){
 
 	int row = blockIdx.x*blockDim.x + threadIdx.x;
 	int site = threadIdx.x%(lattice_Size);
@@ -329,11 +333,13 @@ __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, f
 		H_vals[row] = HDiagPart(tempi, lattice_Size, tempbond, JJ);
 		H_rows[row] = row;
 		H_cols[row] = row;
+                H_keys[row] = row + row*dim;
 
 	}
 
 	else {
 		H_rows[row] = dim;
+                H_keys[row] = dim + dim*dim;
 	}
 
 }
@@ -348,7 +354,7 @@ Inputs: d_basis_Position - position information about the basis
 	JJ - the coupling parameter 
 
 */
-__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, const int lattice_Size, const float JJ){
+__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_keys, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, const int lattice_Size, const float JJ){
 
 	int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size);
 	int T0 = threadIdx.x%(2*lattice_Size);
@@ -425,6 +431,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 			H_vals[ idx(ii, 4*site + tempcount + start, stride) ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
 			H_cols[ idx(ii, 4*site + tempcount + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
 			H_rows[ idx(ii, 4*site + tempcount + start, stride) ] = rowtemp;
+                        H_keys[ idx(ii, 4*site + tempcount + start, stride) ] = (compare) ? ( H_cols[idx(ii, 4*site + tempcount + start, stride) ] + dim*H_rows[idx(ii, 4*site + tempcount + start, stride)] ) : dim + dim*dim;
 
 //Vertical bond -----------------
 			tempod[threadIdx.x] = tempi[threadIdx.x];
@@ -446,6 +453,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 			H_cols[ idx(ii, 4*site + 2 + tempcount + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
 			H_rows[ idx(ii, 4*site + 2 + tempcount + start, stride) ] = rowtemp;
 			
+                        H_keys[ idx(ii, 4*site + tempcount + 2 + start, stride) ] = (compare) ? ( H_cols[idx(ii, 4*site + 2 + tempcount + start, stride) ] + dim*H_rows[idx(ii, 4*site + tempcount + 2 + start, stride)] ) : dim + dim*dim;
 			__syncthreads();
 
 			atomicAdd(&d_num_Elem, count);

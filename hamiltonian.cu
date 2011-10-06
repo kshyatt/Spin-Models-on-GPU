@@ -66,12 +66,12 @@ unsigned int temp = 0;
 		for (int sp =0; sp<lattice_Size; sp++){
 			temp += (i1>>sp)&1;
 		} //unpack bra
-		if (temp==(lattice_Size/2+Sz) ){
+		//if (temp==(lattice_Size/2+Sz) ){
 			basis[realdim] = i1;
 			basis_Position[i1] = realdim;
 			realdim++;
 			//cout<<basis[realdim]<<" "<<basis_Position[i1]<<endl;
-		}
+		//}
 }
 
 return realdim;
@@ -226,7 +226,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	bpg.x = (4*lattice_Size*(*vdim))/512 + 1;
         
 	dim3 tpb;
-	tpb.x = 512;
+	tpb.x = 1024;
 	//these are going to need to depend on dim and Nsize
      
 	int* d_H_rows;
@@ -246,7 +246,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		return 1;
 	}*/
 	
-	FillDiagonals<<<*vdim/512 + 1, tpb>>>(d_basis, *vdim, d_H_rows, d_H_cols, d_H_vals, d_Bond, lattice_Size, JJ);
+	FillDiagonals<<<*vdim/1024 + 1, tpb>>>(d_basis, *vdim, d_H_rows, d_H_cols, d_H_vals, d_Bond, lattice_Size, JJ);
 
 	cudaThreadSynchronize();
 
@@ -327,7 +327,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	cudaMemcpy(hamil_PosRow, (int*)sortdata.keys[0], num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
 	cudaMemcpy(hamil_PosCol, (int*)sortdata.values1[0], num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
 
-	FullToCOO<<<num_Elem/512 + 1, 512>>>(num_Elem, (float*)sortdata.values2[0], hamil_Values, *vdim); // csr and description initializations happen somewhere else
+	FullToCOO<<<num_Elem/1024 + 1, 1024>>>(num_Elem, (float*)sortdata.values2[0], hamil_Values, *vdim); // csr and description initializations happen somewhere else
 
 	cudaFree(d_H_rows);
 	cudaFree(d_H_cols);

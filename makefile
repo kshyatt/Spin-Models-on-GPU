@@ -1,5 +1,5 @@
 CC = nvcc
-CFLAGS = -w -g -G -arch=sm_21
+CFLAGS = -w -arch=sm_21
 LIBS = -lcublas -lcusparse -Lsort/sort/gnu/release -lmgpusort -lcuda -lcudart
 OBJS = heisenberg.o lanczos.o testhamiltonian.o 
 

@@ -16,7 +16,7 @@ using namespace std;
 
 __host__ __device__ int idx(int i, int j, int lda);
 
-__device__ int d_num_Elem = 12870; //all the diagonal elements
+__device__ int d_num_Elem = 65536; //all the diagonal elements
 
 /*struct hamstruct{
 

@@ -115,13 +115,14 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	cudaEventRecord(start, 0);
 	sparsestatus = cusparseXcoo2csr(sparsehandle, d_H_rows, num_Elem, dim, d_H_rowptrs, CUSPARSE_INDEX_BASE_ZERO);
 
-	if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
-		std::cout<<"Failed to switch from COO to CSR! Error: "<<sparsestatus<<std::endl;
-	}
+	
 	cudaThreadSynchronize();
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
+	if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
+		std::cout<<"Failed to switch from COO to CSR! Error: "<<sparsestatus<<std::endl;
+	}	
 	std::cout<<"Runtime to convert to CSR: "<<time<<std::endl;
 
 	thrust::host_vector<cuDoubleComplex> h_a(max_Iter);
@@ -214,11 +215,11 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	std::cout<<"Time to get V1=H*V0: "<<time<<std::endl;
 	
 	if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
-		std::cout<<"Getting V1 = H*V0 failed! Error: ";
+		std::cout<<"Getting V1 = H*V0 failed! CUSPARSE Error: ";
 		std::cout<<sparsestatus<<std::endl;
 	}
  	if (cudaPeekAtLastError() != 0 ){
-		std::cout<<"Getting V1  = H*V0 failed! Error: ";
+		std::cout<<"Getting V1  = H*V0 failed! CUDA Error: ";
 		std::cout<<cudaGetErrorString(cudaPeekAtLastError())<<std::endl;
 	} 
   //*********************************************************************************************************
