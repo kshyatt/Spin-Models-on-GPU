@@ -486,8 +486,8 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
       printf("Copying the eigenvalue failed! \n");
     }*/
 		for(int i = 0; i < num_Eig; i++){
-			std::cout<<h_ordered[i]<<" ";
-		} 
+    std::cout<<h_ordered[i]<<" ";
+  } 
 
 
     if (iter == max_Iter - 2){// have to use this or d_b will overflow

@@ -131,7 +131,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		case 1: dim = 10; //guesses
 	}
         */
-int dim = 2;
+	int dim = 2;
 
 	for (int ch=1; ch<lattice_Size; ch++) dim *= 2;
 
@@ -294,7 +294,7 @@ int dim = 2;
 	cudaFree(d_H_cols);
 	cudaFree(d_H_vals);
 
-	/*cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex));
+	cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex));
 	int* h_rows = (int*)malloc(num_Elem*sizeof(int));
 	int* h_cols = (int*)malloc(num_Elem*sizeof(int));
 
@@ -303,13 +303,13 @@ int dim = 2;
 	cudaMemcpy(h_cols, hamil_PosCol, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
 
 	std::ofstream fout;
-	fout.open("testhamiltonian.log");
+	fout.open("testhamiltonianfloat.log");
 	for(int i = 0; i < num_Elem; i++){
 		fout<<"("<<h_rows[i]<<","<<h_cols[i]<<")";
 		fout<<" - "<<h_vals[i].x<<std::endl;
 	}
 
-	fout.close();*/
+	fout.close();
 
 	sortReleaseEngine(engine);
 
