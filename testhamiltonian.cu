@@ -290,7 +290,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 	cudaMemcpy(h_cols, hamil_PosCol, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
 
 	std::ofstream fout;
-	fout.open("testhamiltonian.log");
+	fout.open("testhamiltonianmaster.log");
 	
 	for(int i = 0; i < num_Elem; i++){
 		fout<<"("<<h_rows[i]<<","<<h_cols[i]<<")";
