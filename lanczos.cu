@@ -114,7 +114,6 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 
 	cudaEventRecord(start, 0);
 	sparsestatus = cusparseXcoo2csr(sparsehandle, d_H_rows, num_Elem, dim, d_H_rowptrs, CUSPARSE_INDEX_BASE_ZERO);
-
 	
 	cudaThreadSynchronize();
 	cudaEventRecord(stop,0);
@@ -222,17 +221,17 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 		std::cout<<"Getting V1  = H*V0 failed! CUDA Error: ";
 		std::cout<<cudaGetErrorString(cudaPeekAtLastError())<<std::endl;
 	} 
-  //*********************************************************************************************************
+	//*********************************************************************************************************
+	  
+	  // This is just the first steps so I can do the rest
   
-  // This is just the first steps so I can do the rest
-  
-  /*try{ 
-    d_a_ptr = raw_pointer_cast(&d_a[0]);  
-  }
-  catch( thrust::system_error e ){
-    std::cerr<<"Error settng d_a_ptr: "<<e.what()<<std::endl;
-    exit(-1);
-  }*/
+	/*try{ 
+		d_a_ptr = raw_pointer_cast(&d_a[0]);  
+	}
+	catch( thrust::system_error e ){
+		std::cerr<<"Error settng d_a_ptr: "<<e.what()<<std::endl;
+		exit(-1);
+	}*/
 
 	cuDoubleComplex dottemp = make_cuDoubleComplex(0. ,0.);
    
@@ -320,122 +319,122 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
   
 	thrust::host_vector<double> h_diag(max_Iter);
 	double* h_diag_ptr = raw_pointer_cast(&h_diag[0]);
-  thrust::host_vector<double> h_offdia(max_Iter);
-  double* h_offdia_ptr = raw_pointer_cast(&h_offdia[0]);
+	thrust::host_vector<double> h_offdia(max_Iter);
+	double* h_offdia_ptr = raw_pointer_cast(&h_offdia[0]);
   
-  thrust::device_vector<cuDoubleComplex> temp(dim);
-  cuDoubleComplex* temp_ptr = thrust::raw_pointer_cast(&temp[0]);
+	thrust::device_vector<cuDoubleComplex> temp(dim);
+	cuDoubleComplex* temp_ptr = thrust::raw_pointer_cast(&temp[0]);
 
-  double eigtemp = 0.;
+	double eigtemp = 0.;
 
-  thrust::host_vector<double> h_ordered(num_Eig, 0.);
+	thrust::host_vector<double> h_ordered(num_Eig, 0.);
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
 	std::cout<<"Time to set up the arrays for iteration: "<<time<<std::endl;
 
-  while( fabs(gs_Energy - eigtemp) > conv_req || iter < 10){ //this is a cleaner version than what was in the original - way fewer if statements
+	while( fabs(gs_Energy - eigtemp) > conv_req || iter < 10){ //this is a cleaner version than what was in the original - way fewer if statements
 
-    iter++;
+		iter++;
 
-	eigtemp = h_ordered[num_Eig - 1];
-    /*status1 = cudaMemcpy(&eigtemp, d_ordered_ptr, sizeof(double), cudaMemcpyDeviceToHost);
+		eigtemp = h_ordered[num_Eig - 1];
+		/*status1 = cudaMemcpy(&eigtemp, d_ordered_ptr, sizeof(double), cudaMemcpyDeviceToHost);
 
-    if (status1 != CUDA_SUCCESS){
-      printf("Copying last eigenvalue failed \n");
-    }*/
-    //std::cout<<"Getting V2 = H*V1 for the "<<iter + 1<<"th time"<<std::endl;
+		if (status1 != CUDA_SUCCESS){
+ 			printf("Copying last eigenvalue failed \n");
+		}*/
+		//std::cout<<"Getting V2 = H*V1 for the "<<iter + 1<<"th time"<<std::endl;
 		cudaEventRecord(start, 0);
-    sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rowptrs, d_H_cols, v1, beta, v2); // the Hamiltonian is applied here, in this gross expression
-    cudaThreadSynchronize();
+		sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rowptrs, d_H_cols, v1, beta, v2); // the Hamiltonian is applied here, in this gross expression
+		cudaThreadSynchronize();
 
 		cudaEventRecord(stop,0);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
-		std::cout<<"Time to do csrmv: "<<time<<std::endl;
+		//std::cout<<"Time to do csrmv: "<<time<<std::endl;
 
-    if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
-      std::cout<<"Error applying the Hamiltonian in "<<iter<<"th iteration!";
-      std::cout<<"Error: "<<sparsestatus<<std::endl;
-    } 
+		if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
+		std::cout<<"Error applying the Hamiltonian in "<<iter<<"th iteration!";
+		std::cout<<"Error: "<<sparsestatus<<std::endl;
+		} 
 
-    //d_a_ptr = thrust::raw_pointer_cast(&d_a[iter]);
-    //std::cout<<"Getting V1*V2 for the "<<iter + 1<<"th time"<<std::endl;
+		//d_a_ptr = thrust::raw_pointer_cast(&d_a[iter]);
+		//std::cout<<"Getting V1*V2 for the "<<iter + 1<<"th time"<<std::endl;
     
 		cudaEventRecord(start, 0);
 		linalgstat = cublasZdotc(linalghandle, dim, v1, 1, v2, 1, &dottemp);
-    cudaThreadSynchronize();
+		cudaThreadSynchronize();
 
 		cudaEventRecord(stop,0);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
-		std::cout<<"Time to get v1*v2: "<<time<<std::endl;
+		//std::cout<<"Time to get v1*v2: "<<time<<std::endl;
 
-    h_a[iter] = dottemp;
+		h_a[iter] = dottemp;
 
-    if (linalgstat != CUBLAS_STATUS_SUCCESS){
-      std::cout<<"Error getting v1 * v2 in "<<iter<<"th iteration! Error: ";
-      std::cout<<linalgstat<<std::endl;
-    }
+		if (linalgstat != CUBLAS_STATUS_SUCCESS){
+			std::cout<<"Error getting v1 * v2 in "<<iter<<"th iteration! Error: ";
+			std::cout<<linalgstat<<std::endl;
+		}
 
-    //cudaMemcpy(temp_ptr, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
-    //temp = v1;
+		//cudaMemcpy(temp_ptr, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
+		//temp = v1;
 
-    axpytemp = cuCmul(make_cuDoubleComplex(-1., 0.), h_b[iter]);
-    cudaEventRecord(start, 0);
-    linalgstat = cublasZaxpy( linalghandle, dim, &axpytemp, v0, 1, v2, 1);
-    if (linalgstat != CUBLAS_STATUS_SUCCESS){
-      std::cout<<"Error getting (d_b/d_a)*v0 + v1 in "<<iter<<"th iteration!";
-      std::cout<<"Error: "<<linalgstat<<std::endl;
-    }
-    cudaThreadSynchronize();
+		axpytemp = cuCmul(make_cuDoubleComplex(-1., 0.), h_b[iter]);
+		cudaEventRecord(start, 0);
+		linalgstat = cublasZaxpy( linalghandle, dim, &axpytemp, v0, 1, v2, 1);
+		if (linalgstat != CUBLAS_STATUS_SUCCESS){
+			std::cout<<"Error getting (d_b/d_a)*v0 + v1 in "<<iter<<"th iteration!";
+ 			std::cout<<"Error: "<<linalgstat<<std::endl;
+		}
+		cudaThreadSynchronize();
 		cudaEventRecord(stop,0);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
 		//std::cout<<"Time to get v2 - b[i]*v0: "<<time<<std::endl;
 
-    axpytemp = cuCmul(make_cuDoubleComplex(-1., 0.), h_a[iter]);
-    linalgstat = cublasZaxpy( linalghandle, dim, &axpytemp, v1, 1, v2, 1);
-    if (linalgstat != CUBLAS_STATUS_SUCCESS){
-      std::cout<<"Error getting v2 + d_a*v1 in "<<iter<<"th iteration! Error: ";
-      std::cout<<linalgstat<<std::endl;
-    }
+		axpytemp = cuCmul(make_cuDoubleComplex(-1., 0.), h_a[iter]);
+		linalgstat = cublasZaxpy( linalghandle, dim, &axpytemp, v1, 1, v2, 1);
+		if (linalgstat != CUBLAS_STATUS_SUCCESS){
+			std::cout<<"Error getting v2 + d_a*v1 in "<<iter<<"th iteration! Error: ";
+      			std::cout<<linalgstat<<std::endl;
+		}
 
-    //std::cout<<"Getting norm of V2 for the "<<iter + 1<<"th time"<<std::endl;
+		//std::cout<<"Getting norm of V2 for the "<<iter + 1<<"th time"<<std::endl;
 		cudaEventRecord(start, 0);
-    linalgstat = cublasDznrm2( linalghandle, dim, v2, 1, &normtemp);
-    if (linalgstat != CUBLAS_STATUS_SUCCESS){
-      std::cout<<"Error getting norm of v2 in "<<iter<<"th iteration! Error: ";
-      std::cout<<linalgstat<<std::endl;
-    }
+		linalgstat = cublasDznrm2( linalghandle, dim, v2, 1, &normtemp);
+		if (linalgstat != CUBLAS_STATUS_SUCCESS){
+			std::cout<<"Error getting norm of v2 in "<<iter<<"th iteration! Error: ";
+			std::cout<<linalgstat<<std::endl;
+		}
 
 		cudaEventRecord(stop,0);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
-		std::cout<<"Time to get norm of v2: "<<time<<std::endl;
+		//std::cout<<"Time to get norm of v2: "<<time<<std::endl;
 
-    h_b[iter + 1] = make_cuDoubleComplex(normtemp, 0.);
-    gamma = make_cuDoubleComplex(1./normtemp,0.);
+		h_b[iter + 1] = make_cuDoubleComplex(normtemp, 0.);
+		gamma = make_cuDoubleComplex(1./normtemp,0.);
 
-    linalgstat = cublasZscal(linalghandle, dim, &gamma, v2, 1);
-    if (linalgstat != CUBLAS_STATUS_SUCCESS){ 
-      std::cout<<"Error getting 1/d_b * v2 in "<<iter<<"th iteration! Error: ";
-      std::cout<<linalgstat<<std::endl;
-    }
+		linalgstat = cublasZscal(linalghandle, dim, &gamma, v2, 1);
+		if (linalgstat != CUBLAS_STATUS_SUCCESS){ 
+			std::cout<<"Error getting 1/d_b * v2 in "<<iter<<"th iteration! Error: ";
+			std::cout<<linalgstat<<std::endl;
+		}
 
 		cudaEventRecord(start, 0);
     //lancz_ptr = raw_pointer_cast(&d_lanczvec[dim*(iter - 1)]);
     //cudaMemcpy(lancz_ptr, v0, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
-    cudaMemcpy(v0, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
-    cudaMemcpy(v1, v2, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
+		cudaMemcpy(v0, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
+		cudaMemcpy(v1, v2, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
 		cudaEventRecord(stop, 0);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
-		std::cout<<"Time to copy around the Lanczos vectors: "<<time<<std::endl;
+		//std::cout<<"Time to copy around the Lanczos vectors: "<<time<<std::endl;
     
-    for (int i = 0; i <= iter; i++){
+		for (int i = 0; i <= iter; i++){
 			h_diag[i] = cuCreal(h_a[i]); //adding another spot in the tridiagonal matrix representation
-    	h_offdia[i] = cuCreal(h_b[i]);
+			h_offdia[i] = cuCreal(h_b[i]);
 		}
 		
   //this tqli stuff is a bunch of crap and needs to be fixed  
@@ -457,9 +456,9 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
     for (int ii=1;ii<=iter;ii++){
         h_offdia[ii-1] = h_offdia[ii];
     }
-    h_offdia[iter] = 0;
+		h_offdia[iter] = 0;
 		cudaEventRecord(start, 0);
-    returned = tqli(h_diag_ptr, h_offdia_ptr, iter + 1, max_Iter, h_H_eigen); //tqli is in a separate file   
+		returned = tqli(h_diag_ptr, h_offdia_ptr, iter + 1, max_Iter, h_H_eigen); //tqli is in a separate file   
 		cudaEventRecord(stop, 0);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
@@ -473,11 +472,11 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 		cudaEventRecord(stop, 0);		
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
-		std::cout<<"Runtime for sort and copy: "<<time<<std::endl;
+		//std::cout<<"Runtime for sort and copy: "<<time<<std::endl;
 
 		//std::sort(h_diag.begin(), h_diag.end());
    
-	gs_Energy = h_ordered[num_Eig - 1];
+		gs_Energy = h_ordered[num_Eig - 1];
     //d_ordered_ptr = thrust::raw_pointer_cast(&d_ordered[num_Eig - 1]);
     //status2 = cudaMemcpy(&gs_Energy, d_ordered_ptr, sizeof(double), cudaMemcpyDeviceToHost);
     
@@ -486,6 +485,10 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 		if (status2 != CUDA_SUCCESS){
       printf("Copying the eigenvalue failed! \n");
     }*/
+		for(int i = 0; i < num_Eig; i++){
+			std::cout<<h_ordered[i]<<" ";
+		} 
+
 
     if (iter == max_Iter - 2){// have to use this or d_b will overflow
       //this stuff here is used to resize the main arrays in the case that we aren't converging quickly enough
