@@ -121,7 +121,11 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
 	if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
-		std::cout<<"Failed to switch from COO to CSR! Error: "<<sparsestatus<<std::endl;
+		std::cout<<"Failed to switch from COO to CSR! CUSPARSE Error: "<<sparsestatus<<std::endl;
+	}
+
+	if (cudaPeekAtLastError() != CUDA_SUCCESS){
+		std::cout<<"Failed to switch from COO to CSR! Error: "<<cudaGetErrorString( cudaPeekAtLastError())<<std::endl;
 	}
 
 	std::cout<<"Runtime to convert to CSR: "<<time<<std::endl;
@@ -476,6 +480,11 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 		if (status2 != CUDA_SUCCESS){
       printf("Copying the eigenvalue failed! \n");
     }*/
+
+	for(int i = 0; i < num_Eig; i++){
+   		std::cout<<h_ordered[i]<<" ";
+  	} 
+
 
     if (iter == max_Iter - 2){// have to use this or d_b will overflow
       //this stuff here is used to resize the main arrays in the case that we aren't converging quickly enough
