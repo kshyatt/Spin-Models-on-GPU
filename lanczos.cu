@@ -106,11 +106,11 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 
   cudaError_t status1, status2, status3, status4;
 
-  int* d_H_rowptrs;
-  status1 = cudaMalloc(&d_H_rowptrs, (dim + 1)*sizeof(int));
-  if (status1 != CUDA_SUCCESS){ 
-    std::cout<<"Error allocating d_H_rowptrs: "<<cudaGetErrorString(status1)<<std::endl;
-  }
+	int* d_H_rowptrs;
+	status1 = cudaMalloc(&d_H_rowptrs, (dim + 1)*sizeof(int));
+	if (status1 != CUDA_SUCCESS){ 
+		std::cout<<"Error allocating d_H_rowptrs: "<<cudaGetErrorString(status1)<<std::endl;
+	}
 
 	cudaEventRecord(start, 0);
 	sparsestatus = cusparseXcoo2csr(sparsehandle, d_H_rows, num_Elem, dim, d_H_rowptrs, CUSPARSE_INDEX_BASE_ZERO);
@@ -128,40 +128,38 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 		std::cout<<"Failed to switch from COO to CSR! Error: "<<cudaGetErrorString( cudaPeekAtLastError())<<std::endl;
 	}
 
-	std::cout<<"Runtime to convert to CSR: "<<time<<std::endl;
-
-
+		
 	std::ofstream fout;
 	fout.open("lanczos.log");
-	cuDoubleComplex* h_H_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex));
-	cudaMemcpy(h_H_vals, d_H_vals, num_Elem*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
-	for(int i = 0; i < num_Elem; i++){
-		fout<<h_H_vals[i].x<<std::endl;
+	int* h_H_vals = (int*)malloc((dim+1)*sizeof(int));
+	cudaMemcpy(h_H_vals, d_H_rowptrs, dim*sizeof(int), cudaMemcpyDeviceToHost);
+	for(int i = 0; i < dim + 1; i++){
+		fout<<h_H_vals[i]<<std::endl;
 	}
 
 	fout.close();
 
-	
+	std::cout<<"Runtime to convert to CSR: "<<time<<std::endl;
 
-  thrust::host_vector<cuDoubleComplex> h_a(max_Iter);
+	thrust::host_vector<cuDoubleComplex> h_a(max_Iter);
 
-  thrust::host_vector<cuDoubleComplex> h_b(max_Iter);
+	thrust::host_vector<cuDoubleComplex> h_b(max_Iter);
 
-  //cuDoubleComplex* d_a_ptr;
-  //cuDoubleComplex* d_b_ptr; //we need these to pass to kernel functions 
+	//cuDoubleComplex* d_a_ptr;
+	//cuDoubleComplex* d_b_ptr; //we need these to pass to kernel functions 
 
-  //Making the "random" starting vector
+	//Making the "random" starting vector
 
-  thrust::device_vector<cuDoubleComplex> d_lanczvec(dim*max_Iter); //this thing is an array of the Lanczos vectors 
+	thrust::device_vector<cuDoubleComplex> d_lanczvec(dim*max_Iter); //this thing is an array of the Lanczos vectors 
  
-  cuDoubleComplex* lancz_ptr = thrust::raw_pointer_cast(&d_lanczvec[0]);
+	cuDoubleComplex* lancz_ptr = thrust::raw_pointer_cast(&d_lanczvec[0]);
 
-  cuDoubleComplex* v0;
-  cuDoubleComplex* v1;
-  cuDoubleComplex* v2;
-  status1 = cudaMalloc(&v0, dim*sizeof(cuDoubleComplex));
-  status2 = cudaMalloc(&v1, dim*sizeof(cuDoubleComplex));
-  status3 = cudaMalloc(&v2, dim*sizeof(cuDoubleComplex));
+	cuDoubleComplex* v0;
+	cuDoubleComplex* v1;
+	cuDoubleComplex* v2;
+	status1 = cudaMalloc(&v0, dim*sizeof(cuDoubleComplex));
+	status2 = cudaMalloc(&v1, dim*sizeof(cuDoubleComplex));
+	status3 = cudaMalloc(&v2, dim*sizeof(cuDoubleComplex));
 
   //thrust::device_ptr<cuDoubleComplex> v0_ptr(v0);
   //thrust::device_ptr<cuDoubleComplex> v1_ptr(v1);
@@ -175,7 +173,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
   //cuDoubleComplex* v2_ptr = thrust::raw_pointer_cast(&v2[0]);
 
 	cudaEventRecord(start, 0);
-  cuDoubleComplex* host_v0 = (cuDoubleComplex*)malloc(dim*sizeof(cuDoubleComplex));
+	cuDoubleComplex* host_v0 = (cuDoubleComplex*)malloc(dim*sizeof(cuDoubleComplex));
   for(int i = 0; i<dim; i++){
     host_v0[i] = make_cuDoubleComplex(0. , 0.);
     if (i%4 == 0) host_v0[i] = make_cuDoubleComplex(1.0, 0.) ;
@@ -229,7 +227,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 		std::cout<<"Getting V1  = H*V0 failed! Error: ";
 		std::cout<<cudaGetErrorString(cudaPeekAtLastError())<<std::endl;
 	} 
-	
+
   //*********************************************************************************************************
   
   // This is just the first steps so I can do the rest
