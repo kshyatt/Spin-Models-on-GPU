@@ -107,7 +107,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
   cudaError_t status1, status2, status3, status4;
 
 	int* d_H_rowptrs;
-	status1 = cudaMalloc(&d_H_rowptrs, (dim + 1)*sizeof(int));
+	status1 = cudaMalloc(&d_H_rowptrs, dim*sizeof(int));
 	if (status1 != CUDA_SUCCESS){ 
 		std::cout<<"Error allocating d_H_rowptrs: "<<cudaGetErrorString(status1)<<std::endl;
 	}
@@ -131,9 +131,9 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 		
 	std::ofstream fout;
 	fout.open("lanczos.log");
-	int* h_H_vals = (int*)malloc((dim+1)*sizeof(int));
+	int* h_H_vals = (int*)malloc(dim*sizeof(int));
 	cudaMemcpy(h_H_vals, d_H_rowptrs, dim*sizeof(int), cudaMemcpyDeviceToHost);
-	for(int i = 0; i < dim + 1; i++){
+	for(int i = 0; i < dim ; i++){
 		fout<<h_H_vals[i]<<std::endl;
 	}
 
