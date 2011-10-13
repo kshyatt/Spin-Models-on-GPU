@@ -113,7 +113,20 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
   }
 
 	cudaEventRecord(start, 0);
-  sparsestatus = cusparseXcoo2csr(sparsehandle, d_H_rows, num_Elem, dim, d_H_rowptrs, CUSPARSE_INDEX_BASE_ZERO);
+	sparsestatus = cusparseXcoo2csr(sparsehandle, d_H_rows, num_Elem, dim, d_H_rowptrs, CUSPARSE_INDEX_BASE_ZERO);
+
+	int* h_H_rowptrs = (int*)malloc((dim+1)*sizeof(int));
+	cudaMemcpy(h_H_rowptrs, d_H_rowptrs, (dim+1)*sizeof(int), cudaMemcpyDeviceToHost);
+
+	std::ofstream fout;
+	fout.open("lanczos.log");
+
+	//cudaMemcpy(host_v0, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+	for(int i = 0; i < dim + 1; i++){
+		fout<<h_H_rowptrs[i]<<std::endl;
+	}
+
+	fout.close();
 
   
 	cudaThreadSynchronize();
@@ -216,6 +229,9 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
     std::cout<<"Getting V1  = H*V0 failed! Error: ";
     std::cout<<cudaGetErrorString(cudaPeekAtLastError())<<std::endl;
   } 
+
+	
+	
   //*********************************************************************************************************
   
   // This is just the first steps so I can do the rest
@@ -266,16 +282,16 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
     std::cout<<"V1 = V1 - alpha*V0 failed! Error: ";
     std::cout<<linalgstat<<std::endl;
   }
-  cudaThreadSynchronize();
+	cudaThreadSynchronize();
 
 	cudaEventRecord(start, 0);
-  linalgstat = cublasDznrm2(linalghandle, dim, v1, 1, &normtemp); //this is slow for some reason
+	linalgstat = cublasDznrm2(linalghandle, dim, v1, 1, &normtemp); //this is slow for some reason
   
-  cudaThreadSynchronize();
-  if (linalgstat != CUBLAS_STATUS_SUCCESS){
-    std::cout<<"Getting the norm of v1 failed! Error: ";
-    std::cout<<linalgstat<<std::endl;
-  }
+	cudaThreadSynchronize();
+	if (linalgstat != CUBLAS_STATUS_SUCCESS){
+		std::cout<<"Getting the norm of v1 failed! Error: ";
+		std::cout<<linalgstat<<std::endl;
+	}
   
   //d_b_ptr = thrust::raw_pointer_cast(&d_b[1]);
 
@@ -418,11 +434,11 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
     }
 
 		cudaEventRecord(start, 0);
-    //lancz_ptr = raw_pointer_cast(&d_lanczvec[dim*(iter - 1)]);
-    //cudaMemcpy(lancz_ptr, v0, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
-    cudaMemcpy(v0, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
-    cudaMemcpy(v1, v2, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
-		cudaEventRecord(stop, 0);
+	//lancz_ptr = raw_pointer_cast(&d_lanczvec[dim*(iter - 1)]);
+	//cudaMemcpy(lancz_ptr, v0, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
+	cudaMemcpy(v0, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
+	cudaMemcpy(v1, v2, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToDevice);
+	cudaEventRecord(stop, 0);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
 		std::cout<<"Time to copy around the Lanczos vectors: "<<time<<std::endl;
