@@ -115,20 +115,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	cudaEventRecord(start, 0);
 	sparsestatus = cusparseXcoo2csr(sparsehandle, d_H_rows, num_Elem, dim, d_H_rowptrs, CUSPARSE_INDEX_BASE_ZERO);
 
-	int* h_H_rowptrs = (int*)malloc((dim+1)*sizeof(int));
-	cudaMemcpy(h_H_rowptrs, d_H_rowptrs, (dim+1)*sizeof(int), cudaMemcpyDeviceToHost);
-
-	std::ofstream fout;
-	fout.open("lanczos.log");
-
-	//cudaMemcpy(host_v0, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
-	for(int i = 0; i < dim + 1; i++){
-		fout<<h_H_rowptrs[i]<<std::endl;
-	}
-
-	fout.close();
-
-  
+	 
 	cudaThreadSynchronize();
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
@@ -142,6 +129,19 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	}
 
 	std::cout<<"Runtime to convert to CSR: "<<time<<std::endl;
+
+
+	std::ofstream fout;
+	fout.open("lanczos.log");
+	cuDoubleComplex* h_H_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex));
+	cudaMemcpy(h_H_vals, d_H_vals, num_Elem*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+	for(int i = 0; i < num_Elem; i++){
+		fout<<h_H_vals[i].x<<std::endl;
+	}
+
+	fout.close();
+
+	
 
   thrust::host_vector<cuDoubleComplex> h_a(max_Iter);
 
@@ -185,52 +185,50 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 
   }
 
-  cudaMemcpy(v0, host_v0, dim*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
+	cudaMemcpy(v0, host_v0, dim*sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
 
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
 	std::cout<<"Time to set and push v0: "<<time<<std::endl;
 
-  double normtemp;
+	double normtemp;
 
 	cudaEventRecord(start,0);
-  linalgstat = cublasDznrm2(linalghandle, dim, v0, 1, &normtemp);
-  normalize<<<dim/512 + 1, 512>>>(v0, dim, normtemp);
+	linalgstat = cublasDznrm2(linalghandle, dim, v0, 1, &normtemp);
+	normalize<<<dim/512 + 1, 512>>>(v0, dim, normtemp);
 
-  cuDoubleComplex alpha = make_cuDoubleComplex(1.,0.);
-  cuDoubleComplex beta = make_cuDoubleComplex(0.,0.); 
+	cuDoubleComplex alpha = make_cuDoubleComplex(1.,0.);
+	cuDoubleComplex beta = make_cuDoubleComplex(0.,0.); 
 
-  cudaThreadSynchronize();
+	cudaThreadSynchronize();
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
 	std::cout<<"Time to normalize v0: "<<time<<std::endl;
 
 	cudaEventRecord(start,0);
-  sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rowptrs, d_H_cols, v0, beta, v1); // the Hamiltonian is applied here
+	sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rowptrs, d_H_cols, v0, beta, v1); // the Hamiltonian is applied here
 
-  if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
-    std::cout<<"Getting V1 = H*V0 failed! Error: ";
-    std::cout<<sparsestatus<<std::endl;
-  }
-  cudaThreadSynchronize();
+	if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
+		std::cout<<"Getting V1 = H*V0 failed! Error: ";
+		std::cout<<sparsestatus<<std::endl;
+	}
+	cudaThreadSynchronize();
 	
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
 	std::cout<<"Time to get V1=H*V0: "<<time<<std::endl;
 	
-  if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
-    std::cout<<"Getting V1 = H*V0 failed! Error: ";
-    std::cout<<sparsestatus<<std::endl;
-  }
-  if (cudaPeekAtLastError() != 0 ){
-    std::cout<<"Getting V1  = H*V0 failed! Error: ";
-    std::cout<<cudaGetErrorString(cudaPeekAtLastError())<<std::endl;
-  } 
-
-	
+	if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
+		std::cout<<"Getting V1 = H*V0 failed! Error: ";
+		std::cout<<sparsestatus<<std::endl;
+	}
+	if (cudaPeekAtLastError() != 0 ){
+		std::cout<<"Getting V1  = H*V0 failed! Error: ";
+		std::cout<<cudaGetErrorString(cudaPeekAtLastError())<<std::endl;
+	} 
 	
   //*********************************************************************************************************
   
