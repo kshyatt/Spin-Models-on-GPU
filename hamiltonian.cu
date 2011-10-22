@@ -156,86 +156,110 @@ hamil_PosCol - a pointer to a device array containing the locations of each valu
 */
 
 
-__host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int* vdim, float JJ, int Sz){
+__host__ int ConstructSparseMatrix(const int how_many, int* model_Type, int* lattice_Size, int** Bond, d_hamiltonian*& hamil_lancz, float* JJ, int* Sz, ){
 
 
 	//cudaSetDevice(1);
 
-	int num_Elem = 0; // the total number of elements in the matrix, will get this (or an estimate) from the input types
-	cudaError_t status1, status2, status3;
+	int* num_Elem = (int*)malloc(how_many*sizeof(int));
+	f_hamiltonian* d_H = (f_hamiltonian*)malloc(how_many*sizeof(f_hamiltonian));
 
-	//int dim = 65536;
+	int stride[how_many];
 
-	/*
-	switch (model_Type){
-	case 0:
-		dim = 65536;
-		break;
-	case 1: dim = 10; //guesses
-	}
-	*/
-	int dim = 2;
+	int** basis_Position = (int**)malloc(how_many*sizeof(int*));
+	int** basis = (int**)malloc(how_many*sizeof(int*));
 
-	for (int ch=1; ch<lattice_Size; ch++) dim *= 2;
+	int** d_basis_Position = (int**)malloc(how_many*sizeof(int*));
+	int** d_basis = (int**)malloc(how_many*sizeof(int*));
 
-	int stride = 4*lattice_Size + 1;
+	int** d_Bond = (int**)malloc(how_many*sizeof(int*));
 
-	int basis_Position[dim];
-	int basis[dim];
-	//----------------Construct basis and copy it to the GPU --------------------//
+	int padded_dim[how_many];
+	int raw_size[how_many];
 
-	*vdim = GetBasis(dim, lattice_Size, Sz, basis_Position, basis);
+	dim3 bpg[how_many];
+	dim3 tpb[how_many];
 
-	int* d_basis_Position;
-	int* d_basis;
+	cudaError_t status[how_many];
 
-	status1 = cudaMalloc(&d_basis_Position, dim*sizeof(int));
-	status2 = cudaMalloc(&d_basis, *vdim*sizeof(int));
+	int* d_num_Elem;
+	cudaMalloc(&d_num_Elem, how_many*sizeof(int));
 
-	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-		std::cout<<"Memory allocation for basis arrays failed! Error: ";
-		std::cout<<cudaPeekAtLastError()<<std::endl;
-		return 1;
-	}
+	for(int i = 0; i<how_many; i++){
+		num_Elem[i] = 0;
+		stride[i] = 4*lattice_Size[i] + 1;
 
-	status1 = cudaMemcpy(d_basis_Position, basis_Position, dim*sizeof(int), cudaMemcpyHostToDevice);
-	status2 = cudaMemcpy(d_basis, basis, *vdim*sizeof(int), cudaMemcpyHostToDevice);
+		d_H[i].fulldim = 2;
+		for (int ch=1; ch<lattice_Size; ch++) d_H[i].fulldim *= 2;
+		
+		basis_Position[i] = (int*)malloc(d_H.fulldim*sizeof(int));
+		basis[i] = (int*)malloc(d_H.fulldim*sizeof(int));
 
-	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-		std::cout<<"Memory copy for basis arrays failed! Error: ";
-		std::cout<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
-		return 1;
-	}
+		d_H[i].sectordim = GetBasis(d_H[i].fulldim, lattice_Size[i], Sz[i], basis_Position[i], basis[i]);
 
-	int* d_Bond;
-	status1 = cudaMalloc(&d_Bond, 3*lattice_Size*sizeof(int));
+		d_basis_Position[i] = (int*)malloc(d_H[i].fulldim*sizeof(int));
+		d_basis[i] = (int*)malloc(d_H[i].sectordim*sizeof(int));
 
-	status2 = cudaMemcpy(d_Bond, Bond, 3*lattice_Size*sizeof(int), cudaMemcpyHostToDevice);
+		status[i] = cudaStreamCreate(&stream[i]);
 
-	if ( (status1 != CUDA_SUCCESS) || (status2 != CUDA_SUCCESS) ){
-		std::cout<<"Memory allocation and copy for bond data failed! Error: ";
-		std::cout<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
-		return 1;
-	}
+		if (status[i] != CUDA_SUCCESS){
+			cout<<"Error creating "<<i<<"th stream: "<<cudaGetErrorString(status[i])<<endl;
+		}	
 
-	int padded_dim = (*vdim/1024 + 1)*1024;
-	int raw_size = (padded_dim + 4*lattice_Size*(*vdim));
+	} // can insert more code in here to handle model type later
 
-	dim3 bpg;
+	for(int i = 0; i<how_many; i++){
+		status[i] = cudaMemcpyAsync(d_basis_Position[i], basis_Position[i], d_H[i].fulldim*sizeof(int), cudaMemcpyHostToDevice, stream[i]);
 
-	bpg.x = (4*lattice_Size*(*vdim))/512 + 1;
-        
-	dim3 tpb;
-	tpb.x = 1024;
-	//these are going to need to depend on dim and Nsize
-     
-	int* d_H_rows;
-	int* d_H_cols;
-	float* d_H_vals;
+		if (status[i] != CUDA_SUCCESS){
+			cout<<"Error copying "<<i<<"th basis_Position: "<<cudaGetErrorString(status[i])<<endl;
+		}
+
+		status[i] = cudaMemcpyAsync(d_basis[i], basis[i], d_H[i].sectordim*sizeof(int), cudaMemcpyHostToDevice, stream[i]);
+
+		if (status[i] != CUDA_SUCCESS){
+			cout<<"Error copying "<<i<<"th basis: "<<cudaGetErrorString(status[i])<<endl;
+		}
+
+		padded_dim[i] = (d_H[i].sectordim/1024 + 1)*1024;
+		raw_size[i] = (padded_dim + 4*lattice_Size[i]*d_H[i].sectordim);
+
+		status[i] = cudaMalloc(&d_H[i].rows, raw_size*sizeof(int));
+		if (status[i] != CUDA_SUCCESS){
+			cout<<"Error creating "<<i<<"th rows array: "<<cudaGetErrorString(status[i])<<endl;
+		}
+		status[i] = cudaMalloc(&d_H[i].cols, raw_size*sizeof(int));
+		if (status[i] != CUDA_SUCCESS){
+			cout<<"Error creating "<<i<<"th cols array: "<<cudaGetErrorString(status[i])<<endl;
+		}
+		status[i] = cudaMalloc(&d_H[i].vals, raw_size*sizeof(float));
+		if (status[i] != CUDA_SUCCESS){
+			cout<<"Error creating "<<i<<"th values array: "<<cudaGetErrorString(status[i])<<endl;
+		}
+
+		status[i] = cudaMalloc(&d_Bond[i], 3*lattice_Size[i]*sizeof(int));
+		if (status[i] != CUDA_SUCCESS){
+			cout<<"Error creating "<<i<<"th bonds array: "<<cudaGetErrorString(status[i])<<endl;
+		}
+
+		status[i] = cudaMemcpyAsync(d_Bond[i], Bond[i], 3*lattice_Size[i]*sizeof(int), cudaMemcpyHostToDevice, stream[i]);
+
+		if (status[i] != CUDA_SUCCESS){
+			cout<<"Error copying "<<i<<"th bonds array: "<<cudaGetErrorString(status[i])<<endl;
+		}
 	
-	cudaMalloc(&d_H_rows, raw_size*sizeof(int));
-	cudaMalloc(&d_H_cols, raw_size*sizeof(int));
-	cudaMalloc(&d_H_vals, raw_size*sizeof(float));
+		bpg[i].x = (4*lattice_Size[i]*d_H[i].sectordim)/1024 + 1;
+		tpb[i].x = 1024;
+
+		cudaStreamSynchronize();
+		
+		FillDiagonals<<<d_H[i].sectordim/1024 + 1, tpb, 0, stream[i]>>>(d_basis[i], d_H[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], JJ[i]);
+		
+		cudaStreamSynchronize();
+
+		FillSparse<<<bpg, tpb, 0, stream[i]>>>(d_basis_Position[i], d_basis[i], d_h[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], JJ[i], d_num_Elem);
+
+	}
 
 	/*hamstruct* d_H_sort;
 	status2 = cudaMalloc(&d_H_sort, *vdim*stride*sizeof(hamstruct));
@@ -245,99 +269,88 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 		std::cout<<cudaGetErrorString( status1 )<<std::endl;
 		return 1;
 	}*/
-	
-	FillDiagonals<<<*vdim/1024 + 1, tpb>>>(d_basis, *vdim, d_H_rows, d_H_cols, d_H_vals, d_Bond, lattice_Size, JJ);
+
 
 	cudaThreadSynchronize();
 
-	if( cudaPeekAtLastError() != 0 ){
-		std::cout<<"Error in FillDiagonals! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
-		return 1;
-	}
+	//int* num_ptr;
+	//cudaGetSymbolAddress((void**)&num_ptr, (const char*)"d_num_Elem");
 
-	FillSparse<<<bpg, tpb>>>(d_basis_Position, d_basis, *vdim, d_H_rows, d_H_cols, d_H_vals, d_Bond, lattice_Size, JJ);
+	cudaMemcpy(num_Elem, d_num_Elem, how_many*sizeof(int), cudaMemcpyDeviceToHost);
+	//std::cout<<num_Elem<<std::endl;
+	for(int i = -; i < how_many, i++){      
+          status[i] = cudaFree(d_basis[i]);
+          if ( status[i] != CUDA_SUCCESS){
+            cout<<"Error freeing "<<i<<"th basis array: "<<cudaGetErrorString(status[i])<<endl;
+          }
+	  status[i] = cudaFree(d_basis_Position[i]);
+	  if (status[i] != CUDA_SUCCESS){
+            cout<<"Error freeing "<<i<<"th basis_Position array: "<<cudaGetErrorString(status[i])<<endl;
+          }
+          status[i] = cudaFree(d_Bond[i]); // we don't need these later on
+          if (status[i] != CUDA_SUCCESS){
 
-	cudaThreadSynchronize();
-
-	if( cudaPeekAtLastError() != 0 ){
-		std::cout<<"Error in FillSparse! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
-		return 1;
-	}
-
-	int* num_ptr;
-	cudaGetSymbolAddress((void**)&num_ptr, (const char*)"d_num_Elem");
-
-	cudaMemcpy(&num_Elem, num_ptr, sizeof(int), cudaMemcpyDeviceToHost);
-	std::cout<<num_Elem<<std::endl;
-	status1 = cudaFree(d_basis);
-	status2 = cudaFree(d_basis_Position);
-	status3 = cudaFree(d_Bond); // we don't need these later on
-
-	if ( (status1 != CUDA_SUCCESS) ||
-			 (status2 != CUDA_SUCCESS) ||
-			 (status3 != CUDA_SUCCESS) ){
-		std::cout<<"Freeing bond and basis information failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
-		return 1;
-	}
-
+            cout<<"Error freeing "<<i<<"th Bond array: "<<cudaGetErrorString(status[i])<<endl;
+          }
+        }
 	//----------------Sorting Hamiltonian--------------------------//
 
 	sortEngine_t engine;
 	sortStatus_t sortstatus = sortCreateEngine("sort/sort/src/cubin64/", &engine);
 
 	MgpuSortData sortdata;
-
 	
-	sortdata.AttachKey((uint*)d_H_rows);
-	sortdata.AttachVal(0, (uint*)d_H_cols);
-	sortdata.AttachVal(1, (uint*)d_H_vals);
+        int sortnumber;
+        float** vals_buffer = (float**)malloc(how_many*sizeof(float*));
 
-	int sortnumber = ((raw_size/2048) + 1)*2048;
+        for(int i = 0; i<how_many, i++){
 
-	sortdata.Alloc(engine, sortnumber, 2);
+	  sortdata.AttachKey((uint*)d_H[i].rows);
+	  sortdata.AttachVal(0, (uint*)d_H[i].cols);
+	  sortdata.AttachVal(1, (uint*)d_H[i].vals);
 
-	sortdata.firstBit = 0;
-	sortdata.endBit = 8*sizeof(dim);
+	  sortnumber = ((raw_size[i]/2048) + 1)*2048;
 
-	sortArray(engine, &sortdata);
+	  sortdata.Alloc(engine, sortnumber, 2);
 
-	/*thrust::device_ptr<int> sort_key_ptr(d_H_rows);
-	thrust::device_ptr<int> sort_val_ptr(d_H_cols);
+	  sortdata.firstBit = 0;
+	  sortdata.endBit = 8*sizeof(d_H[i].fulldim);
 
-	thrust::sort_by_key(sort_key_ptr, sort_key_ptr + *vdim*stride, sort_val_ptr);*/
+	  sortArray(engine, &sortdata);
+
+	  /*thrust::device_ptr<int> sort_key_ptr(d_H_rows);
+	  thrust::device_ptr<int> sort_val_ptr(d_H_cols);
+
+	  thrust::sort_by_key(sort_key_ptr, sort_key_ptr + *vdim*stride, sort_val_ptr);*/
         
-	//--------------------------------------------------------------
+          status[i] = cudaMalloc(&hamil_lancz[i].vals, num_Elem[i]*sizeof(cuDoubleComplex));
+          if (status[i] != CUDA_SUCCESS){
+            cout<<"Error allocating "<<i<<"th lancz values array: "<<cudaGetErrorString(status[i])<<endl;
+          }
+	  status[i] = cudaMalloc(&hamil_lancz[i].rows, num_Elem[i]*sizeof(int));
+          if (status[i] != CUDA_SUCCESS){
+            cout<<"Error allocating "<<i<<"th lancz rows array: "<<cudaGetErrorString(status[i])<<endl;
+          }
+	  status[i] = cudaMalloc(&hamil_lancz[i].cols, num_Elem[i]*sizeof(int));
+          if (status[i] != CUDA_SUCCESS){
+            cout<<"Error allocating "<<i<<"th lancz cols array: "<<cudaGetErrorString(status[i]);
+          }
 
-	if (cudaPeekAtLastError() != 0){
-		std::cout<<"Error in sorting! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
-		return 1;
-	}
+          cudaMemcpy(hamil_lancz.rows, (int*)sortdata.keys[0], num_Elem[i]*sizeof(int), cudaMemcpyDeviceToDevice);
+	  cudaMemcpy(hamil_lancz.cols, (int*)sortdata.values1[0], num_Elem[i]*sizeof(int), cudaMemcpyDeviceToDevice);
+          cudaMalloc(&vals_buffer[i], num_Elem[i]*sizeof(float));
+          cudaMemcpy(vals_buffer[i], (float*)sortdata.values2[0], num_Elem[i]*sizeof(float), cudaMemcpyDeviceToDevice);
+	  FullToCOO<<<num_Elem[i]/1024 + 1, 1024>>>(num_Elem[i], vals_buffer[i], hamil_lancz[i].vals, d_H[i].sectordim); // csr and description initializations happen somewhere else
 
-	status1 = cudaMalloc(&hamil_Values, num_Elem*sizeof(cuDoubleComplex));
-	status2 = cudaMalloc(&hamil_PosRow, num_Elem*sizeof(int));
-	status3 = cudaMalloc(&hamil_PosCol, num_Elem*sizeof(int));
+	  cudaFree(d_H[i].rows);
+	  cudaFree(d_H[i].cols);
+	  cudaFree(d_H[i].vals);
 
-	if ( (status1 != CUDA_SUCCESS) ||
-			 (status2 != CUDA_SUCCESS) ||
-			 (status3 != CUDA_SUCCESS) ){
-		std::cout<<"Memory allocation for COO representation failed! Error: "<<cudaGetErrorString( cudaPeekAtLastError() )<<std::endl;
-		return 1;
-	}
+	  /*cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex));
+	  int* h_rows = (int*)malloc(num_Elem*sizeof(int));
+	  int* h_cols = (int*)malloc(num_Elem*sizeof(int));
 
-	cudaMemcpy(hamil_PosRow, (int*)sortdata.keys[0], num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
-	cudaMemcpy(hamil_PosCol, (int*)sortdata.values1[0], num_Elem*sizeof(int), cudaMemcpyDeviceToDevice);
-
-	FullToCOO<<<num_Elem/1024 + 1, 1024>>>(num_Elem, (float*)sortdata.values2[0], hamil_Values, *vdim); // csr and description initializations happen somewhere else
-
-	cudaFree(d_H_rows);
-	cudaFree(d_H_cols);
-	cudaFree(d_H_vals);
-
-	cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem*sizeof(cuDoubleComplex));
-	int* h_rows = (int*)malloc(num_Elem*sizeof(int));
-	int* h_cols = (int*)malloc(num_Elem*sizeof(int));
-
-	/*cudaMemcpy(h_vals, hamil_Values, num_Elem*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+	  cudaMemcpy(h_vals, hamil_Values, num_Elem*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_rows, hamil_PosRow, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
 	cudaMemcpy(h_cols, hamil_PosCol, num_Elem*sizeof(int), cudaMemcpyDeviceToHost);
 
@@ -352,7 +365,7 @@ __host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, 
 
 	sortReleaseEngine(engine);
 
-	return num_Elem;
+	return 1;
 }
 
 __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, int lattice_Size, float JJ){
