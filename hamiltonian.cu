@@ -8,8 +8,13 @@ int main(){
 
 	int** Bond;
 
-	int how_many = 3;
+	int how_many = 30;
   	Bond = (int**)malloc(how_many*sizeof(int*));
+	d_hamiltonian* hamil_lancz = (d_hamiltonian*)malloc(how_many*sizeof(d_hamiltonian));
+	int* nsite = (int*)malloc(how_many*sizeof(int));
+	int* Sz = (int*)malloc(how_many*sizeof(int));
+	float* JJ = (float*)malloc(how_many*sizeof(float));	
+	int* model_type = (int*)malloc(how_many*sizeof(int));
 
 	for(int i = 0; i < how_many; i++){
 		Bond[i] = (int*)malloc(16*3*sizeof(int));
@@ -23,34 +28,15 @@ int main(){
   		Bond[i][35] = 7; Bond[i][36] = 8; Bond[i][37] = 9; Bond[i][38] = 10; Bond[i][39] = 11;
   		Bond[i][40] = 12; Bond[i][41] = 13; Bond[i][42] = 14; Bond[i][43] = 15; Bond[i][44] = 0;
   		Bond[i][45] = 1; Bond[i][46] = 2; Bond[i][47] = 3;
+
+		nsite[i] = 16;
+		Sz[i] = 0;
+		JJ[i] = 1.f;
+		model_type[i] = 0;
 	}
 	
 
-	d_hamiltonian* hamil_lancz = (d_hamiltonian*)malloc(how_many*sizeof(d_hamiltonian));
-
-
-  	int* nsite = (int*)malloc(how_many*sizeof(int));
-	nsite[0] = 16;
-	nsite[1] = 16;
-	nsite[2] = 16;
-
   	int dim;
-
-  	int* Sz = (int*)malloc(how_many*sizeof(int));
-	Sz[0] = 0;
-	Sz[1] = 0;
-	Sz[2] = 0;
-
-  	float* JJ = (float*)malloc(how_many*sizeof(float));
-	JJ[0] = 1.f;
-	JJ[1] = 1.f;
-	JJ[2] = 1.f;
-
-	int* model_type = (int*)malloc(how_many*sizeof(int));
-	model_type[0] = 0;
-	model_type[1] = 0;
-	model_type[2] = 0;
-
 
 	int* num_Elem = ConstructSparseMatrix(how_many, model_type, nsite, Bond, hamil_lancz, JJ, Sz );
 
@@ -350,22 +336,24 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
 	
 	float** vals_buffer = (float**)malloc(how_many*sizeof(float*));
+	int sortnumber[how_many];
 
 	for(int i = 0; i<how_many; i++){
+		
 		sortEngine_t engine;
 		sortStatus_t sortstatus = sortCreateEngine("sort/sort/src/cubin64/", &engine);
 
 		MgpuSortData sortdata;
 	
-		int sortnumber;
+		sortnumber[i];
 
 		sortdata.AttachKey((uint*)d_H[i].rows);
 		sortdata.AttachVal(0, (uint*)d_H[i].cols);
 		sortdata.AttachVal(1, (uint*)d_H[i].vals);
 
-		sortnumber = ((raw_size[i]/2048) + 1)*2048;
+		sortnumber[i] = ((raw_size[i]/2048) + 1)*2048;
 
-		sortdata.Alloc(engine, sortnumber, 2);
+		sortdata.Alloc(engine, sortnumber[i], 2);
 
 		sortdata.firstBit = 0;
 		sortdata.endBit = 8*(sizeof(d_H[i].fulldim));
@@ -431,7 +419,7 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 		}
 
 		
-		/*if(i == 0){
+		/*if(i == 5){
 			ofstream fout;
 			fout.open("hamiltonian.log");
 				for(int j = 0; j < num_Elem[i]; j++){
