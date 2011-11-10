@@ -8,7 +8,7 @@ int main(){
 
 	int** Bond;
 
-	int how_many = 1;
+	int how_many = 200;
   	Bond = (int**)malloc(how_many*sizeof(int*));
 	d_hamiltonian* hamil_lancz = (d_hamiltonian*)malloc(how_many*sizeof(d_hamiltonian));
 	int* nsite = (int*)malloc(how_many*sizeof(int));
@@ -175,7 +175,7 @@ hamil_PosCol - a pointer to a device array containing the locations of each valu
 __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* lattice_Size, int** Bond, d_hamiltonian*& hamil_lancz, float* JJ, int* Sz ){
 
 
-	//cudaSetDevice(1);
+	cudaSetDevice(1);
 
 	int* num_Elem = (int*)malloc(how_many*sizeof(int));
 	f_hamiltonian* d_H = (f_hamiltonian*)malloc(how_many*sizeof(f_hamiltonian));
@@ -284,17 +284,17 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
                 tpb[i].x = lattice_Size[i];
                 do{
                   tpb[i].x *= 2;
-                }while(tpb[i].x < 256);
+                }while(tpb[i].x < 512);
 
 		bpg[i].x = (bool)(4*lattice_Size[i]*d_H[i].sectordim)%tpb[i].x ? (((4*lattice_Size[i]*d_H[i].sectordim)/tpb[i].x) + 1) : (4*lattice_Size[i]*d_H[i].sectordim)/tpb[i].x;
-                cout<<bpg[i].x<<" "<<tpb[i].x<<" "<<d_H[i].sectordim<<endl;
-		status[i] = cudaStreamSynchronize(stream[i]);
+		
+                status[i] = cudaStreamSynchronize(stream[i]);
 
 		if (status[i] != CUDA_SUCCESS){
 			cout<<"Error synchronizing "<<i<<"th stream: "<<cudaGetErrorString(status[i])<<endl;
 		}
 
-		FillDiagonals<<<d_H[i].sectordim/512 + 1, 512, 0, stream[i]>>>(d_basis[i], d_H[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], JJ[i]);
+		FillDiagonals<<<d_H[i].sectordim/512 + 1, 512, 1, stream[i]>>>(d_basis[i], d_H[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], JJ[i]);
 
 		status[i] = cudaStreamSynchronize(stream[i]);
 
@@ -308,7 +308,7 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 		}
 
 
-		FillSparse<<<bpg[i].x, tpb[i].x, 0, stream[i]>>>(d_basis_Position[i], d_basis[i], d_H[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], JJ[i], d_num_Elem, i);
+		FillSparse<<<bpg[i].x, tpb[i].x, 1, stream[i]>>>(d_basis_Position[i], d_basis[i], d_H[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], JJ[i], d_num_Elem, i);
 
 		status[i] = cudaPeekAtLastError();
 		if (status[i] != CUDA_SUCCESS){
@@ -414,7 +414,7 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 		hamil_lancz[i].fulldim = d_H[i].fulldim;
 		hamil_lancz[i].sectordim = d_H[i].sectordim;
 
-		cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem[i]*sizeof(cuDoubleComplex));
+		/*cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem[i]*sizeof(cuDoubleComplex));
 	  	int* h_rows = (int*)malloc(num_Elem[i]*sizeof(int));
 	  	int* h_cols = (int*)malloc(num_Elem[i]*sizeof(int));
 
@@ -446,7 +446,7 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
 				}
 			fout.close();
-		}
+		}*/
 
 	}
 
@@ -502,7 +502,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 	#if __CUDA_ARCH__ < 200
 		const int array_size = 512;
 	#elif __CUDA_ARCH__ >= 200
-		const int array_size = 512;
+		const int array_size = 1024;
 	#else
        		#error Could not detect GPU architecture
 	#endif
