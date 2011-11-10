@@ -17,7 +17,7 @@ int main(){
 	int* model_type = (int*)malloc(how_many*sizeof(int));
 
 	for(int i = 0; i < how_many; i++){
-		/*Bond[i] = (int*)malloc(16*3*sizeof(int));
+		Bond[i] = (int*)malloc(16*3*sizeof(int));
   		Bond[i][0] = 0; Bond[i][1] = 1; Bond[i][2] = 2; Bond[i][3] = 3; Bond[i][4] = 4;
   		Bond[i][5] = 5; Bond[i][6] = 6; Bond[i][7] = 7; Bond[i][8] = 8; Bond[i][9] = 9;
   		Bond[i][10] = 10; Bond[i][11] = 11; Bond[i][12] = 12; Bond[i][13] = 13; Bond[i][14] = 14;
@@ -27,10 +27,10 @@ int main(){
   		Bond[i][30] = 15; Bond[i][31] = 12; Bond[i][32] = 4; Bond[i][33] = 5; Bond[i][34] = 6;
   		Bond[i][35] = 7; Bond[i][36] = 8; Bond[i][37] = 9; Bond[i][38] = 10; Bond[i][39] = 11;
   		Bond[i][40] = 12; Bond[i][41] = 13; Bond[i][42] = 14; Bond[i][43] = 15; Bond[i][44] = 0;
-  		Bond[i][45] = 1; Bond[i][46] = 2; Bond[i][47] = 3;*/
+  		Bond[i][45] = 1; Bond[i][46] = 2; Bond[i][47] = 3;
 		//going to outsource this soon
 
-		Bond[i] = (int*)malloc(12*3*sizeof(int));
+		/*Bond[i] = (int*)malloc(12*3*sizeof(int));
 
   		for(int j = 0; j < 12; j++){
     			Bond[i][j] = j;
@@ -41,9 +41,8 @@ int main(){
   		Bond[i][20] = 9; Bond[i][21] = 0; Bond[i][22] = 11; Bond[i][23] = 1;
   		Bond[i][24] = 3; Bond[i][25] = 6; Bond[i][26] = 7; Bond[i][27] = 8;
   		Bond[i][28] = 9; Bond[i][29] = 4; Bond[i][30] = 10; Bond[i][31] = 11;
-  		Bond[i][32] = 1; Bond[i][33] = 2; Bond[i][34] = 0; Bond[i][35] = 5;
-
-		nsite[i] = 12;
+  		Bond[i][32] = 1; Bond[i][33] = 2; Bond[i][34] = 0; Bond[i][35] = 5;*/
+  		nsite[i] = 16;
 		Sz[i] = 0;
 		JJ[i] = 1.f;
 		model_type[i] = 0;
@@ -83,12 +82,12 @@ unsigned int temp = 0;
 		for (int sp =0; sp<lattice_Size; sp++){
 			temp += (i1>>sp)&1;
 		} //unpack bra
-		//if (temp==(lattice_Size/2+Sz) ){
+		if (temp==(lattice_Size/2+Sz) ){
 			basis[realdim] = i1;
 			basis_Position[i1] = realdim;
 			realdim++;
 			//cout<<basis[realdim]<<" "<<basis_Position[i1]<<endl;
-		//}
+		}
 }
 
 return realdim;
@@ -176,8 +175,8 @@ hamil_PosCol - a pointer to a device array containing the locations of each valu
 __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* lattice_Size, int** Bond, d_hamiltonian*& hamil_lancz, float* JJ, int* Sz ){
 
 
-	//int device_count;
-	//cudaGetDeviceCount(&device_count);
+	int device_count;
+	cudaGetDeviceCount(&device_count);
 
 	//cudaSetDevice(1);
 
@@ -264,20 +263,18 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 				cout<<"Error copying "<<i<<"th basis: "<<cudaGetErrorString(status[i])<<endl;
 			}
 
-			//padded_dim[i] = (bool)(d_H[i].sectordim % 1024) ? (d_H[i].sectordim/1024 + 1)*1024 : d_H[i].sectordim;
-			//raw_size[i] = (padded_dim[i] + 4*lattice_Size[i]*d_H[i].sectordim);
-			raw_size[i] = (4*lattice_Size[i] + 1)*d_H[i].sectordim;
-			int realsize = (bool)(raw_size[i]%2048) ? ((raw_size[i]/2048) + 1)*2048 : raw_size[i];
+			padded_dim[i] = (bool)(d_H[i].sectordim%512) ? (d_H[i].sectordim/512 + 1)*512 : d_H[i].sectordim;
+			raw_size[i] = (d_H[i].sectordim%2048) ? ( ( (1 + 4*lattice_Size[i]) * d_H[i].sectordim)/2048 + 1)*2048 : (1 + 4*lattice_Size[i])*d_H[i].sectordim;
 
-			status[i] = cudaMalloc(&d_H[i].rows, realsize*sizeof(int));
+			status[i] = cudaMalloc(&d_H[i].rows, raw_size[i]*sizeof(int));
 			if (status[i] != CUDA_SUCCESS){
 				cout<<"Error creating "<<i<<"th rows array: "<<cudaGetErrorString(status[i])<<endl;
 			}
-			status[i] = cudaMalloc(&d_H[i].cols, realsize*sizeof(int));
+			status[i] = cudaMalloc(&d_H[i].cols, raw_size[i]*sizeof(int));
 			if (status[i] != CUDA_SUCCESS){
 				cout<<"Error creating "<<i<<"th cols array: "<<cudaGetErrorString(status[i])<<endl;
 			}
-			status[i] = cudaMalloc(&d_H[i].vals, realsize*sizeof(float));
+			status[i] = cudaMalloc(&d_H[i].vals, raw_size[i]*sizeof(float));
 			if (status[i] != CUDA_SUCCESS){
 				cout<<"Error creating "<<i<<"th values array: "<<cudaGetErrorString(status[i])<<endl;
 			}
@@ -293,7 +290,7 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 				cout<<"Error copying "<<i<<"th bonds array: "<<cudaGetErrorString(status[i])<<endl;
 			}
 	
-			bpg[i].x = (bool)(d_H[i].sectordim%512) ? (4*lattice_Size[i]*d_H[i].sectordim)/512 + 1 : (4*lattice_Size[i]*d_H[i].sectordim)/512;
+			bpg[i].x = (d_H[i].sectordim%512) ? (4*lattice_Size[i]*d_H[i].sectordim)/512 + 1 : 4*lattice_Size[i]*d_H[i].sectordim/512;
 			tpb[i].x = 512;
 
 			status[i] = cudaStreamSynchronize(stream[i]);
@@ -301,9 +298,6 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 			if (status[i] != CUDA_SUCCESS){
 				cout<<"Error synchronizing "<<i<<"th stream: "<<cudaGetErrorString(status[i])<<endl;
 			}
-		}
-
-		for( int i = 0; i < how_many; i++){
 
 			FillDiagonals<<<d_H[i].sectordim/512 + 1, 512, 0, stream[i]>>>(d_basis[i], d_H[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], JJ[i]);
 		
@@ -323,7 +317,7 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
 			status[i] = cudaPeekAtLastError();
 			if (status[i] != CUDA_SUCCESS){
-				cout<<"Error in "<<i<<"th stream: "<<cudaGetErrorString(status[i])<<endl;
+				cout<<"Error at "<<i<<"th stream: "<<cudaGetErrorString(status[i])<<endl;
 			}
 
 		}
@@ -345,10 +339,9 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 	//cudaGetSymbolAddress((void**)&num_ptr, (const char*)"d_num_Elem");
 
 	cudaMemcpy(num_Elem, d_num_Elem, how_many*sizeof(int), cudaMemcpyDeviceToHost);
-
 	//std::cout<<num_Elem<<std::endl;
 	for(int i = 0; i < how_many; i++){
-    
+      
           status[i] = cudaFree(d_basis[i]);
           if ( status[i] != CUDA_SUCCESS){
             cout<<"Error freeing "<<i<<"th basis array: "<<cudaGetErrorString(status[i])<<endl;
@@ -376,6 +369,8 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
 		MgpuSortData sortdata;
 	
+		sortnumber[i];
+
 		sortdata.AttachKey((uint*)d_H[i].rows);
 		sortdata.AttachVal(0, (uint*)d_H[i].cols);
 		sortdata.AttachVal(1, (uint*)d_H[i].vals);
@@ -429,7 +424,7 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 	  	int* h_rows = (int*)malloc(num_Elem[i]*sizeof(int));
 	  	int* h_cols = (int*)malloc(num_Elem[i]*sizeof(int));
 
-		status[i] = cudaMemcpyAsync(h_vals, hamil_lancz[i].vals, num_Elem[i]*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+		status[i] = cudaMemcpy(h_vals, hamil_lancz[i].vals, num_Elem[i]*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
 		
 		if (status[i] != CUDA_SUCCESS){
 			cout<<"Error copying to h_vals: "<<cudaGetErrorString(status[i])<<endl;
@@ -458,6 +453,7 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 				}
 			fout.close();
 		}
+		cout<<num_Elem[i]<<endl;
 	
 	}
 
@@ -472,7 +468,7 @@ __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, f
 
 	unsigned int tempi;
 
-	__shared__ int3 tempbond[12];
+	__shared__ int3 tempbond[16];
 	//int3 tempbond[16];
 
 	if (row < dim){
@@ -488,8 +484,7 @@ __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, f
 	}
 
 	else {
-		H_rows[row] = 2*dim;
-		H_cols[row] = 2*dim;
+		H_rows[row] = dim;
 	}
 
 }
@@ -515,11 +510,12 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 	#elif __CUDA_ARCH__ >= 200
 		const int array_size = 512;
 	#else
-       		#error Couldn't detect architecture
+       		#error your mom
 	#endif
 
-	__shared__ int3 tempbond[12];
+	__shared__ int3 tempbond[16];
 	int count;
+	
 	__shared__ int temppos[array_size];
 	__shared__ float tempval[array_size];
 	//__shared__ uint tempi[array_size];
@@ -532,7 +528,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 	count = 0;
 	int rowtemp;
 
-	int start = (bool)(dim%array_size) ? (dim/array_size + 1)*array_size : dim;
+	int start = (bool)(dim%array_size) ? (dim/array_size + 1)*array_size : dim/array_size;
 
 	int s;
 	//int si, sj;//sk,sl; //spin operators
@@ -541,31 +537,20 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 
 	tempi = d_basis[ii];
 
-	//temppos[threadIdx.x] = 2*dim;
-
 	__syncthreads();
 
 	bool compare;
 
 	if( ii < dim ){
+		
 		if (T0 < 2*lattice_Size){
 			//Putting bond info in shared memory
 			(tempbond[site]).x = d_Bond[site];
 			(tempbond[site]).y = d_Bond[lattice_Size + site];
 			(tempbond[site]).z = d_Bond[2*lattice_Size + site];
 
-			//__syncthreads();
-			//Diagonal Part
+			__syncthreads();
 
-			/*temppos[threadIdx.x] = d_basis_Position[tempi[threadIdx.x]];
-			tempval[threadIdx.x] = HDiagPart(tempi[threadIdx.x], lattice_Size, tempbond, JJ);
-
-			H_sort[ idx(ii, 0, stride) ].value = tempval[threadIdx.x];
-			H_sort[ idx(ii, 0, stride) ].colindex = temppos[threadIdx.x];
-			H_sort[ idx(ii, 0, stride) ].rowindex = ii;
-			H_sort[ idx(ii, 0, stride) ].dim = dim;*/
-                
-			//-------------------------------
 			//Horizontal bond ---------------
 			s = (tempbond[site]).x;
 			tempod[threadIdx.x] = tempi;
@@ -577,19 +562,25 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 			//tempod[threadIdx.x] ^= (1<<sj); //toggle bit
 
 			compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
-			temppos[threadIdx.x] = (compare) ? d_basis_Position[tempod[threadIdx.x]] : 2*dim;
+			temppos[threadIdx.x] = (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
 			tempval[threadIdx.x] = HOffBondX(site, tempi, JJ);
 
-			count += (int)compare;
+			
 			//tempcount = (T0/lattice_Size);
-			rowtemp = (bool)(T0/lattice_Size) ? ii : temppos[threadIdx.x];			
-			rowtemp = (compare) ? rowtemp : 2*dim;
+			rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];			
+			rowtemp = (compare) ? rowtemp : dim;
 
 			H_vals[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
-			H_cols[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = (bool)(T0/lattice_Size) ? temppos[threadIdx.x] : ii;
+			H_cols[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
+			
 			H_rows[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = rowtemp;
 
-//Vertical bond -----------------
+			count += (int)compare;
+			atomicAdd(&num_Elem[index], count);
+			count = 0;
+
+
+			//Vertical bond -----------------
 			s = (tempbond[site]).x;
 			tempod[threadIdx.x] = tempi;
 			tempod[threadIdx.x] ^= (1<<s);
@@ -600,22 +591,25 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 			//tempod[threadIdx.x] ^= (1<<sj); //toggle bit
                  
 			compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
-			temppos[threadIdx.x] =  (compare) ? d_basis_Position[tempod[threadIdx.x]] : 2*dim;
+			temppos[threadIdx.x] =  (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
 			tempval[threadIdx.x] = HOffBondY(site,tempi, JJ);
 
-			count += (int)compare;
-			//tempcount = (T0/lattice_Size);
-			rowtemp = (bool)(T0/lattice_Size) ? ii : temppos[threadIdx.x];			
-			rowtemp = (compare) ? rowtemp : 2*dim;
+			
+			rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];			
+			rowtemp = (compare) ? rowtemp : dim;
 
 			H_vals[ idx(ii, 4*site + 2 + (T0/lattice_Size) + start, stride) ] =  tempval[threadIdx.x]; // (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
-			H_cols[ idx(ii, 4*site + 2 + (T0/lattice_Size) + start, stride) ] = (bool)(T0/lattice_Size) ? temppos[threadIdx.x] : ii;
+			H_cols[ idx(ii, 4*site + 2 + (T0/lattice_Size) + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
+
 			H_rows[ idx(ii, 4*site + 2 + (T0/lattice_Size) + start, stride) ] = rowtemp;
 			
-			//__syncthreads();
+			count += (int)compare;
+
+			__syncthreads();
+			
 
 			atomicAdd(&num_Elem[index], count);
-		}
+}
 }//end of ii
 }//end of FillSparse
 
