@@ -1,5 +1,22 @@
 #include"lattice.h"
 
+void Fill_Bonds_12A(int* Bond){
+
+  Bond = (int*)malloc(12*3*sizeof(int));
+
+  for(int i = 0; i < 12; i++){
+    Bond[i] = i;
+  }
+
+  Bond[12] = 5; Bond[13] = 2; Bond[14] = 3; Bond[15] = 4;
+  Bond[16] = 10; Bond[17] = 6; Bond[18] = 7; Bond[19] = 8;
+  Bond[20] = 9; Bond[21] = 0; Bond[22] = 11; Bond[23] = 1;
+  Bond[24] = 3; Bond[25] = 6; Bond[26] = 7; Bond[27] = 8;
+  Bond[28] = 9; Bond[29] = 4; Bond[30] = 10; Bond[31] = 11;
+  Bond[32] = 1; Bond[33] = 2; Bond[34] = 0; Bond[35] = 5;
+
+}
+
 void Fill_Bonds_16B(int* Bond){
 
   Bond = (int*)malloc(3*16*sizeof(int));
@@ -17,7 +34,7 @@ void Fill_Bonds_16B(int* Bond){
 
 }
 
-void Fill_Bonds_18A(int* Bond){
+/*void Fill_Bonds_18A(int* Bond){
 
   Bond = (int*)malloc(3*18*sizeof(int));
 
@@ -28,7 +45,7 @@ void Fill_Bonds_18A(int* Bond){
   Bond[18] = 3; Bond[19] = 4; Bond[20] = 5;
   Bond[21] = 
 
-}
+}*/
 
 void Fill_Bonds_22A(int* Bond){
   Bond = (int*)malloc(3*22*sizeof(int));
