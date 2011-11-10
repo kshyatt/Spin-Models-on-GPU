@@ -17,7 +17,7 @@ int main(){
 	int* model_type = (int*)malloc(how_many*sizeof(int));
 
 	for(int i = 0; i < how_many; i++){
-		Bond[i] = (int*)malloc(16*3*sizeof(int));
+		/*Bond[i] = (int*)malloc(16*3*sizeof(int));
   		Bond[i][0] = 0; Bond[i][1] = 1; Bond[i][2] = 2; Bond[i][3] = 3; Bond[i][4] = 4;
   		Bond[i][5] = 5; Bond[i][6] = 6; Bond[i][7] = 7; Bond[i][8] = 8; Bond[i][9] = 9;
   		Bond[i][10] = 10; Bond[i][11] = 11; Bond[i][12] = 12; Bond[i][13] = 13; Bond[i][14] = 14;
@@ -29,8 +29,8 @@ int main(){
   		Bond[i][40] = 12; Bond[i][41] = 13; Bond[i][42] = 14; Bond[i][43] = 15; Bond[i][44] = 0;
   		Bond[i][45] = 1; Bond[i][46] = 2; Bond[i][47] = 3;
 		//going to outsource this soon
-
-		/*Bond[i] = (int*)malloc(12*3*sizeof(int));
+                */
+		Bond[i] = (int*)malloc(12*3*sizeof(int));
 
   		for(int j = 0; j < 12; j++){
     			Bond[i][j] = j;
@@ -41,9 +41,9 @@ int main(){
   		Bond[i][20] = 9; Bond[i][21] = 0; Bond[i][22] = 11; Bond[i][23] = 1;
   		Bond[i][24] = 3; Bond[i][25] = 6; Bond[i][26] = 7; Bond[i][27] = 8;
   		Bond[i][28] = 9; Bond[i][29] = 4; Bond[i][30] = 10; Bond[i][31] = 11;
-  		Bond[i][32] = 1; Bond[i][33] = 2; Bond[i][34] = 0; Bond[i][35] = 5;*/
+  		Bond[i][32] = 1; Bond[i][33] = 2; Bond[i][34] = 0; Bond[i][35] = 5;
 
-		nsite[i] = 16;
+		nsite[i] = 12;
 		Sz[i] = 0;
 		JJ[i] = 1.f;
 		model_type[i] = 0;
@@ -83,12 +83,12 @@ unsigned int temp = 0;
 		for (int sp =0; sp<lattice_Size; sp++){
 			temp += (i1>>sp)&1;
 		} //unpack bra
-		if (temp==(lattice_Size/2+Sz) ){
+		//if (temp==(lattice_Size/2+Sz) ){
 			basis[realdim] = i1;
 			basis_Position[i1] = realdim;
 			realdim++;
 			//cout<<basis[realdim]<<" "<<basis_Position[i1]<<endl;
-		}
+		//}
 }
 
 return realdim;
@@ -253,8 +253,9 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 			cout<<"Error copying "<<i<<"th basis: "<<cudaGetErrorString(status[i])<<endl;
 		}
 
-		padded_dim[i] = (d_H[i].sectordim/1024 + 1)*1024;
-		raw_size[i] = (padded_dim[i] + 4*lattice_Size[i]*d_H[i].sectordim);
+		padded_dim[i] = (bool)(d_H[i].sectordim%512) ? (d_H[i].sectordim/512 + 1)*512 : d_H[i].sectordim;
+		raw_size[i] = padded_dim[i] + (4*lattice_Size[i]*d_H[i].sectordim);
+		raw_size[i] = (bool)(raw_size[i]%2048) ? (raw_size[i]/2048 + 1)*2048 : raw_size[i];
 
 		status[i] = cudaMalloc(&d_H[i].rows, raw_size[i]*sizeof(int));
 		if (status[i] != CUDA_SUCCESS){
@@ -280,9 +281,13 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 			cout<<"Error copying "<<i<<"th bonds array: "<<cudaGetErrorString(status[i])<<endl;
 		}
 
-		bpg[i].x = (4*lattice_Size[i]*d_H[i].sectordim)/1024 + 1;
-		tpb[i].x = 1024;
+                tpb[i].x = lattice_Size[i];
+                do{
+                  tpb[i].x *= 2;
+                }while(tpb[i].x < 256);
 
+		bpg[i].x = (bool)(4*lattice_Size[i]*d_H[i].sectordim)%tpb[i].x ? (((4*lattice_Size[i]*d_H[i].sectordim)/tpb[i].x) + 1) : (4*lattice_Size[i]*d_H[i].sectordim)/tpb[i].x;
+                cout<<bpg[i].x<<" "<<tpb[i].x<<" "<<d_H[i].sectordim<<endl;
 		status[i] = cudaStreamSynchronize(stream[i]);
 
 		if (status[i] != CUDA_SUCCESS){
@@ -364,12 +369,12 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 		sortdata.AttachVal(0, (uint*)d_H[i].cols);
 		sortdata.AttachVal(1, (uint*)d_H[i].vals);
 
-		sortnumber[i] = ((raw_size[i]/2048) + 1)*2048;
+		sortnumber[i] = raw_size[i];
 
 		sortdata.Alloc(engine, sortnumber[i], 2);
 
 		sortdata.firstBit = 0;
-		sortdata.endBit = 8*(sizeof(d_H[i].fulldim));
+		sortdata.endBit = lattice_Size[i] + 2;
 
 		sortArray(engine, &sortdata);
 
@@ -456,7 +461,7 @@ __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, f
 
 	unsigned int tempi;
 
-	__shared__ int3 tempbond[16];
+	__shared__ int3 tempbond[12];
 	//int3 tempbond[16];
 
 	if (row < dim){
@@ -472,7 +477,8 @@ __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, f
 	}
 
 	else {
-		H_rows[row] = dim;
+		H_rows[row] = 2*dim;
+                H_cols[row] = 2*dim;
 	}
 
 }
@@ -496,12 +502,12 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 	#if __CUDA_ARCH__ < 200
 		const int array_size = 512;
 	#elif __CUDA_ARCH__ >= 200
-		const int array_size = 1024;
+		const int array_size = 512;
 	#else
-       		#error your mom
+       		#error Could not detect GPU architecture
 	#endif
 
-	__shared__ int3 tempbond[16];
+	__shared__ int3 tempbond[12];
 	int count;
 	__shared__ int temppos[array_size];
 	__shared__ float tempval[array_size];
@@ -515,7 +521,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 	count = 0;
 	int rowtemp;
 
-	int start = (dim/array_size + 1)*array_size;
+	int start = (bool)(dim%array_size) ? (dim/array_size + 1)*array_size : dim/array_size;
 
 	int s;
 	//int si, sj;//sk,sl; //spin operators
@@ -564,7 +570,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 			count += (int)compare;
 			//tempcount = (T0/lattice_Size);
 			rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];			
-			rowtemp = (compare) ? rowtemp : dim;
+			rowtemp = (compare) ? rowtemp : 2*dim;
 
 			H_vals[ idx(ii, 4*site + (T0/lattice_Size)+ start, stride) ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
 			H_cols[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
@@ -587,7 +593,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 			count += (int)compare;
 			//tempcount = (T0/lattice_Size);
 			rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];			
-			rowtemp = (compare) ? rowtemp : dim;
+			rowtemp = (compare) ? rowtemp : 2*dim;
 
 			H_vals[ idx(ii, 4*site + 2 + (T0/lattice_Size) + start, stride) ] =  tempval[threadIdx.x]; // (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
 			H_cols[ idx(ii, 4*site + 2 + (T0/lattice_Size) + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
