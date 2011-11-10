@@ -17,7 +17,7 @@ int main(){
 	int* model_type = (int*)malloc(how_many*sizeof(int));
 
 	for(int i = 0; i < how_many; i++){
-		Bond[i] = (int*)malloc(16*3*sizeof(int));
+		/*Bond[i] = (int*)malloc(16*3*sizeof(int));
   		Bond[i][0] = 0; Bond[i][1] = 1; Bond[i][2] = 2; Bond[i][3] = 3; Bond[i][4] = 4;
   		Bond[i][5] = 5; Bond[i][6] = 6; Bond[i][7] = 7; Bond[i][8] = 8; Bond[i][9] = 9;
   		Bond[i][10] = 10; Bond[i][11] = 11; Bond[i][12] = 12; Bond[i][13] = 13; Bond[i][14] = 14;
@@ -27,10 +27,10 @@ int main(){
   		Bond[i][30] = 15; Bond[i][31] = 12; Bond[i][32] = 4; Bond[i][33] = 5; Bond[i][34] = 6;
   		Bond[i][35] = 7; Bond[i][36] = 8; Bond[i][37] = 9; Bond[i][38] = 10; Bond[i][39] = 11;
   		Bond[i][40] = 12; Bond[i][41] = 13; Bond[i][42] = 14; Bond[i][43] = 15; Bond[i][44] = 0;
-  		Bond[i][45] = 1; Bond[i][46] = 2; Bond[i][47] = 3;
+  		Bond[i][45] = 1; Bond[i][46] = 2; Bond[i][47] = 3;*/
 		//going to outsource this soon
 
-		/*Bond[i] = (int*)malloc(12*3*sizeof(int));
+		Bond[i] = (int*)malloc(12*3*sizeof(int));
 
   		for(int j = 0; j < 12; j++){
     			Bond[i][j] = j;
@@ -41,9 +41,9 @@ int main(){
   		Bond[i][20] = 9; Bond[i][21] = 0; Bond[i][22] = 11; Bond[i][23] = 1;
   		Bond[i][24] = 3; Bond[i][25] = 6; Bond[i][26] = 7; Bond[i][27] = 8;
   		Bond[i][28] = 9; Bond[i][29] = 4; Bond[i][30] = 10; Bond[i][31] = 11;
-  		Bond[i][32] = 1; Bond[i][33] = 2; Bond[i][34] = 0; Bond[i][35] = 5;*/
+  		Bond[i][32] = 1; Bond[i][33] = 2; Bond[i][34] = 0; Bond[i][35] = 5;
 
-		nsite[i] = 16;
+		nsite[i] = 12;
 		Sz[i] = 0;
 		JJ[i] = 1.f;
 		model_type[i] = 0;
@@ -472,7 +472,7 @@ __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, f
 
 	unsigned int tempi;
 
-	__shared__ int3 tempbond[16];
+	__shared__ int3 tempbond[12];
 	//int3 tempbond[16];
 
 	if (row < dim){
@@ -518,7 +518,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
        		#error Couldn't detect architecture
 	#endif
 
-	__shared__ int3 tempbond[16];
+	__shared__ int3 tempbond[12];
 	int count;
 	__shared__ int temppos[array_size];
 	__shared__ float tempval[array_size];
@@ -541,7 +541,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 
 	tempi = d_basis[ii];
 
-	temppos[threadIdx.x] = 2*dim;
+	//temppos[threadIdx.x] = 2*dim;
 
 	__syncthreads();
 
