@@ -6,7 +6,7 @@
 #include"cuda.h"
 #include"cuda_runtime.h"
 #include"cublas_v2.h"
-#include"cusparse.h"
+#include"cusparse_v2.h"
 #include"cuComplex.h"
 #include"thrust/device_vector.h"
 #include"thrust/host_vector.h"

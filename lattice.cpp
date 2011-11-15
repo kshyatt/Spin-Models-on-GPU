@@ -34,18 +34,29 @@ void Fill_Bonds_16B(int* Bond){
 
 }
 
-/*void Fill_Bonds_18A(int* Bond){
+void Fill_Bonds_18A(int* Bond){
 
-  Bond = (int*)malloc(3*18*sizeof(int));
+  
 
   for(int i = 0; i < 18; i++){
     Bond[i] = i;
   }
 
-  Bond[18] = 3; Bond[19] = 4; Bond[20] = 5;
-  Bond[21] = 
+  Bond[18] = 9; Bond[19] = 2; Bond[20] = 3;
+  Bond[21] = 14; Bond[22] = 5; Bond[23] = 6;
+  Bond[24] = 7; Bond[25] = 8; Bond[26] = 17;
+  Bond[27] = 10; Bond[28] = 11; Bond[29] = 12;
+  Bond[30] = 13; Bond[31] = 0; Bond[32] = 15;
+  Bond[33] = 16; Bond[34] = 1; Bond[35] = 4;
 
-}*/
+  Bond[36] = 2; Bond[37] = 5; Bond[38] = 6;
+  Bond[39] = 7; Bond[40] = 9; Bond[41] = 10;
+  Bond[42] = 11; Bond[43] = 12; Bond[44] = 13;
+  Bond[45] = 3; Bond[46] = 14; Bond[47] = 15;
+  Bond[48] = 16; Bond[49] = 1; Bond[50] = 8;
+  Bond[51] = 17; Bond[52] = 4; Bond[53] = 0;
+
+}
 
 void Fill_Bonds_22A(int* Bond){
   Bond = (int*)malloc(3*22*sizeof(int));
@@ -63,7 +74,27 @@ void Fill_Bonds_22A(int* Bond){
   Bond[64] = 3; Bond[65] = 4; 
 }
 
-void Fill_Bonds_22B(int* Bond){
+void Fill_Bonds_20A(int* Bond){
+
+  for(int i = 0; i < 20; i++){
+    Bond[i] = i;
+  }
+
+  Bond[20] = 13; Bond[21] = 2; Bond[22] = 3; Bond[23] = 18;
+  Bond[24] = 5; Bond[25] = 6; Bond[26] = 7; Bond[27] = 8; 
+  Bond[28] = 0; Bond[29] = 10; Bond[30] = 11; Bond[31] = 12;
+  Bond[32] = 13; Bond[33] = 1; Bond[34] = 15; Bond[35] = 16;
+  Bond[36] = 17; Bond[37] = 4; Bond[38] = 19; Bond[39] = 9;
+
+  Bond[40] = 1; Bond[41] = 5; Bond[42] = 6; Bond[43] = 7;
+  Bond[44] = 9; Bond[45] = 10; Bond[46] = 11; Bond[47] = 12;
+  Bond[48] = 13; Bond[49] = 14; Bond[50] = 15; Bond[51] = 16;
+  Bond[52] = 17; Bond[53] = 4; Bond[54] = 2; Bond[55] = 3;
+  Bond[56] = 18; Bond[57] = 19; Bond[58] = 8; Bond[59] = 0;
+  
+} 
+
+/*void Fill_Bonds_22B(int* Bond){
   Bond = (int*)malloc(3*22*sizeof(int));
 
   for(int i = 0; i < 22; i++){
@@ -71,4 +102,4 @@ void Fill_Bonds_22B(int* Bond){
   }
 
   Bond[22] = 15; Bond[23] = 2; Bond[24] = 3; Bond[25] = 20;
-  Bond[26] = 5; Bond[27] = [
+  Bond[26] = 5; Bond[27] = [*/

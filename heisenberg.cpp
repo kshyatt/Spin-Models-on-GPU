@@ -34,7 +34,7 @@ int main(){
   float JJ = 1.;
 
   const int num_Elem = ConstructSparseMatrix( 0, nsite, Bond, hamil_Values, hamil_PosRow, hamil_PosCol, &dim, JJ, Sz );
-  cout<<"ConstructSparseMatrix finished"<<endl;
+  //cout<<"ConstructSparseMatrix finished"<<endl;
   int rtn = num_Elem;
   if (rtn == 1){
 	return 1;
@@ -42,7 +42,7 @@ int main(){
   rtn = 0;
   free(Bond);
 
-  lanczos(num_Elem, hamil_Values, hamil_PosRow, hamil_PosCol, dim, 200, 3, 1e-12);
+  lanczos(num_Elem, hamil_Values, hamil_PosRow, hamil_PosCol, dim, 200, 3, 1e-4);
 
   cudaFree(hamil_Values);
   cudaFree(hamil_PosRow);

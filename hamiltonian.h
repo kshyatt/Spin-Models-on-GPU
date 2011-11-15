@@ -6,6 +6,7 @@
 #include<fstream>
 #include "sort/util/cucpp.h" // MGPU utility classes
 #include "sort/inc/mgpusort.hpp"
+#include "lattice.h"
 //#include"thrust/sort.h"
 //#include"thrust/device_ptr.h"
 //#include"thrust/device_vector.h"

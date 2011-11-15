@@ -83,7 +83,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
-	std::cout<<"Time to initialize libraries: "<<time<<std::endl;
+	//std::cout<<"Time to initialize libraries: "<<time<<std::endl;
 
 	cudaEventRecord(start,0);
   cusparseMatDescr_t H_descr = 0;
@@ -91,7 +91,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
   if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
     std::cout<<"Error creating matrix description: "<<sparsestatus<<std::endl;
   }
-  sparsestatus = cusparseSetMatType(H_descr, CUSPARSE_MATRIX_TYPE_HERMITIAN);
+  sparsestatus = cusparseSetMatType(H_descr, CUSPARSE_MATRIX_TYPE_GENERAL);
   if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
     std::cout<<"Error setting matrix type: "<<sparsestatus<<std::endl;
   }
@@ -102,7 +102,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
-	std::cout<<"Runtime to create description: "<<time<<std::endl;
+	//std::cout<<"Runtime to create description: "<<time<<std::endl;
 
   cudaError_t status1, status2, status3, status4;
 
@@ -113,8 +113,11 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	}
 
 	cudaEventRecord(start, 0);
-	sparsestatus = cusparseXcoo2csr(sparsehandle, d_H_rows, num_Elem, dim, d_H_rowptrs, CUSPARSE_INDEX_BASE_ZERO);
+	cusparseHybMat_t hyb_Ham;	
+	cusparseCreateHybMat(&hyb_Ham);
 
+	sparsestatus = cusparseXcoo2csr(sparsehandle, d_H_rows, num_Elem, dim, d_H_rowptrs, CUSPARSE_INDEX_BASE_ZERO);
+	sparsestatus = cusparseZcsr2hyb(sparsehandle, dim, dim, H_descr, d_H_vals, d_H_rowptrs, d_H_cols, hyb_Ham, 0, CUSPARSE_HYB_PARTITION_AUTO);
 	 
 	cudaThreadSynchronize();
 	cudaEventRecord(stop,0);
@@ -128,7 +131,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 		std::cout<<"Failed to switch from COO to CSR! Error: "<<cudaGetErrorString( cudaPeekAtLastError())<<std::endl;
 	}
 
-	std::cout<<"Runtime to convert to CSR: "<<time<<std::endl;
+	//std::cout<<"Runtime to convert to CSR: "<<time<<std::endl;
 
 	thrust::host_vector<cuDoubleComplex> h_a(max_Iter);
 
@@ -177,7 +180,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
-	std::cout<<"Time to set and push v0: "<<time<<std::endl;
+	//std::cout<<"Time to set and push v0: "<<time<<std::endl;
 
 	double normtemp;
 
@@ -192,10 +195,10 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
-	std::cout<<"Time to normalize v0: "<<time<<std::endl;
+	//std::cout<<"Time to normalize v0: "<<time<<std::endl;
 
 	cudaEventRecord(start,0);
-	sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rowptrs, d_H_cols, v0, beta, v1); // the Hamiltonian is applied here
+	sparsestatus = cusparseZhybmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, H_descr, hyb_Ham, v0, &beta, v1); // the Hamiltonian is applied here
 
 	if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
 		std::cout<<"Getting V1 = H*V0 failed! Error: ";
@@ -206,7 +209,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
-	std::cout<<"Time to get V1=H*V0: "<<time<<std::endl;
+	//std::cout<<"Time to get V1=H*V0: "<<time<<std::endl;
 	
 	if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
 		std::cout<<"Getting V1 = H*V0 failed! Error: ";
@@ -334,7 +337,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	} 
 
 
-	std::cout<<"Time to normalize v1: "<<time<<std::endl;
+	//std::cout<<"Time to normalize v1: "<<time<<std::endl;
 
 	
 	//Now we're done the first round!
@@ -370,7 +373,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&time, start, stop);
-	std::cout<<"Time to set up the arrays for iteration: "<<time<<std::endl;
+	//std::cout<<"Time to set up the arrays for iteration: "<<time<<std::endl;
 
   while( fabs(gs_Energy - eigtemp) > conv_req || iter < 10){ //this is a cleaner version than what was in the original - way fewer if statements
 
@@ -384,13 +387,13 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
     }*/
     //std::cout<<"Getting V2 = H*V1 for the "<<iter + 1<<"th time"<<std::endl;
 		cudaEventRecord(start, 0);
-    sparsestatus = cusparseZcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim, dim, alpha, H_descr, d_H_vals, d_H_rowptrs, d_H_cols, v1, beta, v2); // the Hamiltonian is applied here, in this gross expression
+    sparsestatus = cusparseZhybmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha, H_descr, hyb_Ham, v1, &beta, v2); // the Hamiltonian is applied here, in this gross expression
     cudaThreadSynchronize();
 
 		cudaEventRecord(stop,0);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
-		std::cout<<"Time to do csrmv: "<<time<<std::endl;
+		//std::cout<<"Time to do csrmv: "<<time<<std::endl;
 
     if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
       std::cout<<"Error applying the Hamiltonian in "<<iter<<"th iteration!";
@@ -407,7 +410,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 		cudaEventRecord(stop,0);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
-		std::cout<<"Time to get v1*v2: "<<time<<std::endl;
+		//std::cout<<"Time to get v1*v2: "<<time<<std::endl;
 
     h_a[iter] = dottemp;
 
@@ -450,7 +453,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 		cudaEventRecord(stop,0);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
-		std::cout<<"Time to get norm of v2: "<<time<<std::endl;
+		//std::cout<<"Time to get norm of v2: "<<time<<std::endl;
 
     h_b[iter + 1] = make_cuDoubleComplex(normtemp, 0.);
     gamma = make_cuDoubleComplex(1./normtemp,0.);
@@ -469,7 +472,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 	cudaEventRecord(stop, 0);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
-		std::cout<<"Time to copy around the Lanczos vectors: "<<time<<std::endl;
+		//std::cout<<"Time to copy around the Lanczos vectors: "<<time<<std::endl;
     
     for (int i = 0; i <= iter; i++){
 			h_diag[i] = cuCreal(h_a[i]); //adding another spot in the tridiagonal matrix representation
@@ -497,7 +500,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
     }
     h_offdia[iter] = 0;
 		cudaEventRecord(start, 0);
-    returned = tqli(h_diag_ptr, h_offdia_ptr, iter + 1, max_Iter, h_H_eigen); //tqli is in a separate file   
+    		returned = tqli(h_diag_ptr, h_offdia_ptr, iter + 1, max_Iter, h_H_eigen); //tqli is in a separate file   
 		cudaEventRecord(stop, 0);
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
@@ -511,7 +514,7 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 		cudaEventRecord(stop, 0);		
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
-		std::cout<<"Runtime for sort and copy: "<<time<<std::endl;
+		//std::cout<<"Runtime for sort and copy: "<<time<<std::endl;
 
 		//std::sort(h_diag.begin(), h_diag.end());
    
@@ -526,8 +529,9 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
     }*/
 
 	for(int i = 0; i < num_Eig; i++){
-   		std::cout<<h_ordered[i]<<" ";
+   		std::cout<<std::setprecision(12)<<h_ordered[i]<<" ";
   	} 
+	std::cout<<std::endl;
 
 
     if (iter == max_Iter - 2){// have to use this or d_b will overflow
