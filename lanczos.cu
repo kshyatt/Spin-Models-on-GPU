@@ -279,22 +279,6 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 		std::cout<<cudaGetErrorString(cudaPeekAtLastError())<<std::endl;
 	} 
 
-
-	std::ofstream fout;
-	fout.open("lanczos.log");
-	//fout<<normtemp<<std::endl;
-	fout<<std::endl;
-	//int* h_H_vals = (int*)malloc((dim+1)*sizeof(int));
-	cudaMemcpy(host_v0, v1, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
-	for(int i = 0; i < dim ; i++){
-		fout<<host_v0[i].x<<std::endl;
-	}
-
-	fout.close();
-
-	
-  
-	
 	cudaEventRecord(start, 0);
 	linalgstat = cublasDznrm2(linalghandle, dim, v1, 1, &normtemp); //this is slow for some reason
   
@@ -394,6 +378,25 @@ __host__ void lanczos(const int num_Elem, cuDoubleComplex*& d_H_vals, int*& d_H_
 		cudaEventSynchronize(stop);
 		cudaEventElapsedTime(&time, start, stop);
 		//std::cout<<"Time to do csrmv: "<<time<<std::endl;
+
+	
+
+	/*if (iter == 1) {
+		std::ofstream fout;
+		fout.open("lanczos.log");
+		//fout<<normtemp<<std::endl;
+		fout<<std::endl;
+		//int* h_H_vals = (int*)malloc((dim+1)*sizeof(int));
+		cudaMemcpy(host_v0, v2, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+		for(int i = 0; i < dim ; i++){
+			fout<<host_v0[i].x<<std::endl;
+		}
+
+		fout.close();
+	}*/
+	
+  
+	
 
     if (sparsestatus != CUSPARSE_STATUS_SUCCESS){
       std::cout<<"Error applying the Hamiltonian in "<<iter<<"th iteration!";
