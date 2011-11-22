@@ -19,23 +19,25 @@ __host__ __device__ int idx(int i, int j, int lda);
 
 //__device__ int d_num_Elem = 65536; //all the diagonal elements
 
-struct d_hamiltonian{
+struct d_hamiltonian
+{
 
-	int* rows;
-	int* cols;
-	cuDoubleComplex* vals;
-	int fulldim;
-	int sectordim;
+    int* rows;
+    int* cols;
+    cuDoubleComplex* vals;
+    int fulldim;
+    int sectordim;
 };
 
 
-struct f_hamiltonian{
+struct f_hamiltonian
+{
 
-	int* rows;
-	int* cols;
-	float* vals;
-	int fulldim;
-	int sectordim;
+    int* rows;
+    int* cols;
+    float* vals;
+    int fulldim;
+    int sectordim;
 };
 
 /*struct ham_sort_function{

@@ -5,10 +5,10 @@ using namespace std;
 
 /*class lattice{
 
-  public 
+  public
     int nsite;
     int* Bond;
-    
+
     typedef enum {
       lattice_16A = 1;
       lattice_18A = 2;
@@ -16,9 +16,9 @@ using namespace std;
       lattice_24A = 4;
     } latticetype_t;
 */
-    void Fill_Bonds_16B(int* Bond);
-    void Fill_Bonds_18A(int* Bond);
-    void Fill_Bonds_20A(int* Bond);
-    void Fill_Bonds_22A(int* Bond);
-    void Fill_Bonds_22B(int* Bond);
+void Fill_Bonds_16B(int* Bond);
+void Fill_Bonds_18A(int* Bond);
+void Fill_Bonds_20A(int* Bond);
+void Fill_Bonds_22A(int* Bond);
+void Fill_Bonds_22B(int* Bond);
 //};
