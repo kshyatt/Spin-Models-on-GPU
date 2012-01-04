@@ -2,7 +2,7 @@
 
 void Fill_Bonds_12A(int* Bond){
 
-  Bond = (int*)malloc(12*3*sizeof(int));
+  //Bond = (int*)malloc(12*3*sizeof(int));
 
   for(int i = 0; i < 12; i++){
     Bond[i] = i;
@@ -19,7 +19,7 @@ void Fill_Bonds_12A(int* Bond){
 
 void Fill_Bonds_16B(int* Bond){
 
-  Bond = (int*)malloc(3*16*sizeof(int));
+  //Bond = (int*)malloc(3*16*sizeof(int));
 
   Bond[0] = 0; Bond[1] = 1; Bond[2] = 2; Bond[3] = 3; Bond[4] = 4;
   Bond[5] = 5; Bond[6] = 6; Bond[7] = 7; Bond[8] = 8; Bond[9] = 9;
@@ -59,7 +59,7 @@ void Fill_Bonds_18A(int* Bond){
 }
 
 void Fill_Bonds_22A(int* Bond){
-  Bond = (int*)malloc(3*22*sizeof(int));
+  //Bond = (int*)malloc(3*22*sizeof(int));
   
   for(int i = 0; i < 22; i++){
     Bond[i] = i;

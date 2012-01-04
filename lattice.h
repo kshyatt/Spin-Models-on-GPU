@@ -16,6 +16,7 @@ using namespace std;
       lattice_24A = 4;
     } latticetype_t;
 */
+void Fill_Bonds_12A(int* Bond);
 void Fill_Bonds_16B(int* Bond);
 void Fill_Bonds_18A(int* Bond);
 void Fill_Bonds_20A(int* Bond);

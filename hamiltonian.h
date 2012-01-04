@@ -61,7 +61,7 @@ __device__ float HOffBondY(const int si, const int bra, const float JJ);
 
 __device__ float HDiagPart(const int bra, int lattice_Size, int3* d_Bond, const float JJ);
 
-__host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* lattice_Size, int** Bond, d_hamiltonian*& hamil_lancz, float* JJ, int* Sz );
+__host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* lattice_Size, int** Bond, d_hamiltonian*& hamil_lancz, float* JJ, int* Sz, int*& count_array, int device);
 
 __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, int lattice_Size, float JJ);
 

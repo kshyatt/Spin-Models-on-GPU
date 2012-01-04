@@ -3,13 +3,13 @@
 /* NOTE: this function uses FORTRAN style matrices, where the values and positions are stored in a ONE dimensional array! Don't forget this! */
 
 
-int main()
+/*int main()
 {
 
 
     int** Bond;
 
-    int how_many = 1;
+    int how_many = 30;
     Bond = (int**)malloc(how_many*sizeof(int*));
     d_hamiltonian* hamil_lancz = (d_hamiltonian*)malloc(how_many*sizeof(d_hamiltonian));
     int* nsite = (int*)malloc(how_many*sizeof(int));
@@ -20,9 +20,9 @@ int main()
     for(int i = 0; i < how_many; i++)
     {
 
-        nsite[i] = 18;
+        nsite[i] = 16;
         Bond[i] = (int*)malloc(3*nsite[i]*sizeof(int));
-        Fill_Bonds_18A(Bond[i]);
+        Fill_Bonds_16B(Bond[i]);
 
 
         Sz[i] = 0;
@@ -36,7 +36,7 @@ int main()
     int* num_Elem = ConstructSparseMatrix(how_many, model_type, nsite, Bond, hamil_lancz, JJ, Sz );
 
     return 0;
-}
+}*/
 
 __host__ __device__ int idx(int i, int j, int lda)
 {
@@ -161,11 +161,10 @@ hamil_PosCol - a pointer to a device array containing the locations of each valu
 
 */
 
-__host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* lattice_Size, int** Bond, d_hamiltonian*& hamil_lancz, float* JJ, int* Sz )
+__host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* lattice_Size, int** Bond, d_hamiltonian*& hamil_lancz, float* JJ, int* Sz, int*& count_array, int device)
 {
 
-
-    //cudaSetDevice(1);
+    cudaSetDevice(device);
 
     int* num_Elem = (int*)malloc(how_many*sizeof(int));
     f_hamiltonian* d_H = (f_hamiltonian*)malloc(how_many*sizeof(f_hamiltonian));
@@ -303,7 +302,7 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
             cout<<"Error synchronizing "<<i<<"th stream: "<<cudaGetErrorString(status[i])<<endl;
         }
 
-        FillDiagonals<<<d_H[i].sectordim/512 + 1, 512, 0, stream[i]>>>(d_basis[i], d_H[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], JJ[i]);
+        FillDiagonals<<<d_H[i].sectordim/512 + 1, 512, device, stream[i]>>>(d_basis[i], d_H[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], JJ[i]);
 
         status[i] = cudaStreamSynchronize(stream[i]);
 
@@ -319,7 +318,7 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         }
 
 
-        FillSparse<<<bpg[i].x, tpb[i].x, 0, stream[i]>>>(d_basis_Position[i], d_basis[i], d_H[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], JJ[i], d_num_Elem, i);
+        FillSparse<<<bpg[i].x, tpb[i].x, device, stream[i]>>>(d_basis_Position[i], d_basis[i], d_H[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], JJ[i], d_num_Elem, i);
 
         status[i] = cudaPeekAtLastError();
         if (status[i] != CUDA_SUCCESS)
@@ -365,6 +364,8 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
             cout<<"Error freeing "<<i<<"th Bond array: "<<cudaGetErrorString(status[i])<<endl;
         }
+        free(basis[i]);
+        free(basis_Position[i]);
     }
     //----------------Sorting Hamiltonian--------------------------//
 
@@ -434,7 +435,7 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         hamil_lancz[i].fulldim = d_H[i].fulldim;
         hamil_lancz[i].sectordim = d_H[i].sectordim;
 
-        cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem[i]*sizeof(cuDoubleComplex));
+        /*cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem[i]*sizeof(cuDoubleComplex));
         int* h_rows = (int*)malloc(num_Elem[i]*sizeof(int));
         int* h_cols = (int*)malloc(num_Elem[i]*sizeof(int));
 
@@ -471,12 +472,24 @@ __host__ int* ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
             }
             fout.close();
-        }
-
+        }*/
+        cudaStreamSynchronize(stream[i]);
+        cudaFree(vals_buffer[i]);
+        free(Bond[i]);
     }
-
-
-    return num_Elem;
+    cudaDeviceSynchronize();
+    free(d_basis_Position);
+    free(d_Bond);
+    free(d_basis);
+    free(basis);
+    free(basis_Position);
+    free(d_H);
+    free(bpg);
+    free(tpb);
+    free(vals_buffer);
+    memcpy(count_array, num_Elem, how_many);
+    free(num_Elem);
+    //return num_Elem;
 }
 
 __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, int lattice_Size, float JJ)
@@ -487,7 +500,7 @@ __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, f
 
     unsigned int tempi;
 
-    __shared__ int3 tempbond[18];
+    __shared__ int3 tempbond[16];
     //int3 tempbond[16];
 
     if (row < dim)
@@ -536,7 +549,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 #error Could not detect GPU architecture
 #endif
 
-    __shared__ int3 tempbond[18];
+    __shared__ int3 tempbond[16];
     int count;
     __shared__ int temppos[array_size];
     __shared__ float tempval[array_size];
