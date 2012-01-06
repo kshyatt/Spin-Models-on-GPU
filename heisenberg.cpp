@@ -6,10 +6,14 @@
 
 int main()
 {
-    for(int i = 0; i < 1; i++){
+    for(int i = 0; i < 4; i++){
     int** Bond;
     //cout<<i<<" "<<endl;
-    int how_many = 25;
+    int how_many = 30;
+    if (i == 2)
+    {
+        how_many = 10;
+    }
     Bond = (int**)malloc(how_many*sizeof(int*));
     d_hamiltonian* hamil_lancz = (d_hamiltonian*)malloc(how_many*sizeof(d_hamiltonian));
     int* nsite = (int*)malloc(how_many*sizeof(int));
@@ -18,7 +22,7 @@ int main()
     int* model_type = (int*)malloc(how_many*sizeof(int));
     int* num_Elem = (int*)malloc(how_many*sizeof(int));
 
-    int device = i%2;
+    int device = 0; //i%2;
 
     for(int i = 0; i < how_many; i++)
     {
@@ -35,7 +39,12 @@ int main()
     int dim;
 
     ConstructSparseMatrix(how_many, model_type, nsite, Bond, hamil_lancz, JJ, Sz, num_Elem, device);
-
+    for(int j = 0; j<how_many; j++)
+    {
+        cudaFree(hamil_lancz[j].rows);
+        cudaFree(hamil_lancz[j].cols);
+        cudaFree(hamil_lancz[j].vals);
+    }
     free(nsite);
     free(Sz);
     free(JJ);

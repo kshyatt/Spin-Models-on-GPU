@@ -68,12 +68,12 @@ __host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], i
         {
             temp += (i1>>sp)&1;
         } //unpack bra
-        //if (temp==(lattice_Size/2+Sz) ){
+        if (temp==(lattice_Size/2+Sz) ){
         basis[realdim] = i1;
         basis_Position[i1] = realdim;
         realdim++;
         //cout<<basis[realdim]<<" "<<basis_Position[i1]<<endl;
-        //}
+        }
     }
 
     return realdim;
@@ -303,7 +303,8 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         }
 
         FillDiagonals<<<d_H[i].sectordim/512 + 1, 512, device, stream[i]>>>(d_basis[i], d_H[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], JJ[i]);
-
+    }
+    for(int i = 0; i < how_many; i++){
         status[i] = cudaStreamSynchronize(stream[i]);
 
         if (status[i] != CUDA_SUCCESS)
@@ -489,6 +490,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     free(vals_buffer);
     memcpy(count_array, num_Elem, how_many);
     free(num_Elem);
+    cudaFree(d_num_Elem);
     //return num_Elem;
 }
 
@@ -500,7 +502,7 @@ __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, f
 
     unsigned int tempi;
 
-    __shared__ int3 tempbond[16];
+    __shared__ int3 tempbond[18];
     //int3 tempbond[16];
 
     if (row < dim)
@@ -549,7 +551,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 #error Could not detect GPU architecture
 #endif
 
-    __shared__ int3 tempbond[16];
+    __shared__ int3 tempbond[18];
     int count;
     __shared__ int temppos[array_size];
     __shared__ float tempval[array_size];
