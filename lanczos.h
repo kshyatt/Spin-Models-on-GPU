@@ -3,7 +3,7 @@
 #include<cmath>
 #include<fstream>
 #include<iomanip>
-#include"testhamiltonian.h"
+#include"hamiltonian.h"
 #include"cuda.h"
 #include"cuda_runtime.h"
 #include"cublas_v2.h"

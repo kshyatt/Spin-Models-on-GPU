@@ -132,59 +132,59 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     
     cusparseHybMat_t hyb_Ham[how_many];
     for(int i = 0; i < how_many; i++)
-	{ 
+    { 
 		cusparse_status[i] = cusparseCreateHybMat(&hyb_Ham[i]);
-		if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+	if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
     	{
         	std::cout<<"Error creating HYB matrix: "<<cusparse_status[i]<<std::endl;
     	}
 
-		cout<<"Done creating HYB matrices"<<endl;
+	cout<<"Done creating HYB matrices"<<endl;
 
-		cusparse_status[i] = cusparseSetStream(sparsehandle, stream[i]);
-		if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+	cusparse_status[i] = cusparseSetStream(sparsehandle, stream[i]);
+	if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
     	{
         	std::cout<<"Error switching streams: "<<cusparse_status[i]<<std::endl;
     	}
 
 		
-		cout<<"Done changing streams"<<endl;
+	cout<<"Done changing streams"<<endl;
 
-		//status[i] = cudaStreamSynchronize(stream[i]);
+	//status[i] = cudaStreamSynchronize(stream[i]);
 
-		//if (status[i] != CUDA_SUCCESS)
+	//if (status[i] != CUDA_SUCCESS)
     	//{
         	//std::cout<<"Error synchronizing stream: "<<cudaGetErrorString(status[i])<<std::endl;
     	//}
 
-		status[i] = cudaPeekAtLastError();
-		if (status[i] != CUDA_SUCCESS)
+	status[i] = cudaPeekAtLastError();
+	if (status[i] != CUDA_SUCCESS)
     	{
         	std::cout<<"Error synchronizing stream: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
 
-		cout<<"Done synchronizing stream"<<endl;
+	cout<<"Done synchronizing stream"<<endl;
 
     	cusparse_status[i] = cusparseXcoo2csr(sparsehandle, Hamiltonian[i].rows, num_Elem[i], dim[i], d_H_rowptrs[i], CUSPARSE_INDEX_BASE_ZERO);
 
-		if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+	if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
     	{
         	std::cout<<"Error converting to CSR: "<<cusparse_status[i]<<std::endl;
     	}
 
-		//status[i] = cudaStreamSynchronize(stream[i]);
+	//status[i] = cudaStreamSynchronize(stream[i]);
 
-		//if (status[i] != CUDA_SUCCESS)
+	//if (status[i] != CUDA_SUCCESS)
     	//{
         	//std::cout<<"Error synchronizing stream: "<<cudaGetErrorString(status[i])<<std::endl;
     	//}
-		status[i] = cudaPeekAtLastError();
-		if (status[i] != CUDA_SUCCESS)
+	status[i] = cudaPeekAtLastError();
+	if (status[i] != CUDA_SUCCESS)
     	{
         	std::cout<<"Error synchronizing stream: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
 
-		cout<<"Done converting to CSR"<<endl;
+	cout<<"Done converting to CSR"<<endl;
     	cusparse_status[i] = cusparseZcsr2hyb(sparsehandle, dim[i], dim[i], H_descr[i], Hamiltonian[i].vals, d_H_rowptrs[i], Hamiltonian[i].cols, hyb_Ham[i], 0, CUSPARSE_HYB_PARTITION_AUTO);
 
 		if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
@@ -599,6 +599,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 				}
 				std::cout<<std::endl;
 
+                                std::cout<<iter[i]<<endl;
 
 				if (iter[i] == max_Iter - 2) // have to use this or d_b will overflow
 				{
@@ -621,7 +622,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     }
 
 
-    /*for(int i = 0; i < num_Eig; i++)
+    /*for(int i = 0; i < num_Eig[i]; i++)
     {
         std::cout<<h_ordered[i]<<" ";
     } //write out the eigenenergies
@@ -637,9 +638,9 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     
 	for(int i = 0; i < how_many; i++)
 	{
-    	cudaFree(v0[i]);
-    	cudaFree(v1[i]);
-    	cudaFree(v2[i]);
+    	        cudaFree(v0[i]);
+    	        cudaFree(v1[i]);
+    	        cudaFree(v2[i]);
 		cudaFree(y[i]);
 		free(h_H_eigen[i]);
 		free(host_v0[i]);

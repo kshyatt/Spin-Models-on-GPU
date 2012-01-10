@@ -1,19 +1,20 @@
-#include"hamiltonian.h"
+//#include"hamiltonian.h"
 #include"lattice.h"
 #include<cstdlib>
 #include"cuda.h"
 #include<iostream>
+#include"lanczos.h"
 
 int main()
 {
-    for(int i = 0; i < 4; i++){
+    for(int i = 0; i < 1; i++){
     int** Bond;
     //cout<<i<<" "<<endl;
-    int how_many = 30;
-    if (i == 2)
+    int how_many = 1;
+    /*if (i == 2)
     {
         how_many = 10;
-    }
+    }*/
     Bond = (int**)malloc(how_many*sizeof(int*));
     d_hamiltonian* hamil_lancz = (d_hamiltonian*)malloc(how_many*sizeof(d_hamiltonian));
     int* nsite = (int*)malloc(how_many*sizeof(int));
@@ -22,7 +23,8 @@ int main()
     int* model_type = (int*)malloc(how_many*sizeof(int));
     int* num_Elem = (int*)malloc(how_many*sizeof(int));
 
-    int device = 0; //i%2;
+    cudaSetDevice(1);
+    int device = 1; //i%2;
 
     for(int i = 0; i < how_many; i++)
     {
@@ -39,6 +41,8 @@ int main()
     int dim;
 
     ConstructSparseMatrix(how_many, model_type, nsite, Bond, hamil_lancz, JJ, Sz, num_Elem, device);
+    lanczos(how_many, num_Elem, hamil_lancz, 200, 3, 1e-12);
+    
     for(int j = 0; j<how_many; j++)
     {
         cudaFree(hamil_lancz[j].rows);

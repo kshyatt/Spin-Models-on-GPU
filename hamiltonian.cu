@@ -502,7 +502,7 @@ __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, f
 
     unsigned int tempi;
 
-    __shared__ int3 tempbond[16];
+    __shared__ int3 tempbond[18];
     //int3 tempbond[16];
 
     if (row < dim)
@@ -551,7 +551,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 #error Could not detect GPU architecture
 #endif
 
-    __shared__ int3 tempbond[16];
+    __shared__ int3 tempbond[18];
     int count;
     __shared__ int temppos[array_size];
     __shared__ float tempval[array_size];
@@ -618,7 +618,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
             rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
             rowtemp = (compare) ? rowtemp : 2*dim;
 
-            H_vals[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
+            H_vals[ idx(ii, 4*site + (T0/lattice_Size)+ start, stride) ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
             H_cols[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
             H_rows[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = rowtemp;
 
@@ -673,4 +673,5 @@ __global__ void FullToCOO(int num_Elem, float* H_vals, cuDoubleComplex* hamil_Va
     }
 }
 ;
+
 
