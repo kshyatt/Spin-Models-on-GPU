@@ -568,9 +568,9 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
             (tempbond[site]).x = d_Bond[site];
             (tempbond[site]).y = d_Bond[lattice_Size + site];
 
-            __syncthreads();
+            //__syncthreads();
 
-            //Horizontal bond ---------------
+            //----Horizontal bond ---------------
             s = (tempbond[site]).x;
             tempod[threadIdx.x] = tempi;
             tempod[threadIdx.x] ^= (1<<s);
@@ -585,9 +585,16 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
             rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
             rowtemp = (compare) ? rowtemp : 2*dim;
 
+
+            //----sigma^x term ----------------
+
+
+
+
             H_vals[ idx(ii, 4*site + (T0/lattice_Size)+ start, stride) ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
             H_cols[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
             H_rows[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = rowtemp;
+
             atomicAdd(&num_Elem[index], count);
         }
     }//end of ii
