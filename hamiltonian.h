@@ -24,7 +24,7 @@ struct d_hamiltonian
 
     int* rows;
     int* cols;
-    cuDoubleComplex* vals;
+    double* vals;
     int fulldim;
     int sectordim;
 };
@@ -36,6 +36,7 @@ struct f_hamiltonian
     int* rows;
     int* cols;
     float* vals;
+    int* index;
     int fulldim;
     int sectordim;
 };
@@ -63,11 +64,11 @@ __device__ float HDiagPart(const int bra, int lattice_Size, int3* d_Bond, const 
 
 __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* lattice_Size, int** Bond, d_hamiltonian*& hamil_lancz, float* JJ, int* Sz, int*& count_array, int device);
 
-__global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, int lattice_Size, float JJ);
+__global__ void FillDiagonals(int* d_basis, int dim, int* H_index, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, int lattice_Size, float JJ);
 
-__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, const int lattice_Size, const float JJ, int* num_Elem, int index);
+__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_index, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, const int lattice_Size, const float JJ, int* num_Elem, int index);
 
-__global__ void FullToCOO(int num_Elem, float* H_vals, cuDoubleComplex* hamil_Values, int dim);
+__global__ void FullToCOO(int num_Elem, float* H_vals, double* hamil_Values, int dim);
 
 
 

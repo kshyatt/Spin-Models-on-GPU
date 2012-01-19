@@ -1,6 +1,6 @@
 CC = nvcc
-CFLAGS = -w -g -G -gencode arch=compute_20,code=sm_21
-LANCZLIBS = -lcublas -lcusparse 
+CFLAGS = -w -O3 -gencode arch=compute_20,code=sm_21
+LANCZLIBS = -lcublas -lcusparse
 HAMLIBS = -Lsort/sort/gnu/release -lmgpusort -lcuda -lcudart
 OBJS = heisenberg.o lanczos.o hamiltonian.o lattice.o
 

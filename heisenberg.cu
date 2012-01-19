@@ -4,13 +4,13 @@
 #include"cuda.h"
 #include<iostream>
 #include"lanczos.h"
-
+//#include"hamiltonian.h"
 int main()
 {
     for(int i = 0; i < 1; i++){
     int** Bond;
     //cout<<i<<" "<<endl;
-    int how_many = 1;
+    int how_many = 3;
     /*if (i == 2)
     {
         how_many = 10;
@@ -41,7 +41,7 @@ int main()
     int dim;
 
     ConstructSparseMatrix(how_many, model_type, nsite, Bond, hamil_lancz, JJ, Sz, num_Elem, device);
-    lanczos(how_many, num_Elem, hamil_lancz, 200, 3, 1e-12);
+    lanczos(how_many, num_Elem, hamil_lancz, 200, 3, 1e-3);
     
     for(int j = 0; j<how_many; j++)
     {
