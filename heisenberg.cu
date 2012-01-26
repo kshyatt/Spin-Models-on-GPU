@@ -10,7 +10,7 @@ int main()
     for(int i = 0; i < 1; i++){
     int** Bond;
     //cout<<i<<" "<<endl;
-    int how_many = 3;
+    int how_many = 1;
     /*if (i == 2)
     {
         how_many = 10;
@@ -23,8 +23,8 @@ int main()
     int* model_type = (int*)malloc(how_many*sizeof(int));
     int* num_Elem = (int*)malloc(how_many*sizeof(int));
 
-    cudaSetDevice(1);
-    int device = 1; //i%2;
+    //cudaSetDevice(1);
+    int device = 0; //i%2;
 
     for(int i = 0; i < how_many; i++)
     {
@@ -39,10 +39,24 @@ int main()
 
 
     int dim;
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    float time;
 
+    cudaEventRecord(start,0);
     ConstructSparseMatrix(how_many, model_type, nsite, Bond, hamil_lancz, JJ, Sz, num_Elem, device);
+    cudaEventRecord(stop,0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    cout<<"Time to construct Hamiltonians: "<<time<<endl;
+    cudaEventRecord(start,0);
     lanczos(how_many, num_Elem, hamil_lancz, 200, 3, 1e-3);
     
+    cudaEventRecord(stop,0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&time, start, stop);
+    cout<<"Time to perform Lanczos: "<<time<<endl;
     for(int j = 0; j<how_many; j++)
     {
         cudaFree(hamil_lancz[j].rows);
