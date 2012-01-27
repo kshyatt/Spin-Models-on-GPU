@@ -6,10 +6,10 @@
 
 int main()
 {
-    for(int i = 0; i < 5; i++){
+    for(int i = 0; i < 1; i++){
     int** Bond;
     //cout<<i<<" "<<endl;
-    int how_many = 36;
+    int how_many = 1;
     /*if (i == 2)
     {
         how_many = 10;
@@ -44,6 +44,14 @@ int main()
         cout<<"Error: JJ array is NULL"<<endl;
         return 1;
     }
+    
+    float* h = (float*)malloc(how_many*sizeof(float));
+    if (h == NULL)
+    {
+        cout<<"Error: JJ array is NULL"<<endl;
+        return 1;
+    }
+    
     int* model_type = (int*)malloc(how_many*sizeof(int));
     if (model_type == NULL)
     {
@@ -71,13 +79,14 @@ int main()
         
         Sz[i] = 0;
         JJ[i] = 1.f;
+        h[i] = 0.5;
         model_type[i] = 0;
     }
 
 
     int dim;
 
-    ConstructSparseMatrix(how_many, model_type, nsite, Bond, hamil_lancz, JJ, Sz, num_Elem, device);
+    ConstructSparseMatrix(how_many, model_type, nsite, Bond, hamil_lancz, JJ, h, Sz, num_Elem, device);
     for(int j = 0; j<how_many; j++)
     {
         cudaFree(hamil_lancz[j].rows);
@@ -87,6 +96,7 @@ int main()
     free(nsite);
     free(Sz);
     free(JJ);
+    free(h);
     free(model_type);
     free(Bond);
     free(hamil_lancz);
