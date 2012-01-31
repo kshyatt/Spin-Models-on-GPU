@@ -148,22 +148,25 @@ __device__ float HDiagPart(const int bra, int lattice_Size, int3* d_Bond, const 
 
 /* Function: ConstructSparseMatrix:
 
-Inputs: model_Type - tells this function how many elements there could be, what generating functions to use, etc. Presently only supports Heisenberg
+Inputs: 
+how_many - how many Hamiltonians are going to be made
+model_Type - tells this function how many elements there could be, what generating functions to use, etc. Presently only supports Heisenberg
 lattice_Size - the number of lattice sites
-Bond - the bond values ??
-hamil_Values - an empty pointer for a device array containing the values
-hamil_PosRow - an empty pointer for a device array containing the locations of each value in a row
-hamil_PosCol - an empty pointer to a device array containing the locations of each values in a column
+Bond - the bond values - which sites are connected to which
+hamil_lancz - an empty pointer to a device array which will contain the Hamiltonian information
+JJ - the J parameter in the Heisenberg model
+Sz - the expectation value of Sz that is sought
+count_array - an empty array which will hold the number of ``good'' elements per Hamiltonian
+device - which system GPU the kernels will run on
 
-Outputs: hamil_Values - a pointer to a device array containing the values
-hamil_PosRow - a pointer to a device array containing the locations of each value in a row
-hamil_PosCol - a pointer to a device array containing the locations of each values in a column
-
+Outputs: hamil_lancz - an array storing the information about each Hamiltonian
+count_array - an array which stores the number of ``good'' elements per Hamiltonian
 */
 
 __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* lattice_Size, int** Bond, d_hamiltonian*& hamil_lancz, float* JJ, int* Sz, int*& count_array, int device)
 {
     cudaFree(0);
+
     cudaSetDevice(device);
 
     cudaEvent_t start, stop;
