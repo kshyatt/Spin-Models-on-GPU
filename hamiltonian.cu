@@ -581,21 +581,21 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
             s = (tempbond[site]).x;
             tempod[threadIdx.x] = tempi;
             tempod[threadIdx.x] ^= (1<<s);
-            s = (tempbond[site]).y;
-            tempod[threadIdx.x] ^= (1<<s);
+            //s = (tempbond[site]).y;
+            //tempod[threadIdx.x] ^= (1<<s);
 
             compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
-            tempval[threadIdx.x] = (compare) ? HOffBondX(site, tempi, JJ) : 0;
+            //tempval[threadIdx.x] = (compare) ? HOffBondX(site, tempi, JJ) : 0;
 
             //count += (int)compare;
-            temppos[threadIdx.x] = (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
-            rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
-            rowtemp = (compare) ? rowtemp : dim;
+            //temppos[threadIdx.x] = (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
+            //rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
+            //rowtemp = (compare) ? rowtemp : dim;
             
-            H_vals[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
-            H_cols[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
-            H_rows[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = rowtemp;
-            H_set[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = true;
+            //H_vals[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
+            //H_cols[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
+            //H_rows[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = rowtemp;
+            //H_set[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = true;
             count += (int)compare;
             //----sigma^x term ------------------------------------------
 
