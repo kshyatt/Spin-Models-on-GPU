@@ -599,9 +599,9 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 		    	        }
 		    	        h_offdia[i][iter[i]] = 0;
 		    	    
-                                zero<<<(max_Iter*max_Iter/512 + 1), 512, 0, stream[i]>>>(h_H_eigen[i], max_Iter*max_Iter);
+                                /*zero<<<(max_Iter*max_Iter/512 + 1), 512, 0, stream[i]>>>(h_H_eigen[i], max_Iter*max_Iter);
                                 cudaStreamSynchronize(stream[i]);
-                                identity<<<(max_Iter/512 + 1), 512, 0, stream[i]>>>(h_H_eigen[i], max_Iter);
+                                identity<<<(max_Iter/512 + 1), 512, 0, stream[i]>>>(h_H_eigen[i], max_Iter);*/
                                 cudaStreamSynchronize(stream[i]);
 
                                 returned[i] = tqli(h_diag[i], h_offdia[i], iter[i] + 1, max_Iter, h_H_eigen[i]); 
