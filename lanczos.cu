@@ -466,9 +466,11 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 			if (!done_flag[i])
 			{
 				iter[i]++;
-				fflush(stdout);
 				cusparse_status[i] = cusparseDcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim[i], dim[i], num_Elem[i], &alpha[i], H_descr[i], Hamiltonian[i].vals, d_H_rowptrs[i], Hamiltonian[i].cols, v1[i], &beta[i], v2[i]);
-				
+				if( cusparse_status[i] != 0)
+                                {
+                                    cout<<"Error applying H to V1 in "<<iter[i]<<"th iteration"<<endl;
+                                }
 				//cusparse_status[i] = cusparseDhybmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha[i], H_descr[i], hyb_Ham[i], v1[i], &beta[i], v2[i]); // the Hamiltonian is applied here, in this gross expression
 			}
 		}
@@ -561,23 +563,30 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 		for(int i = 0; i < how_many; i++)
 		{
 			cublasSetStream(linalghandle, stream[i]);	
-			cudaStreamSynchronize(stream[i]);
-			if (!done_flag[i])
+			status[i] = cudaStreamSynchronize(stream[i]);
+			
+			if (status[i] != CUDA_SUCCESS)
+    			{
+        			std::cout<<"Error syncing before copying v1 to v0: "<<cudaGetErrorString(status[i])<<std::endl;
+    			}
+                        
+                        if (!done_flag[i])
 			{
 			
 		    	status[i] = cudaMemcpyAsync(v0[i], v1[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
-				if (status[i] != CUDA_SUCCESS)
+			if (status[i] != CUDA_SUCCESS)
     			{
         			std::cout<<"Error copying v1 to v0: "<<cudaGetErrorString(status[i])<<std::endl;
     			}
 		    	status[i] = cudaMemcpyAsync(v1[i], v2[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
-				if (status[i] != CUDA_SUCCESS)
+			if (status[i] != CUDA_SUCCESS)
     			{
         			std::cout<<"Error copying v2 to v1: "<<cudaGetErrorString(status[i])<<std::endl;
     			}
 			//cout<<"Done copying vectors in "<<iter[i]<<"th iteration"<<endl;
 			}
-		}
+		
+                }
 	
 		for(int i = 0; i < how_many; i++)
 		{
@@ -598,14 +607,30 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 		        	        h_offdia[i][ii-1] = h_offdia[i][ii];
 		    	        }
 		    	        h_offdia[i][iter[i]] = 0;
-		    	    
                                 /*zero<<<(max_Iter*max_Iter/512 + 1), 512, 0, stream[i]>>>(h_H_eigen[i], max_Iter*max_Iter);
-                                cudaStreamSynchronize(stream[i]);
+                                status[i] = cudaStreamSynchronize(stream[i]);
+                        	
+                                status[i] = cudaPeekAtLastError();
+                                if( status[i] != CUDA_SUCCESS)
+                                {
+                                    cout<<"Error in stream sync! Error: "<<cudaGetErrorString(status[i])<<endl;
+                                }
+                                
+                        	status[i] = cudaPeekAtLastError();
+                                if( status[i] != CUDA_SUCCESS)
+                                {
+                                    cout<<"Error in zero! Error: "<<cudaGetErrorString(status[i])<<endl;
+                                }
+>>>>>>> temp
                                 identity<<<(max_Iter/512 + 1), 512, 0, stream[i]>>>(h_H_eigen[i], max_Iter);*/
                                 cudaStreamSynchronize(stream[i]);
 
                                 returned[i] = tqli(h_diag[i], h_offdia[i], iter[i] + 1, max_Iter, h_H_eigen[i]); 
-                        	
+                        	status[i] = cudaPeekAtLastError();
+                                if( status[i] != CUDA_SUCCESS)
+                                {
+                                    cout<<"Error in identity! Error: "<<cudaGetErrorString(status[i])<<endl;
+                                }
                                 //cout<<"Done tqli in "<<iter[i]<<"th iteration"<<endl;
         		
 			        sort(h_diag[i], h_diag[i] + h_a[i].size());
