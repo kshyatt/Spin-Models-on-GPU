@@ -36,7 +36,7 @@ int main()
         JJ[i] = 1.f;
         model_type[i] = 0;
     }
-    //cudaFree(0);
+
 
     int dim;
     cudaEvent_t start, stop;
