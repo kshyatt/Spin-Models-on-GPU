@@ -105,7 +105,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         std::cout<<"Failed to initialize CUSPARSE! Error: "<<cusparse_status[0]<<std::endl;
     }
     
-    cout<<"Done initializing libraries"<<endl;
+    //cout<<"Done initializing libraries"<<endl;
     cusparseMatDescr_t H_descr[how_many];
     for(int i = 0; i<how_many; i++)
 	{
@@ -128,7 +128,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     	
 	}
     cudaError_t status[how_many];
-	cout<<"Done creating descriptions"<<endl;
+	//cout<<"Done creating descriptions"<<endl;
     int** d_H_rowptrs;
 	d_H_rowptrs = (int**)malloc(how_many*sizeof(int*));
 
@@ -161,7 +161,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     	}
 
 		
-		cout<<"Done changing streams"<<endl;
+		//cout<<"Done changing streams"<<endl;
 
 		status[i] = cudaPeekAtLastError();
 		if (status[i] != CUDA_SUCCESS)
@@ -182,7 +182,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         	std::cout<<"Error synchronizing stream: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
 
-		cout<<"Done converting to CSR"<<endl;
+		//cout<<"Done converting to CSR"<<endl;
     	/*cusparse_status[i] = cusparseDcsr2hyb(sparsehandle, dim[i], dim[i], H_descr[i], Hamiltonian[i].vals, d_H_rowptrs[i], Hamiltonian[i].cols, hyb_Ham[i], 0, CUSPARSE_HYB_PARTITION_AUTO);
 
 		if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
@@ -231,7 +231,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         	std::cout<<"Error copying v0 to the device: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
 	}
-    cout<<"Done creating and copying v0"<<endl;
+    //cout<<"Done creating and copying v0"<<endl;
 
     double* normtemp = (double*)malloc(how_many*sizeof(double));
 	double* alpha = (double*)malloc(how_many*sizeof(double));
@@ -258,7 +258,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     	cusparse_status[i] = cusparseDcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim[i], dim[i], num_Elem[i], &alpha[i], H_descr[i], Hamiltonian[i].vals, d_H_rowptrs[i], Hamiltonian[i].cols, v0[i], &beta[i], v1[i]); // the Hamiltonian is applied here
 
 
-		cout<<"Done getting v1 = H*v0"<<endl;
+		//cout<<"Done getting v1 = H*v0"<<endl;
     	if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
     	{
         	std::cout<<"Getting V1 = H*V0 failed! Error: ";
@@ -355,7 +355,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         	std::cout<<cublas_status[i]<<std::endl;
     	}
 		//normtemp[i] = testnorm.x;
-		std::cout<<normtemp[i]<<std::endl;
+		//std::cout<<normtemp[i]<<std::endl;
 
     	if (cudaPeekAtLastError() != 0 )
     	{
@@ -396,7 +396,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 	}
 
 
-	cout<<"Done first round"<<endl;
+	//cout<<"Done first round"<<endl;
     //std::cout<<"Time to normalize v1: "<<time<<std::endl;
 
 
@@ -644,6 +644,11 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 				//cout<<"Got done flag"<<endl;
 				eigtemp[i] = h_ordered[i][num_Eig - 1];
 				//cout<<setprecision(12)<<eigtemp[i]<<endl;
+		for(int j = 0; j < num_Eig; j++)
+			{
+			    std::cout<<std::setprecision(12)<<h_ordered[i][j]<<" ";
+			}
+		std::cout<<std::endl;
 
 			         
 			//cout<<"Done sorting h_diag in "<<iter[i]<<"th iteration"<<endl;

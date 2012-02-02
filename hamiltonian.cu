@@ -166,10 +166,10 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     cudaFree(0);
     cudaSetDevice(device);
 
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    float time;
+    //cudaEvent_t start, stop;
+    //cudaEventCreate(&start);
+    //cudaEventCreate(&stop);
+    //float time;
 
     int* num_Elem = (int*)malloc(how_many*sizeof(int));
     f_hamiltonian* d_H = (f_hamiltonian*)malloc(how_many*sizeof(f_hamiltonian));
@@ -195,12 +195,12 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     cudaError_t status[how_many];
 
     int* d_num_Elem;
-    cudaEventRecord(start,0);
+    //cudaEventRecord(start,0);
     cudaMalloc(&d_num_Elem, how_many*sizeof(int));
-    cudaEventRecord(stop,0);
-    cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&time, start, stop);
-    std::cout<<"Time to maloc d_num_Elem: "<<time<<std::endl;
+    //cudaEventRecord(stop,0);
+    //cudaEventSynchronize(stop);
+    //cudaEventElapsedTime(&time, start, stop);
+    //std::cout<<"Time to maloc d_num_Elem: "<<time<<std::endl;
 
     for(int i = 0; i<how_many; i++)
     {
@@ -214,17 +214,17 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         basis[i] = (int*)malloc(d_H[i].fulldim*sizeof(int));
 
         d_H[i].sectordim = GetBasis(d_H[i].fulldim, lattice_Size[i], Sz[i], basis_Position[i], basis[i]);
-        cudaEventRecord(start, 0);
+        //cudaEventRecord(start, 0);
         status[i] = cudaMalloc(&d_basis_Position[i], d_H[i].fulldim*sizeof(int));
         if (status[i] != CUDA_SUCCESS)
         {
             cout<<"Error allocating "<<i<<"th d_basis_Position array: "<<cudaGetErrorString(status[i])<<endl;
         }
-        cudaEventRecord(stop,0);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&time, start, stop);
-        std::cout<<"Time to malloc d_basis_Position: "<<time<<std::endl;
-        cudaEventRecord(start,0);
+        //cudaEventRecord(stop,0);
+        //cudaEventSynchronize(stop);
+        //cudaEventElapsedTime(&time, start, stop);
+        //std::cout<<"Time to malloc d_basis_Position: "<<time<<std::endl;
+        //cudaEventRecord(start,0);
         status[i] = cudaMalloc(&d_basis[i], d_H[i].sectordim*sizeof(int));
 
         if (status[i] != CUDA_SUCCESS)
@@ -232,10 +232,10 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
             cout<<"Error allocating "<<i<<"th d_basis array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
-        cudaEventRecord(stop,0);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&time, start, stop);
-        std::cout<<"Time to malloc d_basis: "<<time<<std::endl;
+        //cudaEventRecord(stop,0);
+        //cudaEventSynchronize(stop);
+        //cudaEventElapsedTime(&time, start, stop);
+        //std::cout<<"Time to malloc d_basis: "<<time<<std::endl;
         status[i] = cudaStreamCreate(&stream[i]);
 
         if (status[i] != CUDA_SUCCESS)
@@ -244,16 +244,16 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         }
 
         num_Elem[i] = d_H[i].sectordim;
-	cudaEventRecord(start,0);
+	//cudaEventRecord(start,0);
         status[i] = cudaMemcpy(d_num_Elem, num_Elem, how_many*sizeof(int), cudaMemcpyHostToDevice);
         if (status[i] != CUDA_SUCCESS)
         {
             cout<<"Error copying num_Elem array to device in "<<i<<"th stream: "<<cudaGetErrorString(status[i])<<endl;
         }
-	cudaEventRecord(stop,0);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&time, start, stop);
-        std::cout<<"Time to copy num_Elem: "<<time<<std::endl;
+	//cudaEventRecord(stop,0);
+        //cudaEventSynchronize(stop);
+        //cudaEventElapsedTime(&time, start, stop);
+        //std::cout<<"Time to copy num_Elem: "<<time<<std::endl;
 
     } // can insert more code in here to handle model type later
 
@@ -277,36 +277,36 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         raw_size[i] = padded_dim[i] + (4*lattice_Size[i]*d_H[i].sectordim);
         raw_size[i] = (bool)(raw_size[i]%2048) ? (raw_size[i]/2048 + 1)*2048 : raw_size[i];
 
-        cudaEventRecord(start,0);
+        //cudaEventRecord(start,0);
         status[i] = cudaMalloc(&d_H[i].rows, raw_size[i]*sizeof(int));
         if (status[i] != CUDA_SUCCESS)
         {
             cout<<"Error creating "<<i<<"th rows array: "<<cudaGetErrorString(status[i])<<endl;
         }
-      cudaEventRecord(stop,0);
-      cudaEventSynchronize(stop);
-      cudaEventElapsedTime(&time, start, stop);
-      //std::cout<<"Time to malloc d_H.rows: "<<time<<std::endl;
-        cudaEventRecord(start,0);
+        //cudaEventRecord(stop,0);
+        //cudaEventSynchronize(stop);
+        //cudaEventElapsedTime(&time, start, stop);
+        //std::cout<<"Time to malloc d_H.rows: "<<time<<std::endl;
+        //cudaEventRecord(start,0);
         status[i] = cudaMalloc(&d_H[i].cols, raw_size[i]*sizeof(int));
         if (status[i] != CUDA_SUCCESS)
         {
             cout<<"Error creating "<<i<<"th cols array: "<<cudaGetErrorString(status[i])<<endl;
         }
-      cudaEventRecord(stop,0);
-      cudaEventSynchronize(stop);
-      cudaEventElapsedTime(&time, start, stop);
-      //std::cout<<"Time to malloc d_H.cols: "<<time<<std::endl;
-      cudaEventRecord(start,0);
+        //cudaEventRecord(stop,0);
+        //cudaEventSynchronize(stop);
+        //cudaEventElapsedTime(&time, start, stop);
+        //std::cout<<"Time to malloc d_H.cols: "<<time<<std::endl;
+        //cudaEventRecord(start,0);
         status[i] = cudaMalloc(&d_H[i].vals, raw_size[i]*sizeof(float));
         if (status[i] != CUDA_SUCCESS)
         {
             cout<<"Error creating "<<i<<"th values array: "<<cudaGetErrorString(status[i])<<endl;
         }
-        cudaEventRecord(stop,0);
-      cudaEventSynchronize(stop);
-      cudaEventElapsedTime(&time, start, stop);
-      //std::cout<<"Time to malloc d_H.vals: "<<time<<std::endl;
+        //cudaEventRecord(stop,0);
+        //cudaEventSynchronize(stop);
+        //cudaEventElapsedTime(&time, start, stop);
+        //std::cout<<"Time to malloc d_H.vals: "<<time<<std::endl;
 
         /*status[i] = cudaMalloc(&d_H[i].index, raw_size[i]*sizeof(int));
         if (status[i] != CUDA_SUCCESS)
