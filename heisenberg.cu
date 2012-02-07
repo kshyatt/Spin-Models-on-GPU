@@ -7,10 +7,10 @@
 //#include"hamiltonian.h"
 int main()
 {
-    for(int i = 0; i < 1; i++){
+    for(int i = 0; i < 2; i++){
     int** Bond;
     //cout<<i<<" "<<endl;
-    int how_many = 1;
+    int how_many = 6;
     /*if (i == 2)
     {
         how_many = 10;
@@ -51,7 +51,7 @@ int main()
     cudaEventElapsedTime(&time, start, stop);
     cout<<"Time to construct Hamiltonians: "<<time<<endl;
     cudaEventRecord(start,0);
-    lanczos(how_many, num_Elem, hamil_lancz, 200, 3, 1e-8);
+    lanczos(how_many, num_Elem, hamil_lancz, 200, 3, 1e-12);
     
     cudaEventRecord(stop,0);
     cudaEventSynchronize(stop);

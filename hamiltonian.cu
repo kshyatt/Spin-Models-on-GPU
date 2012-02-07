@@ -336,7 +336,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
         bpg[i].x = (bool)(4*lattice_Size[i]*d_H[i].sectordim)%tpb[i].x ? (((4*lattice_Size[i]*d_H[i].sectordim)/tpb[i].x) + 1) : (4*lattice_Size[i]*d_H[i].sectordim)/tpb[i].x;
 
-
+        cout<<bpg[i].x<<endl;
 
         status[i] = cudaStreamSynchronize(stream[i]);
 
