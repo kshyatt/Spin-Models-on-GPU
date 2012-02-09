@@ -63,6 +63,8 @@ int main()
         cudaFree(hamil_lancz[j].cols);
         cudaFree(hamil_lancz[j].vals);
     }
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
     free(nsite);
     free(Sz);
     free(JJ);
