@@ -29,7 +29,7 @@
 }*/
 	
 
-__global__ void zero(cuDoubleComplex* a, int m)
+/*__global__ void zero(cuDoubleComplex* a, int m)
 {
     int i = blockDim.x*blockIdx.x + threadIdx.x;
 
@@ -60,23 +60,26 @@ __global__ void identity(double* a, int m)
 
         a[i + m*i] = 1.;
     }
-}
+}*/
 
 
-//Function lanczos: takes a hermitian matrix H, tridiagonalizes it, and finds the n smallest eigenvalues - this version only returns eigenvalues, not
-// eigenvectors. 
-//---------------------------------------------------------------------------------------------------------------------------------------------------
-// Input: h_H, a Hermitian matrix of complex numbers (not yet sparse)
-//        dim, the dimension of the matrix
-//        max_Iter, the starting number of iterations we'll try
-//        num_Eig, the number of eigenvalues we're interested in seeing
-//        conv_req, the convergence we'd like to see
-//---------------------------------------------------------------------------------------------------------------------------------------------------
-// Output: h_ordered, the array of the num_Eig smallest eigenvalues, ordered from smallest to largest
-//---------------------------------------------------------------------------------------------------------------------------------------------------
-
+/*Function lanczos: takes a hermitian matrix H, tridiagonalizes it, and finds the n smallest eigenvalues - this version only returns eigenvalues, not
+ eigenvectors. 
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Input: how_many, the number of Hamiltonians to process
+num_Elem - the number of nonzero elements per matrix
+Hamiltonian - an array of Hamiltonians, each element being a custom struct containing the rows, cols, and vals in COO format as well as the dimensions      
+max_Iter, the starting number of iterations we'll try
+num_Eig, the number of eigenvalues we're interested in seeing
+conv_req, the convergence we'd like to see
+---------------------------------------------------------------------------------------------------------------------------------------------------
+Output: h_ordered, the array of the num_Eig smallest eigenvalues, ordered from smallest to largest
+---------------------------------------------------------------------------------------------------------------------------------------------------
+*/
 __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& Hamiltonian, int max_Iter, const int num_Eig, const double conv_req)
 {
+
+    //----------Initializing CUBLAS and CUSPARSE libraries as well as storage on GPU----------------
 
 	int* dim = (int*)malloc(how_many*sizeof(int));
 	for(int i = 0; i < how_many; i++)
@@ -142,7 +145,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     	}
 	}
 
-    
+    //---------------Converting from COO to CSR format for Hamiltonians----------------    
     //cusparseHybMat_t hyb_Ham[how_many];
     for(int i = 0; i < how_many; i++)
     { 
@@ -196,6 +199,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 	//cout<<"Done converting to HYB"<<endl;
     cudaThreadSynchronize();
 
+    //----------------Create three arrays to hold current Lanczos vectors----------
     vector< vector<double> > h_a(how_many);
 
     vector< vector<double> > h_b(how_many);
@@ -237,12 +241,16 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 	}
     //cout<<"Done creating and copying v0"<<endl;
 
+    //--------------Create dummy variables for CUBLAS functions----------------
+
     double* normtemp = (double*)malloc(how_many*sizeof(double));
 	double* alpha = (double*)malloc(how_many*sizeof(double));
 	double* beta = (double*)malloc(how_many*sizeof(double));
 
 	double* dottemp = (double*)malloc(how_many*sizeof(double));
 	double* axpytemp = (double*)malloc(how_many*sizeof(double));
+
+    //--------------Generate first Lanczos vector--------------------------
 
     for(int i = 0; i < how_many; i++)
 	{
@@ -281,9 +289,8 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
        		std::cout<<cudaGetErrorString(cudaPeekAtLastError())<<std::endl;
     	}
 
-    	//*********************************************************************************************************
+    	//------Set up arrays for iteration over many Lanczos steps-------------------
 
-    	// This is just the first steps so I can do the rest
 	}
     
 	double** y;
@@ -455,6 +462,8 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 	}
 	cout<<"Initialized everything for iterations"<<endl;
 
+    //---------Begin Lanczos iteration-----------------------------
+
     bool all_done = false;
     
 	while( !all_done )
@@ -578,7 +587,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
                         
                         if (!done_flag[i])
 			{
-			
+			//----------------Reorthogonalize the new Lanczos vector-----------------------
 		    	for(int j = 0; j < iter[i] + 1; j++){
                             cublasDdot(linalghandle, dim[i], v2[i], 1, lanczos_store[i][j], 1, &dottemp[i]);
                             dottemp[i] *= -1.;
@@ -587,8 +596,8 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
                             cublasDscal(linalghandle, dim[i], &dottemp[i], v2[i], 1);
                         
                         }                 
-                        //reorthogonalizing
                         
+                        //--------------Copy the Lanczos vectors down to prepare for next iteration--------------
                         status[i] = cudaMemcpyAsync(v0[i], v1[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
 			if (status[i] != CUDA_SUCCESS)
     			{
@@ -643,6 +652,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
                                 identity<<<(max_Iter/512 + 1), 512, 0, stream[i]>>>(h_H_eigen[i], max_Iter);*/
                                 cudaStreamSynchronize(stream[i]);
 
+                                //---------Diagonalize Lanczos matrix and check for convergence------------------
                                 returned[i] = tqli(h_diag[i], h_offdia[i], iter[i] + 1, max_Iter, h_H_eigen[i]); 
                         	status[i] = cudaPeekAtLastError();
                                 if( status[i] != CUDA_SUCCESS)
@@ -661,23 +671,6 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 				done_flag[i] = (fabs(gs_Energy[i] - eigtemp[i]) < conv_req);// && iter[i] > 10;// ? (iter[i] > 10) : false;
 				//cout<<"Got done flag"<<endl;
 				eigtemp[i] = h_ordered[i][num_Eig - 1];
-				//cout<<setprecision(12)<<eigtemp[i]<<endl;
-		/*for(int j = 0; j < num_Eig; j++)
-			{
-			    std::cout<<std::setprecision(12)<<h_ordered[i][j]<<" ";
-			}
-		std::cout<<std::endl;*/
-
-			         
-			//cout<<"Done sorting h_diag in "<<iter[i]<<"th iteration"<<endl;
-        		
-			//cout<<gs_Energy[i]<<endl;
-
-			/*for(int j = 0; j < num_Eig; j++)
-			{
-			    std::cout<<std::setprecision(12)<<h_ordered[i][j]<<" ";
-			}
-			std::cout<<std::endl;*/
 
 				if (iter[i] == max_Iter - 2) // have to use this or d_b will overflow
 				{
@@ -713,7 +706,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
     // now the eigenvectors are available on the host CPU
 
-    
+   //--------------Free arrays to prevent memory leaks------------------------ 
 	for(int i = 0; i < how_many; i++)
 	{
 		for(int j = 0; j < num_Eig; j++)
