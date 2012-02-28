@@ -2,7 +2,7 @@ CC = nvcc
 CFLAGS = -w -g -G -arch=sm_21
 #LANCZLIBS = -lcublas -lcusparse 
 HAMLIBS = -Lsort/sort/gnu/release -lmgpusort -lcuda -lcudart
-OBJS = heisenberg.o lanczos.o hamiltonian.o lattice.o
+OBJS = heisenberg.o hamiltonian.o lattice.o
 
 a.out : $(OBJS) 
 	$(CC) $(CFLAGS) $(OBJS) -o a.out $(HAMLIBS) $(LANCZLIBS)
