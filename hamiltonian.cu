@@ -252,11 +252,11 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
             cout<<"Error creating "<<i<<"th values array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
-        status[i] = cudaMemset(d_H[i].rows, d_H[i].sectordim + 1, raw_size[i]*sizeof(int));
+        /*status[i] = cudaMemset(d_H[i].rows, d_H[i].sectordim + 1, raw_size[i]*sizeof(int));
         if (status[i] != CUDA_SUCCESS)
         {
             cout<<"Error setting "<<i<<"th d_H_vals array: "<<cudaGetErrorString(status[i])<<endl;
-        }
+        }*/
         status[i] = cudaMemset(d_H[i].vals, 0, raw_size[i]*sizeof(float));
         if (status[i] != CUDA_SUCCESS)
         {
@@ -290,10 +290,17 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         }
         while(tpb[i].x < 512);
 
-
         bpg[i].x = (bool)(2*lattice_Size[i]*d_H[i].sectordim)%tpb[i].x ? (((2*lattice_Size[i]*d_H[i].sectordim)/tpb[i].x) + 1) : (2*lattice_Size[i]*d_H[i].sectordim)/tpb[i].x;
 
+        if (bpg[i].x > (1<<16)){
+          bpg[i].y = bpg[i].x/(1<<15);
+          bpg[i].x = (1 << 15);
+        }
 
+        cout<<bpg[i].x<<" "<<bpg[i].y<<endl;
+
+    }
+    for( int i = 0; i < how_many; i++){
 
         status[i] = cudaStreamSynchronize(stream[i]);
 
@@ -393,11 +400,11 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         sortdata.Alloc(engine, sortnumber[i], 2);
 
         sortdata.firstBit = 0;
-        sortdata.endBit = lattice_Size[i] + 1;
+        sortdata.endBit = 32; //lattice_Size[i] + 1;
 
         sortArray(engine, &sortdata);
 
-        sortReleaseEngine(engine);
+        //sortReleaseEngine(engine);
         /*thrust::device_ptr<int> sort_key_ptr(d_H_rows);
         thrust::device_ptr<int> sort_val_ptr(d_H_cols);
 
@@ -506,7 +513,7 @@ __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, f
 
     unsigned int tempi;
 
-    __shared__ int2 tempbond[16];
+    __shared__ int2 tempbond[20];
     //int3 tempbond[16];
 
     if (row < dim)
@@ -545,8 +552,10 @@ JJ - the coupling parameter
 __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* H_set, int* d_Bond, const int lattice_Size, const float JJ, const float h, int* num_Elem, int index)
 {
 
-    int ii = ( blockDim.x / ( 2 * lattice_Size ) ) * blockIdx.x + threadIdx.x / ( 2 * lattice_Size );
+    int ii = ( blockDim.x / ( 2 * lattice_Size ) ) * blockIdx.x + threadIdx.x / ( 2 * lattice_Size ) + blockIdx.y* gridDim.x * blockDim.x / (2 * lattice_Size);
     int T0 = threadIdx.x % ( 2 * lattice_Size );
+
+//    printf("%d \n", ii);
 
 #if __CUDA_ARCH__ < 200
     const int array_size = 512;
