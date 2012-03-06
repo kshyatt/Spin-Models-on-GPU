@@ -1,17 +1,17 @@
 CC = nvcc
-CFLAGS = -w -g -G -Xptxas -v -arch=sm_21
-#LANCZLIBS = -lcublas -lcusparse 
+CFLAGS = -w -O3 -arch=sm_21
+LANCZLIBS = -lcublas -lcusparse 
 HAMLIBS = -Lsort/sort/gnu/release -lmgpusort -lcuda -lcudart
 OBJS = heisenberg.o hamiltonian.o lattice.o
 
 a.out : $(OBJS) 
 	$(CC) $(CFLAGS) $(OBJS) -o a.out $(HAMLIBS) $(LANCZLIBS)
 
-heisenberg.o : heisenberg.cu hamiltonian.h lattice.h
+heisenberg.o : heisenberg.cu lanczos.h lattice.h
 	$(CC) $(CFLAGS) -c heisenberg.cu
 
-#lanczos.o : lanczos.cu lanczos.h 
-#	$(CC) $(CFLAGS) -c $(LANCZLIBS) lanczos.cu
+lanczos.o : lanczos.cu lanczos.h 
+	$(CC) $(CFLAGS) -c $(LANCZLIBS) lanczos.cu
 
 hamiltonian.o : hamiltonian.cu hamiltonian.h
 	$(CC) $(CFLAGS) -c $(HAMLIBS) hamiltonian.cu

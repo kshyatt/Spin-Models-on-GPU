@@ -1,4 +1,4 @@
-#include"hamiltonian.h"
+#include"lanczos.h"
 #include"lattice.h"
 #include<cstdlib>
 #include"cuda.h"
@@ -70,7 +70,7 @@ int main()
     for(int i = 0; i < how_many; i++)
     {
         
-        nsite[i] = 20;
+        nsite[i] = 16;
         Bond[i] = (int*)malloc(2*nsite[i]*sizeof(int));
         for(int k = 0; k < nsite[i]; k++){
           Bond[i][k] = k;
@@ -87,6 +87,7 @@ int main()
     int dim;
 
     ConstructSparseMatrix(how_many, model_type, nsite, Bond, hamil_lancz, JJ, h, Sz, num_Elem, device);
+    lanczos(how_many, num_Elem, hamil_lancz, 200, 3, 1e-12);
     for(int j = 0; j<how_many; j++)
     {
         cudaFree(hamil_lancz[j].rows);
