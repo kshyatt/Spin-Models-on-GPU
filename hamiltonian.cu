@@ -345,6 +345,11 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     	return 1;
     }*/
 
+	for (int i = 0; i < how_many; i++){
+		cudaStreamSynchronize(stream[i]);		
+		ScanWarps<<<raw_size[i]/1024, 1024, device, stream[i]>>>(raw_size[i], d_H[i].set);
+	}
+
 
     cudaThreadSynchronize();
 
@@ -609,7 +614,26 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
     }//end of ii
 }//end of FillSparse
 
+__global__ void ScanWarps(int count, unsigned int H_counter)
+{
+	int global_id = blockDim.x*blockIdx.x + threadIdx.x;
+	int which_warp = threadIdx.x / 32;
+	int warp_id = threadIdx.x % 32;
 
+	unsigned int flag = H_counter[global_id];
+	unsigned int bits = __ballot(flag);
+	unsigned int mask = bfi(0, 0xffffffff, 0, warp_id);
+	unsigned int exc = __popc(mask & bits);
+	unsigned int total = __popc(bits);
+
+	H_counter[which_warp * 32] = total;
+}
+
+__global__ void ScanBlocks(int count, unsigned int H_counter)
+{
+
+	
+}
 /*Function: FullToCOO - takes a full sparse matrix and transforms it into COO format
 Inputs - num_Elem - the total number of nonzero elements
 H_vals - the Hamiltonian values
