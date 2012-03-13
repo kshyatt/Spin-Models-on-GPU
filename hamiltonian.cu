@@ -37,6 +37,19 @@
     return 0;
 }*/
 
+__device__ uint bfi(uint x, uint y, uint bit, uint numBits) {
+    uint ret;
+#if __CUDA_ARCH__ >= 200
+      asm("bfi.b32 %0, %1, %2, %3, %4;" :
+        "=r"(ret) : "r"(y), "r"(x), "r"(bit), "r"(numBits));
+#else
+        uint mask = ((1<< numBits) - 1)<< bit;
+          ret = x & ~mask;
+            ret |= mask & (y<< bit);
+#endif
+              return ret;
+};
+
 __host__ __device__ int idx(int i, int j, int lda)
 {
 
@@ -263,8 +276,8 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
             cout<<"Error setting "<<i<<"th d_H_vals array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
-        status[i] = cudaMalloc(&d_H[i].set, raw_size[i]*sizeof(int));
-        status[i] = cudaMemset(d_H[i].set, 0, raw_size[i]*sizeof(int));
+        status[i] = cudaMalloc(&d_H[i].set, raw_size[i]*sizeof(uint));
+        status[i] = cudaMemset(d_H[i].set, 0, raw_size[i]*sizeof(uint));
         if (status[i] != CUDA_SUCCESS)
         {
             cout<<"Error setting "<<i<<"th d_H_vals array: "<<cudaGetErrorString(status[i])<<endl;
@@ -345,10 +358,35 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     	return 1;
     }*/
 
+        int* num_blocks = (int*)malloc(how_many*sizeof(int));
 	for (int i = 0; i < how_many; i++){
+                num_blocks[i] = raw_size[i]/1024;
 		cudaStreamSynchronize(stream[i]);		
-		ScanWarps<<<raw_size[i]/1024, 1024, device, stream[i]>>>(raw_size[i], d_H[i].set);
+		ScanBlocks<<<num_blocks[i], 1024, device, stream[i]>>>(d_num_Elem, d_H[i].set, i);
+                
 	}
+
+        bool all_done = false;
+        bool* done_flag = (bool*)malloc(how_many*sizeof(bool));
+
+        while( !all_done )
+        {
+            all_done = true;
+            for( int i = 0; i < how_many; i++)
+            {
+                if( !done_flag[i])
+                {
+                    num_blocks[i] /= 1024;
+                    if (num_blocks[i] <= 1)
+                    {
+                        num_blocks[i] = 1;
+                        done_flag[i] = true;
+                    }
+                    ScanBlocks<<< num_blocks[i], 1024, device, stream[i] >>>(d_num_Elem, d_H[i].set, i);
+                }
+                all_done = (all_done && done_flag[i]);
+            }
+        }
 
 
     cudaThreadSynchronize();
@@ -415,7 +453,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
         thrust::sort_by_key(sort_key_ptr, sort_key_ptr + *vdim*stride, sort_val_ptr);*/
         
-        status[i] = cudaMalloc(&hamil_lancz[i].vals, num_Elem[i]*sizeof(cuDoubleComplex));
+        status[i] = cudaMalloc(&hamil_lancz[i].vals, num_Elem[i]*sizeof(double));
         if (status[i] != CUDA_SUCCESS)
         {
             cout<<"Error allocating "<<i<<"th lancz values array: "<<cudaGetErrorString(status[i])<<endl;
@@ -450,11 +488,11 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         hamil_lancz[i].fulldim = d_H[i].fulldim;
         hamil_lancz[i].sectordim = d_H[i].sectordim;
 
-        /*cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem[i]*sizeof(cuDoubleComplex));
+        double* h_vals = (double*)malloc(num_Elem[i]*sizeof(double));
         int* h_rows = (int*)malloc(num_Elem[i]*sizeof(int));
         int* h_cols = (int*)malloc(num_Elem[i]*sizeof(int));
 
-        status[i] = cudaMemcpy(h_vals, hamil_lancz[i].vals, num_Elem[i]*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+        status[i] = cudaMemcpy(h_vals, hamil_lancz[i].vals, num_Elem[i]*sizeof(double), cudaMemcpyDeviceToHost);
 
         if (status[i] != CUDA_SUCCESS)
         {
@@ -484,11 +522,11 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
             for(int j = 0; j < num_Elem[i]; j++)
             {
                 fout<<"("<<h_rows[j]<<","<<h_cols[j]<<")";
-                fout<<" - "<<h_vals[j].x<<std::endl;
+                fout<<" - "<<h_vals[j]<<std::endl;
 
             }
             fout.close();
-        }*/
+        }
         cudaStreamSynchronize(stream[i]);
         cudaFree(vals_buffer[i]);
         free(Bond[i]);
@@ -510,7 +548,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     //return num_Elem;
 }
 
-__global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* H_set, int* d_Bond, int lattice_Size, float JJ)
+__global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, uint* H_set, int* d_Bond, int lattice_Size, float JJ)
 {
 
     int row = blockIdx.x*blockDim.x + threadIdx.x;
@@ -554,7 +592,7 @@ JJ - the coupling parameter
 
 */
 
-__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* H_set, int* d_Bond, const int lattice_Size, const float JJ, const float h, int* num_Elem, int index)
+__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, uint* H_set, int* d_Bond, const int lattice_Size, const float JJ, const float h, int* num_Elem, int index)
 {
 
     int ii = ( blockDim.x / ( 2 * lattice_Size ) ) * blockIdx.x + threadIdx.x / ( 2 * lattice_Size ) + blockIdx.y* gridDim.x * blockDim.x / (2 * lattice_Size);
@@ -614,23 +652,58 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
     }//end of ii
 }//end of FillSparse
 
-__global__ void ScanWarps(int count, unsigned int H_counter)
+__global__ void ScanBlocks(int* count, unsigned int* counter, int index)
 {
-	int global_id = blockDim.x*blockIdx.x + threadIdx.x;
-	int which_warp = threadIdx.x / 32;
-	int warp_id = threadIdx.x % 32;
-
-	unsigned int flag = H_counter[global_id];
-	unsigned int bits = __ballot(flag);
-	unsigned int mask = bfi(0, 0xffffffff, 0, warp_id);
-	unsigned int exc = __popc(mask & bits);
-	unsigned int total = __popc(bits);
-
-	H_counter[which_warp * 32] = total;
-}
-
-__global__ void ScanBlocks(int count, unsigned int H_counter)
-{
+  
+  const uint WARP_SIZE = 32;
+  const uint NUM_WARPS = 1024/WARP_SIZE;
+  uint tid = threadIdx.x;
+  uint global_id = tid + blockDim.x*blockIdx.x;
+  uint lane = (WARP_SIZE - 1) & tid;
+  uint warp = tid / WARP_SIZE;
+  float val = counter[global_id];
+  uint flag = -1.0f != val;
+  // Ballot scan the flags as in the warp scan version.
+  uint bits = __ballot(flag);
+  uint mask = bfi(0, 0xffffffff, 0, lane);
+  uint exc = __popc(mask & bits);
+  uint warpTotal = __popc(bits);
+    
+  // Store each warp total into shared memory.
+  __shared__ volatile uint shared[NUM_WARPS];
+  if(!lane) shared[warp] = warpTotal;
+                                                     
+  // Inclusive scan the warp totals.
+  __syncthreads();
+  const int LOG_NUM_WARPS = 5;
+  if(tid < NUM_WARPS) {
+  uint x = shared[tid];
+    for(int i = 0; i < LOG_NUM_WARPS; ++i) {
+      uint offset = 1<< i;
+      if(tid >= offset) x += shared[tid - offset];
+        shared[tid] = x;
+    }
+  }
+  __syncthreads();
+                                                                                                                                         
+  // Add the inclusive scanned warp totals into exc.
+  uint blockTotal = shared[NUM_WARPS-1];
+  exc += shared[warp] - warpTotal;
+  // Scatter the defined values to shared memory.
+  const int NUM_THREADS = 1024;
+  __shared__ volatile float shared2[NUM_THREADS];
+  
+  if(flag) shared2[exc] = val;
+  
+  //Synchronize and write from shared memory to global memory.  
+   __syncthreads();
+  
+  if(tid < blockTotal) {
+    val = shared2[tid];
+    counter[global_id] = val;
+  }
+  if(!tid)
+    count[index] = blockTotal;
 
 	
 }
@@ -641,7 +714,7 @@ H_pos - the Hamiltonian positions
 hamil_Values - a 1D array that will store the values for the COO form
 
 */
-__global__ void FullToCOO(int num_Elem, float* H_vals, cuDoubleComplex* hamil_Values, int dim)
+__global__ void FullToCOO(int num_Elem, float* H_vals, double* hamil_Values, int dim)
 {
 
     int i = threadIdx.x + blockDim.x * blockIdx.x;
@@ -649,7 +722,7 @@ __global__ void FullToCOO(int num_Elem, float* H_vals, cuDoubleComplex* hamil_Va
     if (i < num_Elem)
     {
 
-        hamil_Values[ i ].x = H_vals[ i ];
+        hamil_Values[ i ] = H_vals[ i ];
 
 
     }

@@ -208,17 +208,18 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     double** v0 = (double**)malloc(how_many*sizeof(double*));
     double** v1 = (double**)malloc(how_many*sizeof(double*));
     double** v2 = (double**)malloc(how_many*sizeof(double*));
-    double*** lanczos_store = (double***)malloc(how_many*sizeof(double**));
+    vector< vector<double*> > lanczos_store(how_many);
+    //double*** lanczos_store = (double***)malloc(how_many*sizeof(double**));
 
     double** host_v0 = (double**)malloc(how_many*sizeof(double*));
 
     for(int i = 0; i < how_many; i++)
 	{
-		status[i] = cudaMalloc(&v0[i], dim[i]*sizeof(double));
+	status[i] = cudaMalloc(&v0[i], dim[i]*sizeof(double));
     	status[i] = cudaMalloc(&v1[i], dim[i]*sizeof(double));
     	status[i] = cudaMalloc(&v2[i], dim[i]*sizeof(double));
-        lanczos_store[i] = (double**)malloc(max_Iter*sizeof(double*));
-		host_v0[i] = (double*)malloc(dim[i]*sizeof(double));
+        lanczos_store[i].resize(max_Iter);// = (double**)malloc(max_Iter*sizeof(double*));
+	host_v0[i] = (double*)malloc(dim[i]*sizeof(double));
     	
     	
     	for(int j = 0; j<dim[i]; j++)
@@ -229,12 +230,12 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         	else if (j%7 == 0) host_v0[i][j] = 3.;
         	else if (j%9 == 0) host_v0[i][j] = -4.;
 
-	    }
+	}
 
         status[i] = cudaMalloc(&lanczos_store[i][0], dim[i]*sizeof(double));
     	
         status[i] = cudaMemcpyAsync(v0[i], host_v0[i], dim[i]*sizeof(double), cudaMemcpyHostToDevice, stream[i]);
-		if (status[i] != CUDA_SUCCESS)
+	if (status[i] != CUDA_SUCCESS)
     	{
         	std::cout<<"Error copying v0 to the device: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
@@ -257,13 +258,27 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 		cublasSetStream(linalghandle, stream[i]);
 		cusparseSetStream(sparsehandle, stream[i]);
 		cublas_status[i] = cublasDnrm2(linalghandle, dim[i], v0[i], 1, &normtemp[i]);
-		
+		cout<<normtemp[i]<<endl;
 		normtemp[i] = 1./normtemp[i];
-		
+		cout<<normtemp[i]<<endl;
 		cublas_status[i] = cublasDscal(linalghandle, dim[i], &normtemp[i], v0[i], 1);
 
     	alpha[i] = 1.;
     	beta[i] = 0.;
+
+
+	//if (iter[0] == 10) {
+        	std::ofstream fout;
+        	fout.open("lanczos.log");
+                int* host_ptrs = (int*)malloc((dim[0]+1)*sizeof(int));
+        	cudaMemcpy(host_ptrs, d_H_rowptrs[i], (dim[0]+1)*sizeof(int), cudaMemcpyDeviceToHost);
+        	for(int j = 0; j < dim[0] + 1 ; j++){
+        		fout<<(host_ptrs[j])<<std::endl;
+				
+        	}
+                fout<<dim[0] + 1<<endl;
+        	fout.close();
+        //}*/
 
     	//cudaThreadSynchronize();
     	cudaMemcpyAsync(lanczos_store[i][0], v0[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
@@ -291,6 +306,18 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
     	//------Set up arrays for iteration over many Lanczos steps-------------------
 
+	/*if (iter[0] == 10) {
+        	std::ofstream fout;
+        	fout.open("lanczos.log");
+        	cudaMemcpy(host_v0[0], v1[0], dim[0]*sizeof(double), cudaMemcpyDeviceToHost);
+        	for(int j = 0; j < dim[0] ; j++){
+        		fout<<(host_v0[0][j])<<std::endl;
+				
+        	}
+
+        	fout.close();
+        }*/
+
 	}
     
 	double** y;
@@ -299,7 +326,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 	for(int i = 0; i < how_many; i++)
 	{
 		cublasSetStream(linalghandle, stream[i]);
-		dottemp[i] = 0.;
+		//dottemp[i] = 0.;
 	   	cublas_status[i] = cublasDdot(linalghandle, dim[i], v1[i], 1, v0[i], 1, &dottemp[i]);
 	   	if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
     	{
@@ -307,7 +334,8 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
        		std::cout<<cublas_status[i]<<std::endl;
     	}
 
-    	h_a[i].push_back(dottemp[i]);
+    	cout<<dottemp[i]<<endl;
+        h_a[i].push_back(dottemp[i]);
     	//cudaMemcpy(d_a_ptr, &dottemp, sizeof(cuDoubleComplex), cudaMemcpyHostToDevice);
 
     	cudaStreamSynchronize(stream[i]);
@@ -333,7 +361,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     	cudaStreamSynchronize(stream[i]);
 
     	axpytemp[i] = -1*h_a[i][0];
-
+        cout<<axpytemp[i]<<endl;
     	cublas_status[i] = cublasDaxpy(linalghandle, 0, &axpytemp[i], v0[i], 1, v1[i], 1);
     	//std::cout<<axpytemp.x<<" "<<axpytemp.y<<std::endl;
 
@@ -389,7 +417,8 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     	gamma[i] = 1./h_b[i][1]; //alpha = 1/beta in v1 = v1 - alpha*v0
     	//normalize<<<dim/512 + 1, 512>>>(v0, dim, normtemp);
     	cublas_status[i] = cublasDscal(linalghandle, dim[i], &normtemp[i], v1[i], 1);
-    	//cudaStreamSynchronize(stream[i]);
+    	cout<<normtemp[i]<<endl;
+        //cudaStreamSynchronize(stream[i]);
     	
 
     	if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
@@ -469,7 +498,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 	while( !all_done )
 	{
 		all_done = true;
-		//cout<<eigtemp[0]<<endl;
+		cout<<eigtemp[0]<<endl;
 		for(int i = 0; i < how_many; i++)
 		{
 			cublasSetStream(linalghandle, stream[i]);
@@ -491,17 +520,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 		}
 		//cout<<"Got v2 for "<<iter[0]<<"th iteration"<<endl;
 
-		/*if (iter[0] == 10) {
-        	std::ofstream fout;
-        	fout.open("lanczos.log");
-        	cudaMemcpy(host_v0[0], v2[0], dim[0]*sizeof(double), cudaMemcpyDeviceToHost);
-        	for(int j = 0; j < dim[0] ; j++){
-        		fout<<(host_v0[0][j])<<std::endl;
-				
-        	}
-
-        	fout.close();
-        }*/
+		
 		for(int i = 0; i < how_many; i++)
 		{
 			cublasSetStream(linalghandle, stream[i]);	
@@ -609,6 +628,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         			std::cout<<"Error copying v2 to v1: "<<cudaGetErrorString(status[i])<<std::endl;
     			}
 			//cout<<"Done copying vectors in "<<iter[i]<<"th iteration"<<endl;
+                        //cout<<iter[i]<<endl;
                         status[i] = cudaMalloc(&lanczos_store[i][iter[i] + 1], dim[i]*sizeof(double));
                         status[i] = cudaMemcpyAsync(lanczos_store[i][iter[i] + 1], v2[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
 			}
@@ -665,7 +685,9 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 			        for (int j = 0; j < num_Eig; j++)
 			        {
 				h_ordered[i][j] = h_diag[i][j];
+                                cout<<h_ordered[i][j]<<" ";
 				}
+                                cout<<endl;
 
 				gs_Energy[i] = h_ordered[i][num_Eig - 1];
 				done_flag[i] = (fabs(gs_Energy[i] - eigtemp[i]) < conv_req);// && iter[i] > 10;// ? (iter[i] > 10) : false;
@@ -675,7 +697,8 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 				if (iter[i] == max_Iter - 2) // have to use this or d_b will overflow
 				{
 				    //this stuff here is used to resize the main arrays in the case that we aren't converging quickly enough
-				    h_a[i].resize(2*max_Iter);
+				    lanczos_store[i].resize(2*max_Iter);
+                                    h_a[i].resize(2*max_Iter);
 				    h_b[i].resize(2*max_Iter);
 				    //d_diag.resize(2*max_Iter);
 				    //d_offdia.resize(2*max_Iter);
@@ -689,6 +712,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 		all_done = true;
 		for(int i = 0; i< how_many; i++){
 			all_done = (all_done && done_flag[i]);
+                        if (iter[i] == 2) all_done = true;
 		}
     }
 
@@ -719,7 +743,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
                 {
                     cudaFree(lanczos_store[i][j]);
                 }
-                free(lanczos_store[i]);
+                //free(lanczos_store[i]);
                 cudaFree(d_H_rowptrs[i]);
                 cudaFree(v0[i]);
 		cudaFree(v1[i]);
@@ -751,7 +775,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 	free(v2);
 	free(h_diag);
 	free(h_offdia);
-        free(lanczos_store);
+        //free(lanczos_store);
         free(dim);
         free(d_H_rowptrs);
         	
