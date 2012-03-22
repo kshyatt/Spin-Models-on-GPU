@@ -424,30 +424,57 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
                 all_done = (all_done && done_flag[i]);
             }
         }*/
-    int* global_offset = (int*)malloc(how_many*sizeof(int));
-    memset(global_offset, 0, how_many*sizeof(int));
-
+    int** scan_holder = (int**)malloc(2*how_many*sizeof(int));
+    
+        cout<<raw_size[0]<<endl;
+  
+    
     for(int i = 0; i < how_many; i++)
     {
-        Multiscan<<< raw_size[i]/1024, 1024, device, stream[i]>>>(d_H[i].set, d_num_Elem, i, global_offset[i]);
-        global_offset[i] = 1024;
+        cudaMalloc(&scan_holder[i], raw_size[i]*sizeof(int)/1024);
+        MultiscanFirstPass<<< raw_size[i]/1024, 1024, device, stream[i]>>>(d_H[i].set, scan_holder[i], d_H[i].sectordim);
     }
 
+    int* h_scan = (int*)malloc(raw_size[0]*sizeof(int)/1024);
+    cudaMemcpy(h_scan, scan_holder[0], raw_size[0]*sizeof(int)/1024, cudaMemcpyDeviceToHost);
+
+            ofstream fout;
+            fout.open("hamiltonian.log");
+            for(int j = 0; j < raw_size[0]/1024; j++)
+            {
+                fout<<h_scan[j]<<std::endl;
+
+            }
+            fout.close();
     for(int i = 0; i < how_many; i++)
     {
-        Multiscan<<< raw_size[i]/(1024*1024), 1024, device, stream[i]>>>(d_H[i].set, d_num_Elem, i, global_offset[i]);
-        global_offset[i] = 1024*1024;
+        cudaMalloc(&scan_holder[i + how_many], (raw_size[i]/(1024*1024))%32 ? (raw_size[i]*sizeof(int)/(1024*1024)) : ((raw_size[i]/(1024*1024*32)) + 1)*32*sizeof(int) );
+        cudaMemset(scan_holder[i + how_many], 0,  (raw_size[i]/(1024*1024))%32 ? (raw_size[i]*sizeof(int)/(1024*1024)) : ((raw_size[i]/(1024*1024*32)) + 1)*32*sizeof(int)); 
+        MultiscanFirstPass<<< raw_size[i]/(1024*1024), 1024, device, stream[i]>>>(scan_holder[i], scan_holder[i + how_many], INT_MAX);
     }
 
+    /*cudaMemcpy(h_scan, scan_holder[how_many], raw_size[0]*sizeof(int)/(1024*1024), cudaMemcpyDeviceToHost);
+            ofstream fout;
+            fout.open("hamiltonian.log");
+            for(int j = 0; j < raw_size[0]/(1024*1024); j++)
+            {
+                fout<<h_scan[j]<<std::endl;
+
+            }
+            fout.close();*/
     for(int i = 0; i < how_many; i++)
     {
-        Multiscan<<< 1, raw_size[i]/(1024*1024), device, stream[i]>>>(d_H[i].set, d_num_Elem, i, global_offset[i]);
-    }
-
-    free(global_offset);
-        
-
+        MultiscanFinal<<< 1, 64, device, stream[i]>>>(scan_holder[i + how_many], d_num_Elem, i);
+    }        
+    cout<<endl;
     cudaThreadSynchronize();
+
+    for(int i = 0; i < how_many; i++)
+    {
+        cudaFree(scan_holder[i]);
+	cudaFree(scan_holder[i + how_many]);
+    }
+    free(scan_holder);
 
     //int* num_ptr;
     //cudaGetSymbolAddress((void**)&num_ptr, (const char*)"d_num_Elem");
@@ -572,7 +599,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         }
 
 
-        if(i == 0)
+        /*if(i == 0)
         {
             cout<<num_Elem[i]<<endl;
             ofstream fout;
@@ -584,7 +611,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
             }
             fout.close();
-        }
+        }*/
         cudaStreamSynchronize(stream[i]);
         cudaFree(vals_buffer[i]);
         free(Bond[i]);
@@ -710,165 +737,136 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
         }
     }//end of ii
 }//end of FillSparse
-
-/*__global__ void ScanBlocks(int* count, unsigned int* counter, int index)
-{
-  
-  //const uint WARP_SIZE = 32;
-  //const uint NUM_WARPS = 1024/WARP_SIZE;
-  uint tid = threadIdx.x;
-  uint global_id = tid + blockDim.x*blockIdx.x;
-  uint lane = (WARP_SIZE - 1) & tid;
-  uint warp = tid / WARP_SIZE;
-  uint val = counter[global_id];
-  uint flag = val;
-  // Ballot scan the flags as in the warp scan version.
-  uint bits = __ballot(flag);
-  uint mask = bfi(0, 0xffffffff, 0, lane);
-  uint exc = __popc(mask & bits);
-  uint warpTotal = __popc(bits);
-    
-  // Store each warp total into shared memory.
-  __shared__ volatile uint shared[NUM_WARPS];
-  if(!lane) shared[warp] = warpTotal;
-                                                     
-  // Inclusive scan the warp totals.
-  __syncthreads();
-  //const int LOG_NUM_WARPS = 5;
-  if(tid < NUM_WARPS) {
-  uint x = shared[tid];
-    for(int i = 0; i < LOG_NUM_WARPS; ++i) {
-      uint offset = 1<< i;
-      if(tid >= offset) x += shared[tid - offset];
-        shared[tid] = x;
-    }
-  }
-  __syncthreads();
-                                                                                                                                         
-  // Add the inclusive scanned warp totals into exc.
-  uint blockTotal = shared[NUM_WARPS-1];
-  exc += shared[warp];// - warpTotal;
-  // Scatter the defined values to shared memory.
-  //const int NUM_THREADS = 1024;
-  //__shared__ volatile float shared2[NUM_THREADS];
-  
-  //if(flag) shared2[exc] = val;
-  
-  //Synchronize and write from shared memory to global memory.  
-   __syncthreads();
-  
-  //if(tid < blockTotal) {
-    //val = shared2[tid];
-    //counter[global_id] = val;
-  //}
-  //if(!tid){
-    count[index] = blockTotal;
-    counter[blockIdx.x] = blockTotal;
-    //printf(" %d \n ", blockTotal);
-  //}
-	
-}
-
-__global__ void ScanBlocksFinal(int* count, unsigned int* counter, int index, int bound)
-{
-  
-  uint tid = threadIdx.x;
-  uint global_id = tid + blockDim.x*blockIdx.x;
-  uint lane = (WARP_SIZE - 1) & tid;
-  uint warp = tid / WARP_SIZE;
-  uint val = counter[global_id];
-  uint flag = val;
-  // Ballot scan the flags as in the warp scan version.
-  uint bits = __ballot(flag);
-  uint mask = bfi(0, 0xffffffff, 0, lane);
-  uint exc = __popc(mask & bits);
-  uint warpTotal = __popc(bits);
-    
-  // Store each warp total into shared memory.
-  __shared__ volatile uint shared[NUM_WARPS];
-  if(!lane) shared[warp] = warpTotal;
-                                                     
-  // Inclusive scan the warp totals.
-  __syncthreads();
-  if(tid < NUM_WARPS) {
-  uint x = shared[tid];
-    for(int i = 0; i < LOG_NUM_WARPS; ++i) {
-      uint offset = 1<< i;
-      if(tid >= offset) x += shared[tid - offset];
-        shared[tid] = x;
-    }
-  }
-  __syncthreads();
-                                                                                                                                         
-  // Add the inclusive scanned warp totals into exc.
-  uint blockTotal = shared[bound-1];
-  //exc += shared[warp];// - warpTotal;
-  //Synchronize and write from shared memory to global memory.  
-   __syncthreads();
-  
-    count[index] = blockTotal;
-    counter[blockIdx.x] = blockTotal;
-	
-}*/
-__global__ void Multiscan(int* values, int* inclusive, int index, int global_offset) {
    
-	// Reserve a half warp of extra space plus one per warp in the block.
-	// This is exactly enough space to avoid comparisons in the multiscan
-	// and to avoid bank conflicts.
-
-	__shared__ volatile int scan[NUM_WARPS * SCAN_STRIDE];
-	int tid = threadIdx.x;
-	int warp = tid / WARP_SIZE;
-	int lane = (WARP_SIZE - 1) & tid;
-                                
-	volatile int* s = scan + SCAN_STRIDE * warp + lane + WARP_SIZE / 2;
-	s[-16] = 0;
-                                             
-	// Read from global memory.
-	int x = values[tid*global_offset];
-	s[0] = x;
-                                                          
-	// Run inclusive scan on each warp's data.
-	int sum = x;   
-	#pragma unroll
-	for(int i = 0; i < 5; ++i) {
-		int offset = 1<< i;
-		sum += s[-offset];
-		s[0] = sum;
-	}
-                                                                                                         
-	// Synchronize to make all the totals available to the reduction code.
-	__syncthreads();
-	__shared__ volatile int totals[NUM_WARPS + NUM_WARPS / 2];
-        int warp_count = (blockDim.x % 32) ? blockDim.x/32 + 1 :  blockDim.x/32;
-	if(tid < warp_count) {
-	// Grab the block total for the tid'th block. This is the last element in the block's scanned sequence. This operation avoids bank conflicts.
-	  int total = scan[SCAN_STRIDE * tid + WARP_SIZE / 2 + WARP_SIZE - 1];
-	  totals[tid] = 0;
-	  volatile int* s2 = totals + NUM_WARPS / 2 + tid;
-	  int totalsSum = total;
-	  s2[0] = total;
-
-	  #pragma unroll
-	  for(int i = 0; i < LOG_NUM_WARPS; ++i) {
-		  int offset = 1<< i;
-		  totalsSum += s2[-offset];
-		  s2[0] = totalsSum; 
-	  }
-          totals[tid] = totalsSum;
+__global__ void MultiscanFirstPass(const int* values, int* inclusive, int cutoff) {
+ 
+    // Reserve a half warp of extra space plus one per warp in the block.
+    // This is exactly enough space to avoid comparisons in the multiscan
+    // and to avoid bank conflicts.
+    __shared__ volatile int scan[NUM_WARPS * SCAN_STRIDE];
+    int tid = threadIdx.x;
+    int gid = tid + blockDim.x*blockIdx.x;
+    int warp = tid / WARP_SIZE;
+    int lane = (WARP_SIZE - 1) & tid;
+ 
+    volatile int* s = scan + SCAN_STRIDE * warp + lane + WARP_SIZE / 2;
+    s[-16] = 0;
+     
+    // Read from global memory.
+    int x = values[gid];
+    s[0] = x;
+ 
+    // Run inclusive scan on each warp's data.
+    int sum = x;   
+    #pragma unroll
+    for(int i = 0; i < 5; ++i) {
+        int offset = 1<< i;
+        sum += s[-offset];
+        s[0] = sum;
+    }
+ 
+    // Synchronize to make all the totals available to the reduction code.
+    __syncthreads();
+    __shared__ volatile int totals[NUM_WARPS + NUM_WARPS / 2];
+    if(tid < NUM_WARPS) {
+        // Grab the block total for the tid'th block. This is the last element
+        // in the block's scanned sequence. This operation avoids bank
+        // conflicts.
+        int total = scan[SCAN_STRIDE * tid + WARP_SIZE / 2 + WARP_SIZE - 1];
+ 
+        totals[tid] = 0;
+        volatile int* s2 = totals + NUM_WARPS / 2 + tid;
+        int totalsSum = total;
+        s2[0] = total;
+ 
+        #pragma unroll
+        for(int i = 0; i < LOG_NUM_WARPS; ++i) {
+            int offset = 1<< i;
+            totalsSum += s2[-offset];
+            s2[0] = totalsSum; 
         }
-	// Synchronize to make the block scan available to all warps.
-	__syncthreads();
-	// Add the block scan to the inclusive sum for the block.
-	sum += totals[warp];
-  
-	// Write the inclusive and exclusive scans to global memory.
-        if( tid == blockDim.x - 1)
-        {
-          values[blockIdx.x*global_offset] = sum;
-          if (gridDim.x == 1) inclusive[index] = sum;
-        }
+ 
+        // Subtract total from totalsSum for an exclusive scan.
+        totals[tid] = totalsSum - total;
+    }
+ 
+    // Synchronize to make the block scan available to all warps.
+    __syncthreads();
+ 
+    // Add the block scan to the inclusive sum for the block.
+    sum += totals[warp];
+ 
+    // Write the inclusive and exclusive scans to global memory.
+    if ((tid + 1) == blockDim.x) 
+    {
+      inclusive[blockIdx.x] = sum;
+      //printf("%d \t", sum);
+    }
+
 }
+
+__global__ void MultiscanFinal(const int* values, int* inclusive, int index) {
+ 
+    // Reserve a half warp of extra space plus one per warp in the block.
+    // This is exactly enough space to avoid comparisons in the multiscan
+    // and to avoid bank conflicts.
+    __shared__ volatile int scan[2 * SCAN_STRIDE];
+    int tid = threadIdx.x;
+    int warp = tid / WARP_SIZE;
+    int lane = (WARP_SIZE - 1) & tid;
+ 
+    volatile int* s = scan + SCAN_STRIDE * warp + lane + WARP_SIZE / 2;
+    s[-16] = 0;
+     
+    // Read from global memory.
+    int x = values[tid];
+    s[0] = x;
+ 
+    // Run inclusive scan on each warp's data.
+    int sum = x;   
+    #pragma unroll
+    for(int i = 0; i < 4; ++i) {
+        int offset = 1<< i;
+        sum += s[-offset];
+        s[0] = sum;
+    }
+ 
+    // Synchronize to make all the totals available to the reduction code.
+    __syncthreads();
+    __shared__ volatile int totals[3];
+    if(tid < 2) {
+        // Grab the block total for the tid'th block. This is the last element
+        // in the block's scanned sequence. This operation avoids bank
+        // conflicts.
+        int total = scan[SCAN_STRIDE * tid + WARP_SIZE / 2 + WARP_SIZE - 1];
+ 
+        totals[tid] = 0;
+        volatile int* s2 = totals + 1 + tid;
+        int totalsSum = total;
+        s2[0] = total;
+ 
+        #pragma unroll
+        for(int i = 0; i < 1; ++i) {
+            int offset = 1<< i;
+            totalsSum += s2[-offset];
+            s2[0] = totalsSum; 
+        }
+ 
+        // Subtract total from totalsSum for an exclusive scan.
+        totals[tid] = totalsSum - total;
+    }
+ 
+    // Synchronize to make the block scan available to all warps.
+    __syncthreads();
+ 
+    // Add the block scan to the inclusive sum for the block.
+    sum += totals[warp];
+ 
+    // Write the inclusive and exclusive scans to global memory.
+    if ((tid + 1) == blockDim.x) inclusive[index] = sum;
+
+}
+
 /*Function: FullToCOO - takes a full sparse matrix and transforms it into COO format
 Inputs - num_Elem - the total number of nonzero elements
 H_vals - the Hamiltonian values

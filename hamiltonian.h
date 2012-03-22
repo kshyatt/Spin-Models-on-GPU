@@ -84,7 +84,9 @@ __global__ void ScanBlocks(int* count, unsigned int* counter, int index);
 
 __global__ void ScanBlocksFinal(int* count, unsigned int* counter, int index, int bound);
 
-__global__ void Multiscan(int* values, int* inclusive, int index, int global_offset);
+__global__ void MultiscanFirstPass(const int* values, int* inclusive, int cutoff);
+
+__global__ void MultiscanFinal(const int* values, int* inclusive, int index);
 
 __global__ void FullToCOO(int num_Elem, float* H_vals, double* hamil_Values, int dim);
 
