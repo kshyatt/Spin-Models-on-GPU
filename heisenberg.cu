@@ -70,7 +70,7 @@ int main()
     for(int i = 0; i < how_many; i++)
     {
         
-        nsite[i] = 20;
+        nsite[i] = 16;
         Bond[i] = (int*)malloc(2*nsite[i]*sizeof(int));
         for(int k = 0; k < nsite[i]; k++){
           Bond[i][k] = k;

@@ -9,11 +9,11 @@
 #include "sort/inc/mgpusort.hpp"
 #include "lattice.h"
 //#include"thrust/sort.h"
-//#include"thrust/device_ptr.h"
+#include"thrust/device_ptr.h"
 //#include"thrust/count.h"
 //#include"thrust/device_vector.h"
 //#include"thrust/host_vector.h"
-//#include"thrust/reduce.h"
+#include"thrust/reduce.h"
 
 #define WARP_SIZE 32
 #define NUM_THREADS 1024
@@ -80,13 +80,7 @@ __global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, f
 
 __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* H_set, int* d_Bond, const int lattice_Size, const float JJ, const float h, int* num_Elem, int index);
 
-__global__ void ScanBlocks(int* count, unsigned int* counter, int index);
-
-__global__ void ScanBlocksFinal(int* count, unsigned int* counter, int index, int bound);
-
-__global__ void MultiscanFirstPass(const int* values, int* inclusive, int cutoff);
-
-__global__ void MultiscanFinal(const int* values, int* inclusive, int index);
+__global__ void BallotScanBlock(const int* dataIn_global, int* dataOut_global, int* countOut_global, int index, bool done_flag);
 
 __global__ void FullToCOO(int num_Elem, float* H_vals, double* hamil_Values, int dim);
 
