@@ -276,8 +276,8 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
             cout<<"Error setting "<<i<<"th d_H_vals array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
-        status[i] = cudaMalloc(&d_H[i].set, raw_size[i]*sizeof(uint));
-        status[i] = cudaMemset(d_H[i].set, 0, raw_size[i]*sizeof(uint));
+        status[i] = cudaMalloc(&d_H[i].set, raw_size[i]*sizeof(int));
+        status[i] = cudaMemset(d_H[i].set, 0, raw_size[i]*sizeof(int));
         if (status[i] != CUDA_SUCCESS)
         {
             cout<<"Error setting "<<i<<"th d_H_vals array: "<<cudaGetErrorString(status[i])<<endl;
@@ -349,6 +349,11 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
     }
 
+    /*for(int i = 0; i < how_many; i++)
+    {
+        thrust::device_ptr<uint> red_ptr(d_H[i].set);
+        num_Elem[i] = thrust::reduce(red_ptr, red_ptr + raw_size[i]);
+    }*/
     /*hamstruct* d_H_sort;
     status2 = cudaMalloc(&d_H_sort, *vdim*stride*sizeof(hamstruct));
 
@@ -358,11 +363,14 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     	return 1;
     }*/
 
-        int* num_blocks = (int*)malloc(how_many*sizeof(int));
+        /*int iter = 1;
+        uint* num_blocks = (uint*)malloc(how_many*sizeof(uint));
 	for (int i = 0; i < how_many; i++){
-                num_blocks[i] = raw_size[i]/1024;
+                if (raw_size[i] > 1024) num_blocks[i] = raw_size[i]/1024;
+                else num_blocks[i] = raw_size[i];
 		cudaStreamSynchronize(stream[i]);		
 		ScanBlocks<<<num_blocks[i], 1024, device, stream[i]>>>(d_num_Elem, d_H[i].set, i);
+                cout<<iter<<" "<<num_blocks[i]<<" "<<raw_size[i]<<endl;
                 
 	}
 
@@ -376,18 +384,68 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
             {
                 if( !done_flag[i])
                 {
-                    num_blocks[i] /= 1024;
-                    if (num_blocks[i] <= 1)
+                    //done_flag[i] = num_blocks[i] % 1024 > 0;
+                    if (num_blocks[i] < 1024)
                     {
-                        num_blocks[i] = 1;
+                        //num_blocks[i] = 1;
                         done_flag[i] = true;
+                        int bound = num_blocks[i];
+                        if (num_blocks[i] > 1)
+                        {
+                          num_blocks[i]--;
+                          num_blocks[i] |= num_blocks[i] >> 1;
+                          num_blocks[i] |= num_blocks[i] >> 2;
+                          num_blocks[i] |= num_blocks[i] >> 4;
+                          num_blocks[i] |= num_blocks[i] >> 8;
+                          num_blocks[i] |= num_blocks[i] >> 16;
+                          num_blocks[i]++;
+                        }
+                        cout<<bound<<" "<<num_blocks[i]<<endl;
+                        ScanBlocksFinal<<< 1, num_blocks[i], device, stream[i] >>>(d_num_Elem, d_H[i].set, i, bound);
                     }
-                    ScanBlocks<<< num_blocks[i], 1024, device, stream[i] >>>(d_num_Elem, d_H[i].set, i);
+                    if (num_blocks[i] == 1)
+                    {
+                        done_flag[i] = true;
+                        ScanBlocks<<< num_blocks[i], 1024, device, stream[i] >>>(d_num_Elem, d_H[i].set, i);
+                        cout<<iter<<" "<<num_blocks[i]<<" "<<raw_size[i]<<endl;
+                    } 
+
+
+                    else
+                    {
+                      num_blocks[i] /= 1024;
+                    
+                      iter++;
+                      cout<<iter<<" "<<num_blocks[i]<<" "<<raw_size[i]<<endl;
+
+                      ScanBlocks<<< num_blocks[i], 1024, device, stream[i] >>>(d_num_Elem, d_H[i].set, i);
+                    }
                 }
                 all_done = (all_done && done_flag[i]);
             }
-        }
+        }*/
+    int* global_offset = (int*)malloc(how_many*sizeof(int));
+    memset(global_offset, 0, how_many*sizeof(int));
 
+    for(int i = 0; i < how_many; i++)
+    {
+        Multiscan<<< raw_size[i]/1024, 1024, device, stream[i]>>>(d_H[i].set, d_num_Elem, i, global_offset[i]);
+        global_offset[i] = 1024;
+    }
+
+    for(int i = 0; i < how_many; i++)
+    {
+        Multiscan<<< raw_size[i]/(1024*1024), 1024, device, stream[i]>>>(d_H[i].set, d_num_Elem, i, global_offset[i]);
+        global_offset[i] = 1024*1024;
+    }
+
+    for(int i = 0; i < how_many; i++)
+    {
+        Multiscan<<< 1, raw_size[i]/(1024*1024), device, stream[i]>>>(d_H[i].set, d_num_Elem, i, global_offset[i]);
+    }
+
+    free(global_offset);
+        
 
     cudaThreadSynchronize();
 
@@ -548,7 +606,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     //return num_Elem;
 }
 
-__global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, uint* H_set, int* d_Bond, int lattice_Size, float JJ)
+__global__ void FillDiagonals(int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* H_set, int* d_Bond, int lattice_Size, float JJ)
 {
 
     int row = blockIdx.x*blockDim.x + threadIdx.x;
@@ -592,7 +650,7 @@ JJ - the coupling parameter
 
 */
 
-__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, uint* H_set, int* d_Bond, const int lattice_Size, const float JJ, const float h, int* num_Elem, int index)
+__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* H_set, int* d_Bond, const int lattice_Size, const float JJ, const float h, int* num_Elem, int index)
 {
 
     int ii = ( blockDim.x / ( 2 * lattice_Size ) ) * blockIdx.x + threadIdx.x / ( 2 * lattice_Size ) + blockIdx.y* gridDim.x * blockDim.x / (2 * lattice_Size);
@@ -645,24 +703,25 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
             H_vals[ idx( ii, 2 * site + ( T0 / lattice_Size ) + start, stride ) ] = tempval[ threadIdx.x ]; 
             H_cols[ idx( ii, 2 * site + ( T0 / lattice_Size ) + start, stride ) ] = temppos[ threadIdx.x ];
             H_rows[ idx( ii, 2 * site + ( T0 / lattice_Size ) + start, stride ) ] = rowtemp;
+            H_set[ idx( ii, 2 * site + ( T0 / lattice_Size ) + start, stride ) ] = count;
             //atomicExch(&H_set[ idx(ii, 2*site + (T0/lattice_Size) + start, stride) ], 1); 
 
-            atomicAdd( &num_Elem[ index ], count);
+            //atomicAdd( &num_Elem[ index ], count);
         }
     }//end of ii
 }//end of FillSparse
 
-__global__ void ScanBlocks(int* count, unsigned int* counter, int index)
+/*__global__ void ScanBlocks(int* count, unsigned int* counter, int index)
 {
   
-  const uint WARP_SIZE = 32;
-  const uint NUM_WARPS = 1024/WARP_SIZE;
+  //const uint WARP_SIZE = 32;
+  //const uint NUM_WARPS = 1024/WARP_SIZE;
   uint tid = threadIdx.x;
   uint global_id = tid + blockDim.x*blockIdx.x;
   uint lane = (WARP_SIZE - 1) & tid;
   uint warp = tid / WARP_SIZE;
-  float val = counter[global_id];
-  uint flag = -1.0f != val;
+  uint val = counter[global_id];
+  uint flag = val;
   // Ballot scan the flags as in the warp scan version.
   uint bits = __ballot(flag);
   uint mask = bfi(0, 0xffffffff, 0, lane);
@@ -675,7 +734,7 @@ __global__ void ScanBlocks(int* count, unsigned int* counter, int index)
                                                      
   // Inclusive scan the warp totals.
   __syncthreads();
-  const int LOG_NUM_WARPS = 5;
+  //const int LOG_NUM_WARPS = 5;
   if(tid < NUM_WARPS) {
   uint x = shared[tid];
     for(int i = 0; i < LOG_NUM_WARPS; ++i) {
@@ -688,24 +747,127 @@ __global__ void ScanBlocks(int* count, unsigned int* counter, int index)
                                                                                                                                          
   // Add the inclusive scanned warp totals into exc.
   uint blockTotal = shared[NUM_WARPS-1];
-  exc += shared[warp] - warpTotal;
+  exc += shared[warp];// - warpTotal;
   // Scatter the defined values to shared memory.
-  const int NUM_THREADS = 1024;
-  __shared__ volatile float shared2[NUM_THREADS];
+  //const int NUM_THREADS = 1024;
+  //__shared__ volatile float shared2[NUM_THREADS];
   
-  if(flag) shared2[exc] = val;
+  //if(flag) shared2[exc] = val;
   
   //Synchronize and write from shared memory to global memory.  
    __syncthreads();
   
-  if(tid < blockTotal) {
-    val = shared2[tid];
-    counter[global_id] = val;
-  }
-  if(!tid)
+  //if(tid < blockTotal) {
+    //val = shared2[tid];
+    //counter[global_id] = val;
+  //}
+  //if(!tid){
     count[index] = blockTotal;
-
+    counter[blockIdx.x] = blockTotal;
+    //printf(" %d \n ", blockTotal);
+  //}
 	
+}
+
+__global__ void ScanBlocksFinal(int* count, unsigned int* counter, int index, int bound)
+{
+  
+  uint tid = threadIdx.x;
+  uint global_id = tid + blockDim.x*blockIdx.x;
+  uint lane = (WARP_SIZE - 1) & tid;
+  uint warp = tid / WARP_SIZE;
+  uint val = counter[global_id];
+  uint flag = val;
+  // Ballot scan the flags as in the warp scan version.
+  uint bits = __ballot(flag);
+  uint mask = bfi(0, 0xffffffff, 0, lane);
+  uint exc = __popc(mask & bits);
+  uint warpTotal = __popc(bits);
+    
+  // Store each warp total into shared memory.
+  __shared__ volatile uint shared[NUM_WARPS];
+  if(!lane) shared[warp] = warpTotal;
+                                                     
+  // Inclusive scan the warp totals.
+  __syncthreads();
+  if(tid < NUM_WARPS) {
+  uint x = shared[tid];
+    for(int i = 0; i < LOG_NUM_WARPS; ++i) {
+      uint offset = 1<< i;
+      if(tid >= offset) x += shared[tid - offset];
+        shared[tid] = x;
+    }
+  }
+  __syncthreads();
+                                                                                                                                         
+  // Add the inclusive scanned warp totals into exc.
+  uint blockTotal = shared[bound-1];
+  //exc += shared[warp];// - warpTotal;
+  //Synchronize and write from shared memory to global memory.  
+   __syncthreads();
+  
+    count[index] = blockTotal;
+    counter[blockIdx.x] = blockTotal;
+	
+}*/
+__global__ void Multiscan(int* values, int* inclusive, int index, int global_offset) {
+   
+	// Reserve a half warp of extra space plus one per warp in the block.
+	// This is exactly enough space to avoid comparisons in the multiscan
+	// and to avoid bank conflicts.
+
+	__shared__ volatile int scan[NUM_WARPS * SCAN_STRIDE];
+	int tid = threadIdx.x;
+	int warp = tid / WARP_SIZE;
+	int lane = (WARP_SIZE - 1) & tid;
+                                
+	volatile int* s = scan + SCAN_STRIDE * warp + lane + WARP_SIZE / 2;
+	s[-16] = 0;
+                                             
+	// Read from global memory.
+	int x = values[tid*global_offset];
+	s[0] = x;
+                                                          
+	// Run inclusive scan on each warp's data.
+	int sum = x;   
+	#pragma unroll
+	for(int i = 0; i < 5; ++i) {
+		int offset = 1<< i;
+		sum += s[-offset];
+		s[0] = sum;
+	}
+                                                                                                         
+	// Synchronize to make all the totals available to the reduction code.
+	__syncthreads();
+	__shared__ volatile int totals[NUM_WARPS + NUM_WARPS / 2];
+        int warp_count = (blockDim.x % 32) ? blockDim.x/32 + 1 :  blockDim.x/32;
+	if(tid < warp_count) {
+	// Grab the block total for the tid'th block. This is the last element in the block's scanned sequence. This operation avoids bank conflicts.
+	  int total = scan[SCAN_STRIDE * tid + WARP_SIZE / 2 + WARP_SIZE - 1];
+	  totals[tid] = 0;
+	  volatile int* s2 = totals + NUM_WARPS / 2 + tid;
+	  int totalsSum = total;
+	  s2[0] = total;
+
+	  #pragma unroll
+	  for(int i = 0; i < LOG_NUM_WARPS; ++i) {
+		  int offset = 1<< i;
+		  totalsSum += s2[-offset];
+		  s2[0] = totalsSum; 
+	  }
+          totals[tid] = totalsSum;
+        }
+	// Synchronize to make the block scan available to all warps.
+	__syncthreads();
+	// Add the block scan to the inclusive sum for the block.
+	sum += totals[warp];
+  
+	// Write the inclusive and exclusive scans to global memory.
+        if( tid == blockDim.x - 1)
+        {
+          values[blockIdx.x*global_offset] = sum;
+          if (gridDim.x == 1) inclusive[index] = sum;
+        }
 }
 /*Function: FullToCOO - takes a full sparse matrix and transforms it into COO format
 Inputs - num_Elem - the total number of nonzero elements
