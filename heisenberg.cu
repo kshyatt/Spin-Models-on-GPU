@@ -6,13 +6,13 @@
 
 int main()
 {
-    for(int i = 0; i < 1; i++){
+    for(int i = 0; i < 14; i++){
     int** Bond;
     //cout<<i<<" "<<endl;
     int how_many = 1;
-    /*if (i == 2)
+    /*if (i == 1)
     {
-        how_many = 10;
+        how_many = 25;
     }*/
     Bond = (int**)malloc(how_many*sizeof(int*));
     if (Bond == NULL)
@@ -70,7 +70,7 @@ int main()
     for(int i = 0; i < how_many; i++)
     {
         
-        nsite[i] = 16;
+        nsite[i] = 20;
         Bond[i] = (int*)malloc(2*nsite[i]*sizeof(int));
         for(int k = 0; k < nsite[i]; k++){
           Bond[i][k] = k;
