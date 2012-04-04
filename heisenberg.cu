@@ -7,13 +7,13 @@
 //#include"hamiltonian.h"
 int main()
 {
-    for(int i = 0; i < 2; i++){
+    for(int i = 0; i < 1; i++){
     int** Bond;
     //cout<<i<<" "<<endl;
-    int how_many = 6;
-    /*if (i == 2)
+    int how_many = 1;
+    /*if (i == 1)
     {
-        how_many = 10;
+        how_many = 5;
     }*/
     Bond = (int**)malloc(how_many*sizeof(int*));
     d_hamiltonian* hamil_lancz = (d_hamiltonian*)malloc(how_many*sizeof(d_hamiltonian));
@@ -29,7 +29,7 @@ int main()
     for(int i = 0; i < how_many; i++)
     {
         
-        nsite[i] = 16;
+        nsite[i] = 18;
         Bond[i] = (int*)malloc(3*nsite[i]*sizeof(int));
         Fill_Bonds_16B(Bond[i]);
         Sz[i] = 0;

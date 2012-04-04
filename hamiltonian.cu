@@ -315,7 +315,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         bpg[i].x = (bpg[i].x < (1<<16)) ? bpg[i].x : (1<<8);
         bpg[i].z = 0;
         
-        cout<<bpg[i].x<<endl;
+        //cout<<bpg[i].x<<endl;
 
         status[i] = cudaStreamSynchronize(stream[i]);
 
@@ -370,7 +370,8 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     //cudaGetSymbolAddress((void**)&num_ptr, (const char*)"d_num_Elem");
 
     cudaMemcpy(num_Elem, d_num_Elem, how_many*sizeof(int), cudaMemcpyDeviceToHost);
-    //std::cout<<num_Elem<<std::endl;
+    
+    //std::cout<<num_Elem[0]<<std::endl;
     for(int i = 0; i < how_many; i++)
     {
 

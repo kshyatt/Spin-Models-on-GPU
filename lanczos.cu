@@ -709,11 +709,11 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
    //--------------Free arrays to prevent memory leaks------------------------ 
 	for(int i = 0; i < how_many; i++)
 	{
-		for(int j = 0; j < num_Eig; j++)
+		/*for(int j = 0; j < num_Eig; j++)
 			{
 			    std::cout<<std::setprecision(12)<<h_ordered[i][j]<<" ";
 			}
-		std::cout<<std::endl;
+		std::cout<<std::endl;*/
 
                 for(int j = 0; j < iter[i]; j++)
                 {
@@ -817,7 +817,7 @@ int tqli(double* d, double* e, int n, int max_Iter, double *z)
             }
             if (m!=l)
             {
-                if (iter++ == 30)
+                if (iter++ == 60)
                 {
                     std::cout <<"Too many iterations in tqli() \n";
                     return 0;
