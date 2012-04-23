@@ -139,7 +139,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 	{
 		status[i] = cudaStreamCreate(&stream[i]);
 		status[i] = cudaMalloc(&d_H_rowptrs[i], (dim[i] + 1)*sizeof(int));
-    	if (status[i] != CUDA_SUCCESS)
+    	if (status[i] != cudaSuccess)
     	{
         	std::cout<<"Error allocating d_H_rowptrs: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
@@ -167,7 +167,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 		//cout<<"Done changing streams"<<endl;
 
 		status[i] = cudaPeekAtLastError();
-		if (status[i] != CUDA_SUCCESS)
+		if (status[i] != cudaSuccess)
     	{
         	std::cout<<"Error synchronizing stream: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
@@ -180,7 +180,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     	}
 
 		status[i] = cudaPeekAtLastError();
-		if (status[i] != CUDA_SUCCESS)
+		if (status[i] != cudaSuccess)
     	{
         	std::cout<<"Error synchronizing stream: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
@@ -234,7 +234,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         status[i] = cudaMalloc(&lanczos_store[i][0], dim[i]*sizeof(double));
     	
         status[i] = cudaMemcpyAsync(v0[i], host_v0[i], dim[i]*sizeof(double), cudaMemcpyHostToDevice, stream[i]);
-		if (status[i] != CUDA_SUCCESS)
+		if (status[i] != cudaSuccess)
     	{
         	std::cout<<"Error copying v0 to the device: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
@@ -321,7 +321,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
     	
 
-    	if (status[i] != CUDA_SUCCESS)
+    	if (status[i] != cudaSuccess)
     	{
         	std::cout<<"Memory allocation of y dummy vector failed! Error:";
         	std::cout<<cudaGetErrorString( status[i] )<<std::endl;
@@ -580,7 +580,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 			cublasSetStream(linalghandle, stream[i]);	
 			status[i] = cudaStreamSynchronize(stream[i]);
 			
-			if (status[i] != CUDA_SUCCESS)
+			if (status[i] != cudaSuccess)
     			{
         			std::cout<<"Error syncing before copying v1 to v0: "<<cudaGetErrorString(status[i])<<std::endl;
     			}
@@ -599,12 +599,12 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
                         
                         //--------------Copy the Lanczos vectors down to prepare for next iteration--------------
                         status[i] = cudaMemcpyAsync(v0[i], v1[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
-			if (status[i] != CUDA_SUCCESS)
+			if (status[i] != cudaSuccess)
     			{
         			std::cout<<"Error copying v1 to v0: "<<cudaGetErrorString(status[i])<<std::endl;
     			}
 		    	status[i] = cudaMemcpyAsync(v1[i], v2[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
-			if (status[i] != CUDA_SUCCESS)
+			if (status[i] != cudaSuccess)
     			{
         			std::cout<<"Error copying v2 to v1: "<<cudaGetErrorString(status[i])<<std::endl;
     			}
@@ -638,13 +638,13 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
                                 status[i] = cudaStreamSynchronize(stream[i]);
                         	
                                 status[i] = cudaPeekAtLastError();
-                                if( status[i] != CUDA_SUCCESS)
+                                if( status[i] != cudaSuccess)
                                 {
                                     cout<<"Error in stream sync! Error: "<<cudaGetErrorString(status[i])<<endl;
                                 }
                                 
                         	status[i] = cudaPeekAtLastError();
-                                if( status[i] != CUDA_SUCCESS)
+                                if( status[i] != cudaSuccess)
                                 {
                                     cout<<"Error in zero! Error: "<<cudaGetErrorString(status[i])<<endl;
                                 }
@@ -655,7 +655,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
                                 //---------Diagonalize Lanczos matrix and check for convergence------------------
                                 returned[i] = tqli(h_diag[i], h_offdia[i], iter[i] + 1, max_Iter, h_H_eigen[i]); 
                         	status[i] = cudaPeekAtLastError();
-                                if( status[i] != CUDA_SUCCESS)
+                                if( status[i] != cudaSuccess)
                                 {
                                     cout<<"Error in identity! Error: "<<cudaGetErrorString(status[i])<<endl;
                                 }
@@ -802,7 +802,7 @@ int tqli(double* d, double* e, int n, int max_Iter, double *z)
 
 {
 
-    int m,l,iter,i,k;
+    int m,l,iter,i;//k;
     double s,r,p,g,f,dd,c,b;
 
     for (l=0; l<n; l++)
