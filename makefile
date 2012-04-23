@@ -1,5 +1,5 @@
 CC = nvcc
-CFLAGS = -w -O3 -arch=sm_21
+CFLAGS = -O3 -arch=sm_21 --compiler-options=-Wall,-Wextra,#--pedantic
 #LANCZLIBS = -lcublas -lcusparse 
 HAMLIBS = -Lsort/sort/gnu/release -lmgpusort -lcuda -lcudart
 OBJS = heisenberg.o hamiltonian.o lattice.o

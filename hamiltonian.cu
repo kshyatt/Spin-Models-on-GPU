@@ -72,7 +72,7 @@ __host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], i
     unsigned int temp = 0;
     int realdim = 0;
 
-    for (unsigned int i1=0; i1<dim; i1++)
+    for (int i1=0; i1<dim; i1++)
     {
         temp = 0;
         basis_Position[i1] = -1;
@@ -201,28 +201,28 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         d_H[i].sectordim = GetBasis(d_H[i].fulldim, lattice_Size[i], Sz[i], basis_Position[i], basis[i]);
 
         status[i] = cudaMalloc(&d_basis_Position[i], d_H[i].fulldim*sizeof(int));
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error allocating "<<i<<"th d_basis_Position array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
         status[i] = cudaMalloc(&d_basis[i], d_H[i].sectordim*sizeof(int));
 
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error allocating "<<i<<"th d_basis array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
         status[i] = cudaStreamCreate(&stream[i]);
 
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error creating "<<i<<"th stream: "<<cudaGetErrorString(status[i])<<endl;
         }
 
         num_Elem[i] = d_H[i].sectordim;
         status[i] = cudaMemcpy(d_num_Elem, num_Elem, how_many*sizeof(int), cudaMemcpyHostToDevice);
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error copying num_Elem array to device in "<<i<<"th stream: "<<cudaGetErrorString(status[i])<<endl;
         }
@@ -233,65 +233,65 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     {
         status[i] = cudaMemcpyAsync(d_basis_Position[i], basis_Position[i], d_H[i].fulldim*sizeof(int), cudaMemcpyHostToDevice, stream[i]);
 
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error copying "<<i<<"th basis_Position: "<<cudaGetErrorString(status[i])<<endl;
         }
 
         status[i] = cudaMemcpyAsync(d_basis[i], basis[i], d_H[i].sectordim*sizeof(int), cudaMemcpyHostToDevice, stream[i]);
 
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error copying "<<i<<"th basis: "<<cudaGetErrorString(status[i])<<endl;
         }
 
         padded_dim[i] = (bool)(d_H[i].sectordim%512) ? (d_H[i].sectordim/512 + 1)*512 : d_H[i].sectordim;
-        raw_size[i] = padded_dim[i] + (2*lattice_Size[i]*d_H[i].sectordim);
+        raw_size[i] = padded_dim[i] + ( (stride[i] - 1)*d_H[i].sectordim);
         raw_size[i] = (bool)(raw_size[i]%2048) ? (raw_size[i]/2048 + 1)*2048 : raw_size[i];
 
         status[i] = cudaMalloc(&d_H[i].rows, raw_size[i]*sizeof(int));
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error creating "<<i<<"th rows array: "<<cudaGetErrorString(status[i])<<endl;
         }
         status[i] = cudaMalloc(&d_H[i].cols, raw_size[i]*sizeof(int));
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error creating "<<i<<"th cols array: "<<cudaGetErrorString(status[i])<<endl;
         }
         status[i] = cudaMalloc(&d_H[i].vals, raw_size[i]*sizeof(float));
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error creating "<<i<<"th values array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
         /*status[i] = cudaMemset(d_H[i].rows, d_H[i].sectordim + 1, raw_size[i]*sizeof(int));
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error setting "<<i<<"th d_H_vals array: "<<cudaGetErrorString(status[i])<<endl;
         }*/
         status[i] = cudaMemset(d_H[i].vals, 0, raw_size[i]*sizeof(float));
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error setting "<<i<<"th d_H_vals array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
         status[i] = cudaMalloc(&d_H[i].set, raw_size[i]*sizeof(int));
         status[i] = cudaMemset(d_H[i].set, 0, raw_size[i]*sizeof(int));
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error setting "<<i<<"th d_H_vals array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
-        status[i] = cudaMalloc(&d_Bond[i], 2*lattice_Size[i]*sizeof(int));
-        if (status[i] != CUDA_SUCCESS)
+        status[i] = cudaMalloc(&d_Bond[i], (stride[i] - 1)*sizeof(int));
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error creating "<<i<<"th bonds array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
-        status[i] = cudaMemcpyAsync(d_Bond[i], Bond[i], 2*lattice_Size[i]*sizeof(int), cudaMemcpyHostToDevice, stream[i]);
+        status[i] = cudaMemcpyAsync(d_Bond[i], Bond[i], (stride[i] - 1)*sizeof(int), cudaMemcpyHostToDevice, stream[i]);
 
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error copying "<<i<<"th bonds array: "<<cudaGetErrorString(status[i])<<endl;
         }
@@ -303,7 +303,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         }
         while(tpb[i].x < 512);
 
-        bpg[i].x = (bool)(2*lattice_Size[i]*d_H[i].sectordim)%tpb[i].x ? (((2*lattice_Size[i]*d_H[i].sectordim)/tpb[i].x) + 1) : (2*lattice_Size[i]*d_H[i].sectordim)/tpb[i].x;
+        bpg[i].x = (bool)( (stride[i] - 1)*d_H[i].sectordim)%tpb[i].x ? ((((stride[i] - 1)*d_H[i].sectordim)/tpb[i].x) + 1) : ((stride[i] - 1)*d_H[i].sectordim)/tpb[i].x;
 
         if (bpg[i].x > (1<<16)){
           bpg[i].y = bpg[i].x/(1<<15);
@@ -317,7 +317,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
         status[i] = cudaStreamSynchronize(stream[i]);
 
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error synchronizing "<<i<<"th stream: "<<cudaGetErrorString(status[i])<<endl;
         }
@@ -327,13 +327,13 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     for(int i = 0; i < how_many; i++){
         status[i] = cudaStreamSynchronize(stream[i]);
 
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error synchronizing "<<i<<"th stream: "<<cudaGetErrorString(status[i])<<endl;
         }
 
         status[i] = cudaPeekAtLastError();
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error in "<<i<<"th stream before FillSparse: "<<cudaGetErrorString(status[i])<<endl;
         }
@@ -342,7 +342,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         FillSparse<<<bpg[i].x, tpb[i].x, device, stream[i]>>>(d_basis_Position[i], d_basis[i], d_H[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_H[i].set, d_Bond[i], lattice_Size[i], JJ[i], h[i], d_num_Elem, i);
 
         status[i] = cudaPeekAtLastError();
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error in "<<i<<"th stream after FillSparse: "<<cudaGetErrorString(status[i])<<endl;
         }
@@ -485,17 +485,17 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     {
 
         status[i] = cudaFree(d_basis[i]);
-        if ( status[i] != CUDA_SUCCESS)
+        if ( status[i] != cudaSuccess )
         {
             cout<<"Error freeing "<<i<<"th basis array: "<<cudaGetErrorString(status[i])<<endl;
         }
         status[i] = cudaFree(d_basis_Position[i]);
-        if (status[i] != CUDA_SUCCESS)
+        if ( status[i] != cudaSuccess )
         {
             cout<<"Error freeing "<<i<<"th basis_Position array: "<<cudaGetErrorString(status[i])<<endl;
         }
         status[i] = cudaFree(d_Bond[i]); // we don't need these later on
-        if (status[i] != CUDA_SUCCESS)
+        if ( status[i] != cudaSuccess )
         {
 
             cout<<"Error freeing "<<i<<"th Bond array: "<<cudaGetErrorString(status[i])<<endl;
@@ -517,8 +517,6 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
         MgpuSortData sortdata;
 
-        sortnumber[i];
-
         sortdata.AttachKey((uint*)d_H[i].rows);
         sortdata.AttachVal(0, (uint*)d_H[i].cols);
         sortdata.AttachVal(1, (uint*)d_H[i].vals);
@@ -539,17 +537,17 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         thrust::sort_by_key(sort_key_ptr, sort_key_ptr + *vdim*stride, sort_val_ptr);*/
         
         status[i] = cudaMalloc(&hamil_lancz[i].vals, num_Elem[i]*sizeof(double));
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error allocating "<<i<<"th lancz values array: "<<cudaGetErrorString(status[i])<<endl;
         }
         status[i] = cudaMalloc(&hamil_lancz[i].rows, num_Elem[i]*sizeof(int));
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error allocating "<<i<<"th lancz rows array: "<<cudaGetErrorString(status[i])<<endl;
         }
         status[i] = cudaMalloc(&hamil_lancz[i].cols, num_Elem[i]*sizeof(int));
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error allocating "<<i<<"th lancz cols array: "<<cudaGetErrorString(status[i]);
         }
@@ -579,21 +577,21 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
         status[i] = cudaMemcpy(h_vals, hamil_lancz[i].vals, num_Elem[i]*sizeof(double), cudaMemcpyDeviceToHost);
 
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error copying to h_vals: "<<cudaGetErrorString(status[i])<<endl;
         }
 
         status[i] = cudaMemcpy(h_rows, hamil_lancz[i].rows, num_Elem[i]*sizeof(int), cudaMemcpyDeviceToHost);
 
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error copying to h_rows: "<<cudaGetErrorString(status[i])<<endl;
         }
 
         status[i] = cudaMemcpy(h_cols, hamil_lancz[i].cols, num_Elem[i]*sizeof(int), cudaMemcpyDeviceToHost);
 
-        if (status[i] != CUDA_SUCCESS)
+        if (status[i] != cudaSuccess)
         {
             cout<<"Error copying to h_cols: "<<cudaGetErrorString(status[i])<<endl;
         }*/
