@@ -694,6 +694,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 #endif
 
     int count;
+	__shared__ int2 tempbond[20];
     __shared__ int temppos[ array_size ];
     __shared__ float tempval[ array_size ];
 
@@ -701,6 +702,11 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
     int site = T0 % ( lattice_Size );
     count = 0;
     int rowtemp;
+    uint tempi;
+    __shared__ uint tempod[array_size];
+
+	tempi = d_basis[ii];
+
 
     //int start = (bool)(dim%array_size) ? (dim/array_size + 1)*array_size : dim/array_size;
     int start = ( bool )( dim % 512 ) ? ( dim / 512 + 1 ) * 512 : dim ; 
@@ -710,9 +716,31 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
     {
         if ( T0 < 2 * lattice_Size )
         {
+
+          //Putting bond info in shared memory
+            (tempbond[site]).x = d_Bond[site];
+            (tempbond[site]).y = d_Bond[lattice_Size + site];
+
+            __syncthreads();
+
+            //-----------------Horizontal bond ---------------
+            tempod[threadIdx.x] = tempi;
+            tempod[threadIdx.x] ^= ( 1<<(tempbond[site].x) );//toggles both spins on the bond
+
+            compare = (d_basis_Position[tempod[threadIdx.x]] > ii); //don't double count elements
+
+            temppos[threadIdx.x] = (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
+            tempval[threadIdx.x] = HOffBondX(site, tempi, JJ);
+
+            count += (int)compare;
+            rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
+            rowtemp = (compare) ? rowtemp : dim + 1;
+
+            //H_index[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = rowtemp*dim + H_cols[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ];
+
             //----sigma^x term ------------------------------------------
 
-            temppos[ threadIdx.x ] = ( ii ^ ( 1 << site ) );// & ( 1 << site ); //flip the site-th bit of row - applying the sigma_x operator
+            /*temppos[ threadIdx.x ] = ( ii ^ ( 1 << site ) );// & ( 1 << site ); //flip the site-th bit of row - applying the sigma_x operator
             compare = ( temppos[ threadIdx.x ] > ii ) && ( temppos[ threadIdx.x ] < dim );
             temppos[ threadIdx.x ] = compare ? temppos[ threadIdx.x ] : dim + 1;
             tempval[ threadIdx.x ] = 0.5 * h;
@@ -724,7 +752,7 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
 
             //count = (H_vals[ idx(ii, 2*site + (T0/lattice_Size) + start, stride) ] < 1e-8) ? (int)compare : 0;
             //count = (bool)H_set[ idx(ii, 2*site + (T0/lattice_Size) + start, stride) ] ? 0 : (int)compare; 
-            count += ( int )compare;
+            count += ( int )compare;*/
             //----Putting everything back into GPU main memory-----------
 
             H_vals[ idx( ii, 2 * site + ( T0 / lattice_Size ) + start, stride ) ] = tempval[ threadIdx.x ]; 

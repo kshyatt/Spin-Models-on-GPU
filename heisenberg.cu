@@ -6,13 +6,13 @@
 
 int main()
 {
-    for(int i = 0; i < 14; i++){
+    for(int i = 0; i < 1; i++){
     int** Bond;
     //cout<<i<<" "<<endl;
     int how_many = 1;
     /*if (i == 1)
     {
-        how_many = 25;
+        how_many = 30;
     }*/
     Bond = (int**)malloc(how_many*sizeof(int*));
     if (Bond == NULL)
