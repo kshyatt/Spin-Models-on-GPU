@@ -2,6 +2,42 @@
 
 /* NOTE: this function uses FORTRAN style matrices, where the values and positions are stored in a ONE dimensional array! Don't forget this! */
 
+
+/*int main()
+{
+
+
+    int** Bond;
+
+    int how_many = 30;
+    Bond = (int**)malloc(how_many*sizeof(int*));
+    d_hamiltonian* hamil_lancz = (d_hamiltonian*)malloc(how_many*sizeof(d_hamiltonian));
+    int* nsite = (int*)malloc(how_many*sizeof(int));
+    int* Sz = (int*)malloc(how_many*sizeof(int));
+    float* JJ = (float*)malloc(how_many*sizeof(float));
+    int* model_type = (int*)malloc(how_many*sizeof(int));
+
+    for(int i = 0; i < how_many; i++)
+    {
+
+        nsite[i] = 16;
+        Bond[i] = (int*)malloc(3*nsite[i]*sizeof(int));
+        Fill_Bonds_16B(Bond[i]);
+
+
+        Sz[i] = 0;
+        JJ[i] = 1.f;
+        model_type[i] = 0;
+    }
+
+
+    int dim;
+
+    int* num_Elem = ConstructSparseMatrix(how_many, model_type, nsite, Bond, hamil_lancz, JJ, Sz );
+
+    return 0;
+}*/
+
 __host__ __device__ int idx(int i, int j, int lda)
 {
 
@@ -13,8 +49,8 @@ __host__ __device__ int idx(int i, int j, int lda)
 Inputs: dim - the initial dimension of the Hamiltonian
 lattice_Size - the number of sites
 Sz - the value of the Sz operator
-basis_Position[] - an empty array that records the positions of the basis in the set of good kets
-basis - an empty array that records the basis - holds each ket index
+basis_Position[] - an empty array that records the positions of the basis
+basis - an empty array that records the basis
 Outputs: basis_Position - a full array now
 basis[] - a full array now
 
@@ -112,20 +148,17 @@ __device__ float HDiagPart(const int bra, int lattice_Size, int3* d_Bond, const 
 
 /* Function: ConstructSparseMatrix:
 
-Inputs: 
-how_many - how many Hamiltonians are being constructed
-model_Type - which type of Hamiltonian we want to use - presently only takes Heisenberg. Could be turned into a macro
+Inputs: model_Type - tells this function how many elements there could be, what generating functions to use, etc. Presently only supports Heisenberg
 lattice_Size - the number of lattice sites
-Bond - the bond values - which sites are connected to which, moving right and upwards
-hamil_lancz - a custom struct which will contain all the Hamiltonian information
-JJ - the value of the J parameter for the Heisenberg hamiltonian
-Sz - which <S_z> sector we want to examine
-count_array - will hold the number of elements in each Hamiltonian
-device - which GPU the function runs on
+Bond - the bond values ??
+hamil_Values - an empty pointer for a device array containing the values
+hamil_PosRow - an empty pointer for a device array containing the locations of each value in a row
+hamil_PosCol - an empty pointer to a device array containing the locations of each values in a column
 
-Outputs: 
-hamil_lancz - the Hamiltonian rows, columns, and values (as well as dimensions), to be passed to the diagonalizer
-count_array - contains the number of nonzero elements in each Hamiltonian
+Outputs: hamil_Values - a pointer to a device array containing the values
+hamil_PosRow - a pointer to a device array containing the locations of each value in a row
+hamil_PosCol - a pointer to a device array containing the locations of each values in a column
+
 */
 
 __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* lattice_Size, int** Bond, d_hamiltonian*& hamil_lancz, float* JJ, int* Sz, int*& count_array, int device)
@@ -137,8 +170,6 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     //cudaEventCreate(&start);
     //cudaEventCreate(&stop);
     //float time;
-
-    //-----------Initialization-----------------------------------------------------
 
     int* num_Elem = (int*)malloc(how_many*sizeof(int));
     f_hamiltonian* d_H = (f_hamiltonian*)malloc(how_many*sizeof(f_hamiltonian));
@@ -170,8 +201,6 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     //cudaEventSynchronize(stop);
     //cudaEventElapsedTime(&time, start, stop);
     //std::cout<<"Time to maloc d_num_Elem: "<<time<<std::endl;
-
-    //-------Basic information about Hilbert space and basis----------------------
 
     for(int i = 0; i<how_many; i++)
     {
@@ -227,8 +256,6 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         //std::cout<<"Time to copy num_Elem: "<<time<<std::endl;
 
     } // can insert more code in here to handle model type later
-
-    //---------------Move basis information to GPU and initialize Hamiltonian storage there--------------------------------
 
     for(int i = 0; i<how_many; i++)
     {
@@ -306,16 +333,10 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         }
         while(tpb[i].x < 512);
 
-        //tpb[i].y = 0;
-        //tpb[i].z = 0;
-        
+
         bpg[i].x = (bool)((stride[i]-1)*d_H[i].sectordim)%tpb[i].x ? ((((stride[i]-1)*d_H[i].sectordim)/tpb[i].x) + 1) : ((stride[i]-1)*d_H[i].sectordim)/tpb[i].x;
 
-        //bpg[i].y = (bpg[i].x < (1<<16)) ? 0 : (d_H[i].sectordim/(tpb[i].x<<8) + 1);
-        //bpg[i].x = (bpg[i].x < (1<<16)) ? bpg[i].x : (1<<8);
-        //bpg[i].z = 0;
-        
-        //cout<<bpg[i].x<<endl;
+        cout<<bpg[i].x<<endl;
 
         status[i] = cudaStreamSynchronize(stream[i]);
 
@@ -326,9 +347,6 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
         FillDiagonals<<<d_H[i].sectordim/512 + 1, 512, device, stream[i]>>>(d_basis[i], d_H[i].sectordim, d_H[i].index, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], JJ[i]);
     }
-
-    //-------------Fill Hamiltonian with elements-----------------------------
-
     for(int i = 0; i < how_many; i++){
         status[i] = cudaStreamSynchronize(stream[i]);
 
@@ -370,8 +388,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     //cudaGetSymbolAddress((void**)&num_ptr, (const char*)"d_num_Elem");
 
     cudaMemcpy(num_Elem, d_num_Elem, how_many*sizeof(int), cudaMemcpyDeviceToHost);
-    
-    //std::cout<<num_Elem[0]<<std::endl;
+    //std::cout<<num_Elem<<std::endl;
     for(int i = 0; i < how_many; i++)
     {
 
@@ -399,8 +416,6 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
     float** vals_buffer = (float**)malloc(how_many*sizeof(float*));
     int sortnumber[how_many];
-
-    //-------------------------Sort Hamiltonian to pull out nonzero elements-----------------------
 
     for(int i = 0; i<how_many; i++)
     {
@@ -472,7 +487,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         hamil_lancz[i].fulldim = d_H[i].fulldim;
         hamil_lancz[i].sectordim = d_H[i].sectordim;
         count_array[i] = num_Elem[i];
-        cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem[i]*sizeof(cuDoubleComplex));
+        /*cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem[i]*sizeof(cuDoubleComplex));
         int* h_rows = (int*)malloc(num_Elem[i]*sizeof(int));
         int* h_cols = (int*)malloc(num_Elem[i]*sizeof(int));
 
@@ -510,14 +525,12 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
             }
             fout.close();
-        }
+        }*/
         cudaStreamSynchronize(stream[i]);
         cudaFree(vals_buffer[i]);
         free(Bond[i]);
     }
     cudaDeviceSynchronize();
-
-    //----------------------Free arrays to prevent memory leaks---------------------
     free(d_basis_Position);
     free(d_Bond);
     free(d_basis);
@@ -533,19 +546,6 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
     cudaFree(d_num_Elem);
     //return num_Elem;
 }
-
-/* Function FillDiagonals: this function fills only the diagonal elements of a Hamiltonian
-Inputs:
-d_basis - ket index
-dim - the dimension of the Hilbert space
-H_index - array storing a sorting index (row*dim + col)
-H_rows - array storing the row indices of elements
-H_cols - array storing the column indices of elements
-H_vals - array storing the value of elements
-d_Bond - array storing the connections between sites (rightward and upward)
-lattice_Size - the number of sites in the cluster
-JJ - the coupling parameter
-*/
 
 __global__ void FillDiagonals(int* d_basis, int dim, int* H_index, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, int lattice_Size, float JJ)
 {
@@ -581,31 +581,27 @@ __global__ void FillDiagonals(int* d_basis, int dim, int* H_index, int* H_rows, 
 
 }
 
-/* Function FillSparse: this function takes the empty Hamiltonian arrays and fills them up. Each thread in x handles one ket |i>s interaction with one site,
-Inputs: d_basis_Position - position of ``good'' kets  
-d_basis - ket index number
-dim - the number of kets (dimension of Hilbert space)
-H_index - an array that will store an index (row*dim + col) for sorting later
-H_rows - an array that will store the row indices of elements
-H_cols - an array that will store the column indices of elements
-H_vals - an array that will store the values of elements
+/* Function FillSparse: this function takes the empty Hamiltonian arrays and fills them up. Each thread in x handles one ket |i>, and each thread in y handles one site T0
+Inputs: d_basis_Position - position information about the basis
+d_basis - other basis infos
+d_dim - the number of kets
+H_sort - an array that will store the Hamiltonian
 d_Bond - the bond information
-lattice_Size - the number of lattice sites
+d_lattice_Size - the number of lattice sites
 JJ - the coupling parameter
-num_Elem - the number of nonzero elements
-index - which stream we are in
+
 */
 
 __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_index, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, const int lattice_Size, const float JJ, int* num_Elem, int index)
 {
 
-    int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size);// + (blockDim.y/(2*lattice_Size))*blockIdx.y*gridDim.x;
+    int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size);
     int T0 = threadIdx.x%(2*lattice_Size);
 
 #if __CUDA_ARCH__ < 200
     const int array_size = 512;
 #elif __CUDA_ARCH__ >= 200
-    const int array_size = 1024; //check to see which GPU architecture we're on - Tesla only supports 512 threads
+    const int array_size = 1024;
 #else
 #error Could not detect GPU architecture
 #endif
@@ -624,11 +620,16 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
     count = 0;
     int rowtemp;
 
-    int start = (bool)(dim%array_size) ? (dim/array_size + 1)*array_size : dim/array_size; //used so we don't overwrite diagonal elements but array remains warp-aligned
+    int start = (bool)(dim%array_size) ? (dim/array_size + 1)*array_size : dim/array_size;
 
-    //int s;
+    int s;
+    //int si, sj;//sk,sl; //spin operators
+    //unsigned int tempi;// tempod; //tempj;
+    //cuDoubleComplex tempD;
 
     tempi = d_basis[ii];
+
+    __syncthreads();
 
     bool compare;
 
@@ -642,61 +643,78 @@ __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_
             (tempbond[site]).z = d_Bond[2*lattice_Size + site];
 
             __syncthreads();
+            //Diagonal Part
 
-            //-----------------Horizontal bond ---------------
+            /*temppos[threadIdx.x] = d_basis_Position[tempi[threadIdx.x]];
+            tempval[threadIdx.x] = HDiagPart(tempi[threadIdx.x], lattice_Size, tempbond, JJ);
+
+            H_sort[ idx(ii, 0, stride) ].value = tempval[threadIdx.x];
+            H_sort[ idx(ii, 0, stride) ].colindex = temppos[threadIdx.x];
+            H_sort[ idx(ii, 0, stride) ].rowindex = ii;
+            H_sort[ idx(ii, 0, stride) ].dim = dim;*/
+
+            //-------------------------------
+            //Horizontal bond ---------------
+            s = (tempbond[site]).x;
             tempod[threadIdx.x] = tempi;
-            tempod[threadIdx.x] ^= ( 1<<(tempbond[site].x) );
-            tempod[threadIdx.x] ^= ( 1<<(tempbond[site].y) ); //toggles both spins on the bond
+            tempod[threadIdx.x] ^= (1<<s);
+            s = (tempbond[site]).y;
+            tempod[threadIdx.x] ^= (1<<s);
 
-            compare = (d_basis_Position[tempod[threadIdx.x]] > ii); //don't double count elements
+            //tempod[threadIdx.x] ^= (1<<si); //toggle bit
+            //tempod[threadIdx.x] ^= (1<<sj); //toggle bit
 
+            compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
             temppos[threadIdx.x] = (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
             tempval[threadIdx.x] = HOffBondX(site, tempi, JJ);
 
             count += (int)compare;
+            //tempcount = (T0/lattice_Size);
             rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
             rowtemp = (compare) ? rowtemp : 2*dim;
 
-            //-------Put information back into global memory---------------------------
-
-            H_vals[ idx(ii, 4*site + (T0/lattice_Size)+ start, stride) ] = tempval[threadIdx.x]; 
-            H_cols[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii; //determine whether to place element or its hermitian conjugate
+            H_vals[ idx(ii, 4*site + (T0/lattice_Size)+ start, stride) ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
+            H_cols[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
             H_rows[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = rowtemp;
 
             //H_index[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ] = rowtemp*dim + H_cols[ idx(ii, 4*site + (T0/lattice_Size) + start, stride) ];
 
-            //----------------Vertical bond -----------------
+//Vertical bond -----------------
+            s = (tempbond[site]).x;
             tempod[threadIdx.x] = tempi;
-            tempod[threadIdx.x] ^= ( 1<<(tempbond[site].x) );
-            tempod[threadIdx.x] ^= ( 1<<(tempbond[site].y) );
+            tempod[threadIdx.x] ^= (1<<s);
+            s = (tempbond[site]).z;
+            tempod[threadIdx.x] ^= (1<<s);
+
+            //tempod[threadIdx.x] ^= (1<<si); //toggle bit
+            //tempod[threadIdx.x] ^= (1<<sj); //toggle bit
 
             compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
             temppos[threadIdx.x] =  (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
             tempval[threadIdx.x] = HOffBondY(site,tempi, JJ);
 
             count += (int)compare;
+            //tempcount = (T0/lattice_Size);
             rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
             rowtemp = (compare) ? rowtemp : 2*dim;
 
-            //-----Put information back into global memory-------------------------
-
-            H_vals[ idx(ii, 4*site + 2 + (T0/lattice_Size) + start, stride) ] =  tempval[threadIdx.x]; 
+            H_vals[ idx(ii, 4*site + 2 + (T0/lattice_Size) + start, stride) ] =  tempval[threadIdx.x]; // (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
             H_cols[ idx(ii, 4*site + 2 + (T0/lattice_Size) + start, stride) ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
             H_rows[ idx(ii, 4*site + 2 + (T0/lattice_Size) + start, stride) ] = rowtemp;
 
             //H_index[ idx(ii, 4*site + 2 + (T0/lattice_Size) + start, stride) ] = rowtemp*dim + H_cols[ idx(ii, 4*site + 2 + (T0/lattice_Size) + start, stride) ];
             __syncthreads();
 
-            atomicAdd(&num_Elem[index], count); //add number of good elements to total count
+            atomicAdd(&num_Elem[index], count);
         }
     }//end of ii
 }//end of FillSparse
 
 /*Function: FullToCOO - takes a full sparse matrix and transforms it into COO format
 Inputs - num_Elem - the total number of nonzero elements
-H_vals - the Hamiltonian values - a float
-hamil_Values - array to hold Hamiltonian values - a double
-dim - dimension of the Hilbert space
+H_vals - the Hamiltonian values
+H_pos - the Hamiltonian positions
+hamil_Values - a 1D array that will store the values for the COO form
 
 */
 __global__ void FullToCOO(int num_Elem, float* H_vals, double* hamil_Values, int dim)

@@ -138,7 +138,11 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     for(int i = 0; i < how_many; i++)
 	{
 		status[i] = cudaStreamCreate(&stream[i]);
-		status[i] = cudaMalloc(&d_H_rowptrs[i], (dim[i] + 1)*sizeof(int));
+    	if (status[i] != cudaSuccess)
+    	{
+        	std::cout<<"Error creating streams: "<<cudaGetErrorString(status[i])<<std::endl;
+    	}
+	        status[i] = cudaMalloc(&d_H_rowptrs[i], (dim[i] + 1)*sizeof(int));
     	if (status[i] != cudaSuccess)
     	{
         	std::cout<<"Error allocating d_H_rowptrs: "<<cudaGetErrorString(status[i])<<std::endl;
@@ -171,34 +175,46 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     	{
         	std::cout<<"Error synchronizing stream: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
- 
+        cout<<Hamiltonian[i].rows<<endl;
+        cout<<num_Elem[i]<<endl;
+        cout<<dim[i]<<endl;
+        cout<<d_H_rowptrs[i]<<endl; 
         cusparse_status[i] = cusparseXcoo2csr(sparsehandle, Hamiltonian[i].rows, num_Elem[i], dim[i], d_H_rowptrs[i], CUSPARSE_INDEX_BASE_ZERO);
 
-		if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+	if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
     	{
         	std::cout<<"Error converting to CSR: "<<cusparse_status[i]<<std::endl;
     	}
 
-		status[i] = cudaPeekAtLastError();
-		if (status[i] != cudaSuccess)
+	status[i] = cudaPeekAtLastError();
+	if (status[i] != cudaSuccess)
     	{
         	std::cout<<"Error synchronizing stream: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
 
-		//cout<<"Done converting to CSR"<<endl;
+	//cout<<"Done converting to CSR"<<endl;
     	/*cusparse_status[i] = cusparseDcsr2hyb(sparsehandle, dim[i], dim[i], H_descr[i], Hamiltonian[i].vals, d_H_rowptrs[i], Hamiltonian[i].cols, hyb_Ham[i], 0, CUSPARSE_HYB_PARTITION_AUTO);
 
-		if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+	if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
     	{
         	std::cout<<"Error converting to HYB: "<<cusparse_status[i]<<std::endl;
     	}*/
 
 	}
 
+	status[0] = cudaPeekAtLastError();
+	if (status[0] != cudaSuccess)
+    	{
+        	std::cout<<"Error before thread sync: "<<cudaGetErrorString(status[0])<<std::endl;
+    	}
 
 	//cout<<"Done converting to HYB"<<endl;
-    cudaThreadSynchronize();
+        /*status[0] = cudaThreadSynchronize();
 
+	if (status[0] != cudaSuccess)
+    	{
+        	std::cout<<"Error syncing threads: "<<cudaGetErrorString(status[0])<<std::endl;
+    	}*/
     //----------------Create three arrays to hold current Lanczos vectors----------
     vector< vector<double> > h_a(how_many);
 
@@ -213,10 +229,22 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     double** host_v0 = (double**)malloc(how_many*sizeof(double*));
 
     for(int i = 0; i < how_many; i++)
-	{
-		status[i] = cudaMalloc(&v0[i], dim[i]*sizeof(double));
+    {
+      	status[i] = cudaMalloc(&v0[i], dim[i]*sizeof(double));
+	if (status[i] != cudaSuccess)
+    	{
+        	std::cout<<"Error creating storage for v0 on GPU: "<<cudaGetErrorString(status[i])<<std::endl;
+    	}
     	status[i] = cudaMalloc(&v1[i], dim[i]*sizeof(double));
+	if (status[i] != cudaSuccess)
+    	{
+        	std::cout<<"Error creating storage for v1 on GPU: "<<cudaGetErrorString(status[i])<<std::endl;
+    	}
     	status[i] = cudaMalloc(&v2[i], dim[i]*sizeof(double));
+	if (status[i] != cudaSuccess)
+    	{
+        	std::cout<<"Error creating storage for v2 on GPU: "<<cudaGetErrorString(status[i])<<std::endl;
+    	}
         lanczos_store[i] = (double**)malloc(max_Iter*sizeof(double*));
 		host_v0[i] = (double*)malloc(dim[i]*sizeof(double));
     	
@@ -237,6 +265,9 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     	{
         	std::cout<<"Error creating storage for v0 in lanczos_store: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
+        
+        cout<<host_v0[i]<<endl;
+        cout<<v0[i]<<endl;
         status[i] = cudaMemcpyAsync(v0[i], host_v0[i], dim[i]*sizeof(double), cudaMemcpyHostToDevice, stream[i]);
 		if (status[i] != cudaSuccess)
     	{
@@ -274,7 +305,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     	cusparse_status[i] = cusparseDcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim[i], dim[i], num_Elem[i], &alpha[i], H_descr[i], Hamiltonian[i].vals, d_H_rowptrs[i], Hamiltonian[i].cols, v0[i], &beta[i], v1[i]); // the Hamiltonian is applied here
 
 
-        	std::ofstream fout;
+        	/*std::ofstream fout;
         	fout.open("lanczos.log");
         	cudaMemcpy(host_v0[0], v1[0], dim[0]*sizeof(double), cudaMemcpyDeviceToHost);
         	for(int j = 0; j < dim[0] ; j++){
@@ -282,7 +313,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 				
         	}
 
-        	fout.close();
+        	fout.close();*/
 
 
 		//cout<<"Done getting v1 = H*v0"<<endl;
