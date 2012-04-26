@@ -306,14 +306,14 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         }
         while(tpb[i].x < 512);
 
-        tpb[i].y = 0;
-        tpb[i].z = 0;
+        //tpb[i].y = 0;
+        //tpb[i].z = 0;
         
         bpg[i].x = (bool)((stride[i]-1)*d_H[i].sectordim)%tpb[i].x ? ((((stride[i]-1)*d_H[i].sectordim)/tpb[i].x) + 1) : ((stride[i]-1)*d_H[i].sectordim)/tpb[i].x;
 
-        bpg[i].y = (bpg[i].x < (1<<16)) ? 0 : (d_H[i].sectordim/(tpb[i].x<<8) + 1);
-        bpg[i].x = (bpg[i].x < (1<<16)) ? bpg[i].x : (1<<8);
-        bpg[i].z = 0;
+        //bpg[i].y = (bpg[i].x < (1<<16)) ? 0 : (d_H[i].sectordim/(tpb[i].x<<8) + 1);
+        //bpg[i].x = (bpg[i].x < (1<<16)) ? bpg[i].x : (1<<8);
+        //bpg[i].z = 0;
         
         //cout<<bpg[i].x<<endl;
 
@@ -472,7 +472,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
         hamil_lancz[i].fulldim = d_H[i].fulldim;
         hamil_lancz[i].sectordim = d_H[i].sectordim;
         count_array[i] = num_Elem[i];
-        /*cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem[i]*sizeof(cuDoubleComplex));
+        cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem[i]*sizeof(cuDoubleComplex));
         int* h_rows = (int*)malloc(num_Elem[i]*sizeof(int));
         int* h_cols = (int*)malloc(num_Elem[i]*sizeof(int));
 
@@ -510,7 +510,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* la
 
             }
             fout.close();
-        }*/
+        }
         cudaStreamSynchronize(stream[i]);
         cudaFree(vals_buffer[i]);
         free(Bond[i]);
@@ -599,7 +599,7 @@ index - which stream we are in
 __global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, int* H_index, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, const int lattice_Size, const float JJ, int* num_Elem, int index)
 {
 
-    int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size) + (blockDim.y/(2*lattice_Size))*blockIdx.y*gridDim.x;
+    int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size);// + (blockDim.y/(2*lattice_Size))*blockIdx.y*gridDim.x;
     int T0 = threadIdx.x%(2*lattice_Size);
 
 #if __CUDA_ARCH__ < 200

@@ -233,6 +233,10 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
         status[i] = cudaMalloc(&lanczos_store[i][0], dim[i]*sizeof(double));
     	
+		if (status[i] != cudaSuccess)
+    	{
+        	std::cout<<"Error creating storage for v0 in lanczos_store: "<<cudaGetErrorString(status[i])<<std::endl;
+    	}
         status[i] = cudaMemcpyAsync(v0[i], host_v0[i], dim[i]*sizeof(double), cudaMemcpyHostToDevice, stream[i]);
 		if (status[i] != cudaSuccess)
     	{
@@ -268,6 +272,17 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     	//cudaThreadSynchronize();
     	cudaMemcpyAsync(lanczos_store[i][0], v0[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
     	cusparse_status[i] = cusparseDcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim[i], dim[i], num_Elem[i], &alpha[i], H_descr[i], Hamiltonian[i].vals, d_H_rowptrs[i], Hamiltonian[i].cols, v0[i], &beta[i], v1[i]); // the Hamiltonian is applied here
+
+
+        	std::ofstream fout;
+        	fout.open("lanczos.log");
+        	cudaMemcpy(host_v0[0], v1[0], dim[0]*sizeof(double), cudaMemcpyDeviceToHost);
+        	for(int j = 0; j < dim[0] ; j++){
+        		fout<<(host_v0[0][j])<<std::endl;
+				
+        	}
+
+        	fout.close();
 
 
 		//cout<<"Done getting v1 = H*v0"<<endl;
@@ -336,7 +351,6 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
     	cublas_status[i] = cublasDaxpy(linalghandle, 0, &axpytemp[i], v0[i], 1, v1[i], 1);
     	//std::cout<<axpytemp.x<<" "<<axpytemp.y<<std::endl;
-
     	cudaStreamSynchronize(stream[i]);
 
     	if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
@@ -431,8 +445,6 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 	bool* done_flag = (bool*)malloc(how_many*sizeof(bool));
 
 	double** h_H_eigen = (double**)malloc(how_many*sizeof(double*));
-	
-    // In the original code, we started diagonalizing from iter = 5 and above. I start from iter = 1 to minimize issues of control flow
     /*thrust::device_vector<double> d_diag(max_Iter);
     double* diag_ptr;
     thrust::device_vector<double> d_offdia(max_Iter);
@@ -491,7 +503,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 		}
 		//cout<<"Got v2 for "<<iter[0]<<"th iteration"<<endl;
 
-		/*if (iter[0] == 10) {
+		/*if (iter[0] == 1) {
         	std::ofstream fout;
         	fout.open("lanczos.log");
         	cudaMemcpy(host_v0[0], v2[0], dim[0]*sizeof(double), cudaMemcpyDeviceToHost);
@@ -709,11 +721,11 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
    //--------------Free arrays to prevent memory leaks------------------------ 
 	for(int i = 0; i < how_many; i++)
 	{
-		/*for(int j = 0; j < num_Eig; j++)
+		for(int j = 0; j < num_Eig; j++)
 			{
 			    std::cout<<std::setprecision(12)<<h_ordered[i][j]<<" ";
 			}
-		std::cout<<std::endl;*/
+		std::cout<<std::endl;
 
                 for(int j = 0; j < iter[i]; j++)
                 {
