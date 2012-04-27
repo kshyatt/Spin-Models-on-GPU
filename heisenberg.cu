@@ -29,9 +29,9 @@ int main()
     for(int i = 0; i < how_many; i++)
     {
         
-        nsite[i] = 12;
+        nsite[i] = 16;
         Bond[i] = (int*)malloc(3*nsite[i]*sizeof(int));
-        Fill_Bonds_12A(Bond[i]);
+        Fill_Bonds_16B(Bond[i]);
         Sz[i] = 0;
         JJ[i] = 1.f;
         model_type[i] = 0;

@@ -175,10 +175,10 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     	{
         	std::cout<<"Error synchronizing stream: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
-        cout<<Hamiltonian[i].rows<<endl;
-        cout<<num_Elem[i]<<endl;
-        cout<<dim[i]<<endl;
-        cout<<d_H_rowptrs[i]<<endl; 
+        //cout<<Hamiltonian[i].rows<<endl;
+        //cout<<num_Elem[i]<<endl;
+        //cout<<dim[i]<<endl;
+        //cout<<d_H_rowptrs[i]<<endl; 
         cusparse_status[i] = cusparseXcoo2csr(sparsehandle, Hamiltonian[i].rows, num_Elem[i], dim[i], d_H_rowptrs[i], CUSPARSE_INDEX_BASE_ZERO);
 
 	if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
@@ -503,7 +503,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 		h_diag[i] = (double*)malloc(h_a[i].size()*sizeof(double));
 		h_offdia[i] = (double*)malloc(h_b[i].size()*sizeof(double));
 	}
-	cout<<"Initialized everything for iterations"<<endl;
+	//cout<<"Initialized everything for iterations"<<endl;
 
     //---------Begin Lanczos iteration-----------------------------
 
@@ -708,7 +708,9 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 			        for (int j = 0; j < num_Eig; j++)
 			        {
 				h_ordered[i][j] = h_diag[i][j];
+                                //cout<<h_ordered[i][j]<<" ";
 				}
+                                //cout<<endl;
 
 				gs_Energy[i] = h_ordered[i][num_Eig - 1];
 				done_flag[i] = (fabs(gs_Energy[i] - eigtemp[i]) < conv_req);// && iter[i] > 10;// ? (iter[i] > 10) : false;

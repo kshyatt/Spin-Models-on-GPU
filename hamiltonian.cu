@@ -2,42 +2,6 @@
 
 /* NOTE: this function uses FORTRAN style matrices, where the values and positions are stored in a ONE dimensional array! Don't forget this! */
 
-
-/*int main()
-{
-
-
-    int** Bond;
-
-    int how_many = 30;
-    Bond = (int**)malloc(how_many*sizeof(int*));
-    d_hamiltonian* hamil_lancz = (d_hamiltonian*)malloc(how_many*sizeof(d_hamiltonian));
-    int* nsite = (int*)malloc(how_many*sizeof(int));
-    int* Sz = (int*)malloc(how_many*sizeof(int));
-    float* JJ = (float*)malloc(how_many*sizeof(float));
-    int* model_type = (int*)malloc(how_many*sizeof(int));
-
-    for(int i = 0; i < how_many; i++)
-    {
-
-        nsite[i] = 16;
-        Bond[i] = (int*)malloc(3*nsite[i]*sizeof(int));
-        Fill_Bonds_16B(Bond[i]);
-
-
-        Sz[i] = 0;
-        JJ[i] = 1.f;
-        model_type[i] = 0;
-    }
-
-
-    int dim;
-
-    int* num_Elem = ConstructSparseMatrix(how_many, model_type, nsite, Bond, hamil_lancz, JJ, Sz );
-
-    return 0;
-}*/
-
 __host__ __device__ int idx(int i, int j, int lda)
 {
 
@@ -68,7 +32,8 @@ __host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], i
         {
             temp += (i1>>sp)&1;
         } //unpack bra
-        if (temp==(lattice_Size/2+Sz) ){
+        if (temp == (lattice_Size/2 + Sz )){
+        //if (temp==(lattice_Size/2+Sz - 1) || temp == (lattice_Size/2 + Sz) || temp == (lattice_Size/2 + Sz + 1)){
         basis[realdim] = i1;
         basis_Position[i1] = realdim;
         realdim++;
