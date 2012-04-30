@@ -32,15 +32,15 @@ __host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], i
         {
             temp += (i1>>sp)&1;
         } //unpack bra
-        if (temp == (lattice_Size/2 + Sz )){
-        //if (temp==(lattice_Size/2+Sz - 1) || temp == (lattice_Size/2 + Sz) || temp == (lattice_Size/2 + Sz + 1)){
+        //if (temp == lattice_Size/2 + Sz){
+        if (temp==(lattice_Size/2 + Sz - 1) || temp == (lattice_Size/2 + Sz)){ 
+        
         basis[realdim] = i1;
         basis_Position[i1] = realdim;
         realdim++;
-        //cout<<basis[realdim]<<" "<<basis_Position[i1]<<endl;
-        }
-    }
 
+        }
+	}	
     return realdim;
 
 }
