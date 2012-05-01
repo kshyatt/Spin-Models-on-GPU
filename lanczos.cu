@@ -266,8 +266,6 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         	std::cout<<"Error creating storage for v0 in lanczos_store: "<<cudaGetErrorString(status[i])<<std::endl;
     	}
         
-        cout<<host_v0[i]<<endl;
-        cout<<v0[i]<<endl;
         status[i] = cudaMemcpyAsync(v0[i], host_v0[i], dim[i]*sizeof(double), cudaMemcpyHostToDevice, stream[i]);
 		if (status[i] != cudaSuccess)
     	{

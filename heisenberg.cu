@@ -50,6 +50,7 @@ int main()
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
     cout<<"Time to construct Hamiltonians: "<<time<<endl;
+    cout<<num_Elem[0]<<endl;
     cudaEventRecord(start,0);
     lanczos(how_many, num_Elem, hamil_lancz, 200, 3, 1e-12);
     
