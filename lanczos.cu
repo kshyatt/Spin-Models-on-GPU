@@ -827,8 +827,6 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         	fout.close();
         }*/
 
-	cudaEventDestroy(start);
-	cudaEventDestroy(stop);
 
 }
 // things left to do:
