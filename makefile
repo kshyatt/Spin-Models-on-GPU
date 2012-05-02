@@ -1,19 +1,32 @@
 CC = nvcc
-CFLAGS = -w -O3 -arch=sm_20
-LIBS = -lcublas -lcusparse
-OBJS = heisenberg.o lanczos.o testhamiltonian.o 
+CFLAGS = -O3 -gencode arch=compute_20,code=sm_21
+LANCZLIBS = -lcublas -lcusparse
+HAMLIBS = -Lsort/sort/gnu/release -lmgpusort -lcuda -lcudart
+OBJS = launcher.o lanczos.o hamiltonian.o heisenberg.o xy.o tfising.o lattice.o
 
 a.out : $(OBJS) 
-	$(CC) $(CFLAGS) $(OBJS) -o a.out $(LIBS)
+	$(CC) $(CFLAGS) $(OBJS) -o a.out $(HAMLIBS) $(LANCZLIBS)
 
-heisenberg.o : heisenberg.cpp testhamiltonian.h 
-	$(CC) $(CFLAGS) -c heisenberg.cpp
+launcher.o : launcher.cu lanczos.h lattice.h
+	$(CC) $(CFLAGS) -c launcher.cu
 
 lanczos.o : lanczos.cu lanczos.h 
-	$(CC) $(CFLAGS) -c $(LIBS) lanczos.cu
+	$(CC) $(CFLAGS) -c $(LANCZLIBS) lanczos.cu
 
-testhamiltonian.o : testhamiltonian.cu testhamiltonian.h
-	$(CC) $(CFLAGS) -c testhamiltonian.cu
+hamiltonian.o : hamiltonian.cu hamiltonian.h
+	$(CC) $(CFLAGS) -c $(HAMLIBS) hamiltonian.cu
+
+heisenberg.o : heisenberg.cu hamiltonian.h
+	$(CC) $(CFLAGS) -c heisenberg.cu
+
+xy.o : xy.cu hamiltonian.h
+	$(CC) $(CFLAGS) -c xy.cu
+
+tfising.o : tfising.cu hamiltonian.h
+	$(CC) $(CFLAGS) -c tfising.cu
+
+lattice.o : lattice.cpp lattice.h
+	$(CC) $(CFLAGS) -c lattice.cpp
 
 clean : 
 	rm *.o

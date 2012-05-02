@@ -1,56 +1,93 @@
 #include<cmath>
-#include<iostream>
-#include<cstdlib>
-#include"cuda.h"
-#include<limits.h>
-#include"cuComplex.h"
-#include<fstream>
-#include"thrust/sort.h"
-#include"thrust/device_ptr.h"
-#include"thrust/device_vector.h"
-#include"thrust/host_vector.h"
-#include"thrust/reduce.h"
+#include <iostream>
+#include <cstdlib>
+#include "cuda.h"
+#include "cuComplex.h"
+#include <fstream>
+#include "sort/util/cucpp.h" // MGPU utility classes
+#include "sort/inc/mgpusort.hpp"
+#include "lattice.h"
+#include "thrust/device_ptr.h"
+#include "thrust/reduce.h"
 
+using namespace std;
 
-using namespace thrust;
+//__host__ __device__ int idx(int i, int j, int lda);
 
-__host__ __device__ int idx(int i, int j, int lda);
+struct d_hamiltonian
+{
 
-__device__ int d_num_Elem = 12870; //all the diagonal elements
-
-struct hamstruct{
-
-	int rowindex;
-        int colindex;
-	cuDoubleComplex value;
-        int dim;
+    int* rows;
+    int* cols;
+    double* vals;
+    int fulldim;
+    int sectordim;
 };
 
-struct ham_sort_function{
 
-        __host__ __device__ bool operator()(hamstruct a, hamstruct b){
-		//if (a.rowindex == -1 || a.colindex == -1) return false;
-		//if (b.rowindex == -1 || b.colindex == -1) return true;
+struct f_hamiltonian
+{
+
+    int* rows;
+    int* cols;
+    float* vals;
+    int* set;
+    int fulldim;
+    int sectordim;
+};
+
+/*struct ham_sort_function{
+
+	__host__ __device__ bool operator()(hamstruct a, hamstruct b){
+		if (a.rowindex == -1 || a.colindex == -1) return false;
+		if (b.rowindex == -1 || b.colindex == -1) return true;
 
 		//return ( (a.colindex == -1 || a.rowindex == -1) ? true : ( (a.colindex + a.rowindex*a.dim) < (b.colindex + b.rowindex*b.dim) ) );
-        	return (a.colindex + a.rowindex*a.dim) < (b.colindex + b.rowindex*b.dim);
-        }
+		return (a.colindex + a.rowindex*a.dim) < (b.colindex + b.rowindex*b.dim);
+	}
 
-};
+};*/
+
 
 __host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], int basis[]);
 
-__device__ cuDoubleComplex HOffBondX(const int si, const int bra, const double JJ);
+__host__ void ConstructSparseMatrix(const int how_many, int* model_Type, int* lattice_Size, int** Bond, d_hamiltonian*& hamil_lancz, float* J1, float* J2, int* Sz, int*& count_array, int device);
 
-__device__ cuDoubleComplex HOffBondY(const int si, const int bra, const double JJ);
+__global__ void FullToCOO(int num_Elem, float* H_vals, double* hamil_Values, int dim);
 
-__device__ cuDoubleComplex HDiagPart(const int bra, int lattice_Size, int3* d_Bond, const double JJ);
+//--------Declarations of Hamiltonian functions for Heisenberg Model--------------
 
-__host__ int ConstructSparseMatrix(int model_Type, int lattice_Size, int* Bond, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int* vdim, double JJ, int Sz);
+__device__ float HOffBondXHeisenberg(const int si, const int bra, const float JJ);
 
-__global__ void FillDiagonals(int* d_basis, int dim, hamstruct* d_H_sort, int* d_Bond, int lattice_Size, double JJ);
+__device__ float HOffBondYHeisenberg(const int si, const int bra, const float JJ);
 
-__global__ void FillSparse(int* d_basis_Position, int* d_basis, int dim, hamstruct* H_sort, int* d_Bond, const int lattice_Size, const double JJ);
+__device__ float HDiagPartHeisenberg(const int bra, int lattice_Size, int3* d_Bond, const float JJ);
 
-__global__ void FullToCOO(int num_Elem, hamstruct* H_sort, cuDoubleComplex* hamil_Values, int* hamil_PosRow, int* hamil_PosCol, int dim);
+__global__ void FillDiagonalsHeisenberg(int* d_basis, int dim, int* H_set, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, int lattice_Size, float JJ);
+
+__global__ void FillSparseHeisenberg(int* d_basis_Position, int* d_basis, int dim, int* H_set, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, const int lattice_Size, const float JJ);
+
+//------Declarations of Hamiltonian functions for XY Model -------------------
+
+__device__ float HOffBondXXY(const int si, const int bra, const float JJ);
+
+__device__ float HOffBondYXY(const int si, const int bra, const float JJ);
+
+__device__ float HDiagPartXY(const int bra, int lattice_Size, int3* d_Bond, const float JJ);
+
+__global__ void FillDiagonalsXY(int* d_basis, int dim, int* H_set, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, int lattice_Size, float JJ);
+
+__global__ void FillSparseXY(int* d_basis_Position, int* d_basis, int dim, int* H_set, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, const int lattice_Size, const float JJ);
+
+//--------Declarations of Hamiltonian functions for transverse field Ising Model-------
+
+__device__ float HOffBondXTFI(const int si, const int bra, const float JJ);
+
+__device__ float HOffBondYTFI(const int si, const int bra, const float JJ);
+
+__device__ float HDiagPartTFI(const int bra, int lattice_Size, int2* d_Bond, const float JJ);
+
+__global__ void FillDiagonalsTFI(int* d_basis, int dim, int* H_set, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, int lattice_Size, float JJ);
+
+__global__ void FillSparseTFI(int* d_basis_Position, int* d_basis, int dim, int* H_rows, int* H_cols, float* H_vals, int* H_set, int* d_Bond, const int lattice_Size, const float JJ, const float h);
 
