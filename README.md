@@ -1,4 +1,4 @@
-2D Heisenberg Model on GPU
+Spin Models on GPU
 ==========================
 
 Author: Katharine Hyatt (kshyatt AT uwaterloo DOT ca)
