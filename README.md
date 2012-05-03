@@ -2,7 +2,7 @@
 ==========================
 
 Author: Katharine Hyatt (kshyatt AT uwaterloo DOT ca)
-Date: February 7 2012
+Date: May 03 2012
 
 Introduction
 -------------------
@@ -13,7 +13,7 @@ The GPU code is based off of CPU code written by Roger Melko.
 
 Requirements
 ------------------
-Since this code is CUDA based, you will need an nVidia GPU as well as the latest version of the CUDA toolkit and developer driver. The Hamiltonian-generating part also relies on Sean Baxter's Modern GPU sorting library (seanbaxter/mgpu), which you will need to download and compile. 
+Since this code is CUDA based, you will need an nVidia GPU as well as the latest version of the CUDA toolkit and developer driver. The Hamiltonian-generating code also relies on Sean Baxter's <a href="http://github.com/seanbaxter/mgpu/sort">Modern GPU sorting library</a>, which you will need to download and compile. 
 
 What Works and What Doesn't
 -------------------------------------
