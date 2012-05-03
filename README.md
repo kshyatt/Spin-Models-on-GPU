@@ -13,7 +13,18 @@ The GPU code is based off of CPU code written by Roger Melko.
 
 Requirements
 ------------------
-Since this code is CUDA based, you will need an nVidia GPU as well as the latest version of the CUDA toolkit and developer driver. The Hamiltonian-generating code also relies on Sean Baxter's <a href="http://github.com/seanbaxter/mgpu/sort">Modern GPU sorting library</a>, which you will need to download and compile. 
+Since this code is CUDA based, you will need an nVidia GPU as well as the latest version of the CUDA toolkit and developer driver. The Hamiltonian-generating code also relies on Sean Baxter's <a href="http://github.com/seanbaxter/mgpu">Modern GPU library</a>, which you will need to download and compile. 
+
+
+Installation
+------------------------
+Make sure that the CUDA toolkit and developer divers are installed following the guide <a href="http://developer.nvidia.com/nvidia-gpu-computing-documentation">here</a>.  Then:
+
+* git clone https://github.com/kshyatt/Spin-Models-on-GPU.git
+* cd Spin-Models-on-GPU
+* ./setup
+
+For later builds you can simply type "make".  If setup does not work you may have to manually download the MGPU library from the about link.
 
 What Works and What Doesn't
 -------------------------------------
