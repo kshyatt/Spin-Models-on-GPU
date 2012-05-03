@@ -14,13 +14,19 @@ int main()
     {
         how_many = 5;
     }*/
+    
     Bond = (int**)malloc(how_many*sizeof(int*));
+    
     d_hamiltonian* hamil_lancz = (d_hamiltonian*)malloc(how_many*sizeof(d_hamiltonian));
-    int* nsite = (int*)malloc(how_many*sizeof(int));
-    int* Sz = (int*)malloc(how_many*sizeof(int));
-    float* J1 = (float*)malloc(how_many*sizeof(float));
-    float* J2 = (float*)malloc(how_many*sizeof(float));
-    int* model_type = (int*)malloc(how_many*sizeof(int));
+    
+    parameters* data = (parameters*)malloc(how_many*sizeof(parameters));
+
+    if (data == NULL)
+    {
+      cerr<<"Malloc of parameter container failed!"<<endl;
+      return 1;
+    }
+    
     int* num_Elem = (int*)malloc(how_many*sizeof(int));
 
     //cudaSetDevice(1);
@@ -29,24 +35,27 @@ int main()
     for(int i = 0; i < how_many; i++)
     {
         
-        nsite[i] = 16;
-        Bond[i] = (int*)malloc(3*nsite[i]*sizeof(int));
+        data[i].nsite = 16;
+        Bond[i] = (int*)malloc(3*data[i].nsite*sizeof(int));
         Fill_Bonds_16B(Bond[i]);
-        Sz[i] = 0;
-        J1[i] = 1.f;
-        J2[i] = 0.f;
-        model_type[i] = 0;
+        /*for( int j = 0; j < nsite[i]; j++ ){
+          Bond[i][j] = j;
+          Bond[i][j+ nsite[i]] = (j+1)%nsite[i];
+        }*/
+        data[i].Sz = 0;
+        data[i].J1 = 1.f;
+        data[i].J2 = 0.f;
+        data[i].model_type = 0;
     }
 
 
-    int dim;
     /*cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);*/
-    float time;
+    //float time;
 
     //cudaEventRecord(start,0);
-    ConstructSparseMatrix(how_many, model_type, nsite, Bond, hamil_lancz, J1, J2, Sz, num_Elem, device);
+    ConstructSparseMatrix(how_many, Bond, hamil_lancz, data, num_Elem, device);
     /*cudaEventRecord(stop,0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&time, start, stop);
@@ -68,11 +77,7 @@ int main()
     }
     //cudaEventDestroy(start);
     //cudaEventDestroy(stop);
-    free(nsite);
-    free(Sz);
-    free(J1);
-    free(J2);
-    free(model_type);
+    free(data);
     free(Bond);
     free(hamil_lancz);
     free(num_Elem);

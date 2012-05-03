@@ -34,15 +34,15 @@ __device__ float HDiagPartXY(const int bra, int lattice_Size, int3* d_Bond, cons
 }//HdiagPart
 
 
-__global__ void FillDiagonalsXY(int* d_basis, int dim, int* H_set, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, int lattice_Size, float JJ)
+__global__ void FillDiagonalsXY(int* d_basis, f_hamiltonian H, int* d_Bond, parameters data)
 {
 
     int row = blockIdx.x*blockDim.x + threadIdx.x;
 
-	H_vals[row] = 0.f;
-    H_rows[row] = 2*dim;
-    H_cols[row] = 2*dim;
-    H_set[row] = 0;
+    H.vals[row] = 0.f;
+    H.rows[row] = 2*H.sectordim;
+    H.cols[row] = 2*H.sectordim;
+    H.set[row] = 0;
 
 }
 
@@ -57,9 +57,11 @@ JJ - the coupling parameter
 
 */
 
-__global__ void FillSparseXY(int* d_basis_Position, int* d_basis, int dim, int* H_set, int* H_rows, int* H_cols, float* H_vals, int* d_Bond, const int lattice_Size, const float JJ)
+__global__ void FillSparseXY(int* d_basis_Position, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data)
 {
 
+    int dim = H.sectordim;
+    int lattice_Size = data.nsite;
     int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size);
     int T0 = threadIdx.x%(2*lattice_Size);
 
@@ -122,17 +124,17 @@ __global__ void FillSparseXY(int* d_basis_Position, int* d_basis, int dim, int* 
             compare = (d_basis_Position[tempod[threadIdx.x]] != -1) && brasector;
             compare &= (d_basis_Position[tempod[threadIdx.x]] > ii);
             temppos[threadIdx.x] = (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
-            tempval[threadIdx.x] = HOffBondXXY(site, tempi, JJ);
+            tempval[threadIdx.x] = HOffBondXXY(site, tempi, data.J1);
 
             count += (int)compare;
             rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
             rowtemp = (compare) ? rowtemp : 2*dim;
 
-            H_vals[ ii*stride + 4*site + (T0/lattice_Size)+ start ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
-            H_cols[ ii*stride + 4*site + (T0/lattice_Size) + start ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
-            H_rows[ ii*stride + 4*site + (T0/lattice_Size) + start ] = rowtemp;
+            H.vals[ ii*stride + 4*site + (T0/lattice_Size)+ start ] = tempval[threadIdx.x]; //(T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
+            H.cols[ ii*stride + 4*site + (T0/lattice_Size) + start ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
+            H.rows[ ii*stride + 4*site + (T0/lattice_Size) + start ] = rowtemp;
 
-            H_set[ ii*stride + 4*site + (T0/lattice_Size) + start ] = (int)compare;
+            H.set[ ii*stride + 4*site + (T0/lattice_Size) + start ] = (int)compare;
 
             //Vertical bond -----------------
             s = (tempbond[site]).x;
@@ -146,17 +148,17 @@ __global__ void FillSparseXY(int* d_basis_Position, int* d_basis, int dim, int* 
             compare = (d_basis_Position[tempod[threadIdx.x]] != -1) && brasector;
             compare &= (d_basis_Position[tempod[threadIdx.x]] > ii);
             temppos[threadIdx.x] =  (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
-            tempval[threadIdx.x] = HOffBondYXY(site,tempi, JJ);
+            tempval[threadIdx.x] = HOffBondYXY(site,tempi, data.J1);
 
             count += (int)compare;
             rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
             rowtemp = (compare) ? rowtemp : 2*dim;
 
-            H_vals[ ii*stride + 4*site + 2 + (T0/lattice_Size) + start ] =  tempval[threadIdx.x]; // (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
-            H_cols[ ii*stride + 4*site + 2 + (T0/lattice_Size) + start ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
-            H_rows[ ii*stride + 4*site + 2 + (T0/lattice_Size) + start ] = rowtemp;
+            H.vals[ ii*stride + 4*site + 2 + (T0/lattice_Size) + start ] =  tempval[threadIdx.x]; // (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
+            H.cols[ ii*stride + 4*site + 2 + (T0/lattice_Size) + start ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
+            H.rows[ ii*stride + 4*site + 2 + (T0/lattice_Size) + start ] = rowtemp;
 
-            H_set[ ii*stride + 4*site + 2 + (T0/lattice_Size) + start ] = (int)compare;
+            H.set[ ii*stride + 4*site + 2 + (T0/lattice_Size) + start ] = (int)compare;
         }
     }//end of ii
 }//end of FillSparse

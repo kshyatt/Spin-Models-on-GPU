@@ -51,7 +51,7 @@ hamil_PosCol - a pointer to a device array containing the locations of each valu
 
 */
 
-__host__ void ConstructSparseMatrix(const int how_many, int* model_type, int* lattice_Size, int** Bond, d_hamiltonian*& hamil_lancz, float* J1, float* J2, int* Sz, int*& count_array, int device)
+__host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonian*& hamil_lancz, parameters* data, int*& count_array, int device)
 {
     cudaFree(0);
     cudaSetDevice(device);
@@ -82,29 +82,29 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_type, int* la
     for(int i = 0; i<how_many; i++)
     {
 
-        switch(model_type[i])
+        switch(data[i].model_type)
         {
             case 0: //2D spin 1/2 Heisenberg
             case 1: //2D spin 1/2 XY 
                 num_Elem[i] = 0;
-                stride[i] = 4*lattice_Size[i] + 1;
+                stride[i] = 4*data[i].nsite + 1;
 
                 d_H[i].fulldim = 2;
-                for (int ch=1; ch<lattice_Size[i]; ch++) d_H[i].fulldim *= 2;
+                for (int ch=1; ch<data[i].nsite; ch++) d_H[i].fulldim *= 2;
                 break;
             case 2: //1D Transverse Field Ising Model
                 num_Elem[i] = 0;
-                stride[i] = 2*lattice_Size[i] + 1;
+                stride[i] = 2*data[i].nsite + 1;
 
                 d_H[i].fulldim = 2;
-                for (int ch=1; ch<lattice_Size[i]; ch++) d_H[i].fulldim *= 2;
+                for (int ch=1; ch<data[i].nsite; ch++) d_H[i].fulldim *= 2;
                 break;
         }
         
         basis_Position[i] = (int*)malloc(d_H[i].fulldim*sizeof(int));
         basis[i] = (int*)malloc(d_H[i].fulldim*sizeof(int));
 
-        d_H[i].sectordim = GetBasis(d_H[i].fulldim, lattice_Size[i], Sz[i], basis_Position[i], basis[i]);
+        d_H[i].sectordim = GetBasis(d_H[i].fulldim, data[i].nsite, data[i].Sz, basis_Position[i], basis[i]);
         //cudaEventRecord(start, 0);
         status[i] = cudaMalloc(&d_basis_Position[i], d_H[i].fulldim*sizeof(int));
         if (status[i] != cudaSuccess)
@@ -195,13 +195,13 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_type, int* la
 
         status[i] = cudaMemset(d_H[i].set, 0, raw_size[i]*sizeof(int));
 
-        status[i] = cudaMalloc(&d_Bond[i], 3*lattice_Size[i]*sizeof(int));
+        status[i] = cudaMalloc(&d_Bond[i], 3*data[i].nsite*sizeof(int));
         if (status[i] != cudaSuccess)
         {
             cout<<"Error creating "<<i<<"th bonds array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
-        status[i] = cudaMemcpyAsync(d_Bond[i], Bond[i], 3*lattice_Size[i]*sizeof(int), cudaMemcpyHostToDevice, stream[i]);
+        status[i] = cudaMemcpyAsync(d_Bond[i], Bond[i], 3*data[i].nsite*sizeof(int), cudaMemcpyHostToDevice, stream[i]);
 
         if (status[i] != cudaSuccess)
         {
@@ -210,7 +210,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_type, int* la
 
         //------Determine the appropriate number of threads and blocks to launch for Hamiltonian generation------------
 
-        tpb[i].x = lattice_Size[i];
+        tpb[i].x = data[i].nsite;
         do
         {
             tpb[i].x *= 2;
@@ -236,16 +236,16 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_type, int* la
 
         //------Generate diagonal elements of the Hamiltonian--------
 
-        switch(model_type[i])
+        switch(data[i].model_type)
         {
             case 0:
-              FillDiagonalsHeisenberg<<<d_H[i].sectordim/512 + 1, 512, device, stream[i]>>>(d_basis[i], d_H[i].sectordim, d_H[i].set, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], J1[i]);
+              FillDiagonalsHeisenberg<<<d_H[i].sectordim/512 + 1, 512, device, stream[i]>>>(d_basis[i], d_H[i], d_Bond[i], data[i]);
               break;
             case 1:
-              FillDiagonalsXY<<<d_H[i].sectordim/512 + 1, 512, device, stream[i]>>>(d_basis[i], d_H[i].sectordim, d_H[i].set, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], J1[i]);
+              FillDiagonalsXY<<<d_H[i].sectordim/512 + 1, 512, device, stream[i]>>>(d_basis[i], d_H[i], d_Bond[i], data[i]);
               break;
             case 2:
-              FillDiagonalsTFI<<<d_H[i].sectordim/512 + 1, 512, device, stream[i]>>>(d_basis[i], d_H[i].sectordim, d_H[i].set, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], J1[i]);
+              FillDiagonalsTFI<<<d_H[i].sectordim/512 + 1, 512, device, stream[i]>>>(d_basis[i], d_H[i], d_Bond[i], data[i]);
               break;
         }
     }
@@ -265,22 +265,22 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_type, int* la
 
         //--------Launch kernel to create offdiagonal Hamiltonian elements-------
 
-        switch(model_type[i])
+        switch(data[i].model_type)
         {
           
           case 0:
             
-            FillSparseHeisenberg<<<bpg[i].x, tpb[i].x, device, stream[i]>>>(d_basis_Position[i], d_basis[i], d_H[i].sectordim, d_H[i].set, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], J1[i]);
+            FillSparseHeisenberg<<<bpg[i].x, tpb[i].x, device, stream[i]>>>(d_basis_Position[i], d_basis[i], d_H[i], d_Bond[i], data[i]);
             break;
           
           case 1:
             
-            FillSparseXY<<<bpg[i].x, tpb[i].x, device, stream[i]>>>(d_basis_Position[i], d_basis[i], d_H[i].sectordim, d_H[i].set, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_Bond[i], lattice_Size[i], J1[i]);
+            FillSparseXY<<<bpg[i].x, tpb[i].x, device, stream[i]>>>(d_basis_Position[i], d_basis[i], d_H[i], d_Bond[i], data[i]);
             break;
           
           case 2:
 
-            FillSparseTFI<<<bpg[i].x, tpb[i].x, device, stream[i]>>>(d_basis_Position[i], d_basis[i], d_H[i].sectordim, d_H[i].rows, d_H[i].cols, d_H[i].vals, d_H[i].set, d_Bond[i], lattice_Size[i], J1[i], J2[i]);
+            FillSparseTFI<<<bpg[i].x, tpb[i].x, device, stream[i]>>>(d_basis_Position[i], d_basis[i], d_H[i], d_Bond[i], data[i]);
             break;
         }
 
@@ -360,7 +360,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_type, int* la
         sortdata.Alloc(engine, sortnumber[i], 2);
 
         sortdata.firstBit = 0;
-        sortdata.endBit = 2*lattice_Size[i];
+        sortdata.endBit = 31; //2*lattice_Size[i];
 
         sortArray(engine, &sortdata);
 
@@ -417,11 +417,11 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_type, int* la
         
         //----This code dumps the Hamiltonian to a file-------------
         
-        /*cuDoubleComplex* h_vals = (cuDoubleComplex*)malloc(num_Elem[i]*sizeof(cuDoubleComplex));
+        double* h_vals = (double*)malloc(num_Elem[i]*sizeof(double));
         int* h_rows = (int*)malloc(num_Elem[i]*sizeof(int));
         int* h_cols = (int*)malloc(num_Elem[i]*sizeof(int));
 
-        status[i] = cudaMemcpy(h_vals, hamil_lancz[i].vals, num_Elem[i]*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
+        status[i] = cudaMemcpy(h_vals, hamil_lancz[i].vals, num_Elem[i]*sizeof(double), cudaMemcpyDeviceToHost);
 
         if (status[i] != cudaSuccess)
         {
@@ -451,11 +451,11 @@ __host__ void ConstructSparseMatrix(const int how_many, int* model_type, int* la
             {
                 //fout<<h_index[j]<<" - ";
                 fout<<h_rows[j]<<" "<<h_cols[j];
-                fout<<" "<<h_vals[j].x<<std::endl;
+                fout<<" "<<h_vals[j]<<std::endl;
 
             }
             fout.close();
-        }*/
+        }
         cudaStreamSynchronize(stream[i]);
         cudaFree(vals_buffer[i]);
         free(Bond[i]);
