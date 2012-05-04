@@ -2,14 +2,14 @@
 #include<cstdlib>
 #include"cuda.h"
 #include<iostream>
-#include"lanczos.h"
-//#include"hamiltonian.h"
+//#include"lanczos.h"
+#include"hamiltonian.h"
 int main()
 {
-    for(int i = 0; i < 1; i++){
+    for(int i = 0; i < 15; i++){
     int** Bond;
     //cout<<i<<" "<<endl;
-    int how_many = 1;
+    int how_many = 30;
     /*if (i == 1)
     {
         how_many = 5;
@@ -63,7 +63,7 @@ int main()
     cout<<num_Elem[0]<<endl;
     cudaEventRecord(start,0);
     */
-    lanczos(how_many, num_Elem, hamil_lancz, 200, 3, 1e-12);
+    //lanczos(how_many, num_Elem, hamil_lancz, 200, 3, 1e-12);
     /*
     cudaEventRecord(stop,0);
     cudaEventSynchronize(stop);

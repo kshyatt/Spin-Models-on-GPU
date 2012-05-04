@@ -417,7 +417,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
         
         //----This code dumps the Hamiltonian to a file-------------
         
-        double* h_vals = (double*)malloc(num_Elem[i]*sizeof(double));
+        /*double* h_vals = (double*)malloc(num_Elem[i]*sizeof(double));
         int* h_rows = (int*)malloc(num_Elem[i]*sizeof(int));
         int* h_cols = (int*)malloc(num_Elem[i]*sizeof(int));
 
@@ -455,7 +455,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
 
             }
             fout.close();
-        }
+        }*/
         cudaStreamSynchronize(stream[i]);
         cudaFree(vals_buffer[i]);
         free(Bond[i]);
