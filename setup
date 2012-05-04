@@ -1,0 +1,8 @@
+#!/bin/bash
+
+git clone git://github.com/seanbaxter/mgpu.git
+mv mgpu sort
+cd sort/sort/gnu/mgpusort/
+make
+cd ../../../..
+make
