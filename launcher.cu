@@ -38,9 +38,9 @@ int main()
         for(int i = 0; i < how_many; i++)
         {
 
-            data[i].nsite = 20;
+            data[i].nsite = 16;
             Bond[i] = (int*)malloc(3*data[i].nsite*sizeof(int));
-            Fill_Bonds_20A(Bond[i]);
+            Fill_Bonds_16B(Bond[i]);
             /*for( int j = 0; j < data[i].nsite; j++ ){
               Bond[i][j] = j;
               Bond[i][j+ data[i].nsite] = (j+1)%data[i].nsite;
@@ -48,7 +48,7 @@ int main()
             data[i].Sz = 0;
             data[i].J1 = 1.f;
             data[i].J2 = 0.f;
-            data[i].model_type = 1;
+            data[i].model_type = 0;
         }
 
 
@@ -76,7 +76,7 @@ int main()
             cudaFree(hamil_lancz[j].rows);
             cudaFree(hamil_lancz[j].cols);
             cudaFree(hamil_lancz[j].vals);
-            cudaFree(groundstates[i]);
+            cudaFree(groundstates[j]);
         }
         //cudaEventDestroy(start);
         //cudaEventDestroy(stop);

@@ -3,7 +3,21 @@
     \brief Functions for Hamiltonian generation
 */
 
-#include<cmath>
+/*!
+    \defgroup Heisenberg
+    \brief Functions used to generate Hamiltonians for the Heisenberg model
+*/
+
+/*!
+    \defgroup XY
+    \brief Functions used to generate Hamiltonians for the XY model
+*/
+
+/*!
+    \defgroup TFIM
+    \brief Functions used to generate Hamiltonians for the Transverse Field Ising model
+*/
+#include <cmath>
 #include <iostream>
 #include <cstdlib>
 #include "cuda.h"
@@ -127,6 +141,8 @@ __global__ void FullToCOO(int num_Elem, float* H_vals, double* hamil_Values, int
     \fn __device__ float HOffBondXHeisenberg(const int si, const int bra, const float JJ);
     \brief A GPU function which finds the value of the spin operator on the bond in the x direction
     
+    \ingroup Heisenberg
+
     \param si The site whose bond we are looking at
     \param bra The state resulting from applying the spin operator
     \param JJ The coupling of the spin operator on the bond 
@@ -140,6 +156,8 @@ __device__ float HOffBondXHeisenberg(const int si, const int bra, const float JJ
     \fn __device__ float HOffBondYHeisenberg(const int si, const int bra, const float JJ);
     \brief A GPU function which finds the value of the spin operator on the bond in the y direction
     
+    \ingroup Heisenberg
+
     \param si The site whose bond we are looking at
     \param bra The state resulting from applying the spin operator
     \param JJ The coupling of the spin operator on the bond 
@@ -151,6 +169,8 @@ __device__ float HOffBondYHeisenberg(const int si, const int bra, const float JJ
 /*!
     \fn __device__ float HDiagPartHeisenberg(const int bra, int lattice_Size, int3* d_Bond, const float JJ);
     \brief A GPU function which finds the value of the spin operator on the bond on the diagonal
+    
+    \ingroup Heisenberg
     
     \param bra The state resulting from applying the spin operator
     \param lattice_Size The number of sites in the lattice
@@ -164,6 +184,8 @@ __device__ float HDiagPartHeisenberg(const int bra, int lattice_Size, int3* d_Bo
 /*!
     \brief A GPU function which finds and inserts the values, row indices, and column indices of diagonal elements into Hamiltonian storage arrays
     
+    \ingroup Heisenberg
+    
     \param d_basis An array storing the kets which are in-sector
     \param H A struct which contains arrays to be filled with information about the Hamiltonian's diagonal elements
     \param d_Bond An array which contains information about which sites are bonded to which
@@ -174,6 +196,8 @@ __global__ void FillDiagonalsHeisenberg(int* d_basis, f_hamiltonian H, int* d_Bo
 
 /*!
     \brief A GPU function which finds and inserts the values, row indices, and column indices of off-diagonal elements into Hamiltonian storage arrays 
+    
+    \ingroup Heisenberg
     
     \param d_basis_Position Array which stores the location of in-sector kets in d_basis
     \param d_basis Array which stores the in-sector kets
@@ -190,6 +214,8 @@ __global__ void FillSparseHeisenberg(int* d_basis_Position, int* d_basis, f_hami
 /*!
     \brief A GPU function which finds the value of the spin operator on the bond in the x direction
     
+    \ingroup XY
+    
     \param si The site whose bond we are looking at
     \param bra The state resulting from applying the spin operator
     \param JJ The coupling of the spin operator on the bond 
@@ -200,6 +226,8 @@ __device__ float HOffBondXXY(const int si, const int bra, const float JJ);
 
 /*!
     \brief A GPU function which finds the value of the spin operator on the bond in the y direction
+    
+    \ingroup XY
     
     \param si The site whose bond we are looking at
     \param bra The state resulting from applying the spin operator
@@ -212,6 +240,8 @@ __device__ float HOffBondYXY(const int si, const int bra, const float JJ);
 /*!
     \brief A GPU function which finds the value of the spin operator on the bond on the diagonal
     
+    \ingroup XY
+    
     \param bra The state resulting from applying the spin operator
     \param lattice_Size The number of sites in the lattice
     \param d_Bond Array which stores information about which sites are bonded to which
@@ -222,6 +252,8 @@ __device__ float HDiagPartXY(const int bra, int lattice_Size, int3* d_Bond, cons
 /*!
     \brief A GPU function which finds and inserts the values, row indices, and column indices of diagonal elements into Hamiltonian storage arrays
     
+    \ingroup XY
+    
     \param d_basis An array storing the kets which are in-sector
     \param H A struct which contains arrays to be filled with information about the Hamiltonian's diagonal elements
     \param d_Bond An array which contains information about which sites are bonded to which
@@ -231,6 +263,8 @@ __global__ void FillDiagonalsXY(int* d_basis, f_hamiltonian H, int* d_Bond, para
 
 /*!
     \brief A GPU function which finds and inserts the values, row indices, and column indices of off-diagonal elements into Hamiltonian storage arrays 
+    
+    \ingroup XY
     
     \param d_basis_Position Array which stores the location of in-sector kets in d_basis
     \param d_basis Array which stores the in-sector kets
@@ -246,6 +280,8 @@ __global__ void FillSparseXY(int* d_basis_Position, int* d_basis, f_hamiltonian 
 /*!
     \brief A GPU function which finds the value of the spin operator on the bond in the x direction
     
+    \ingroup TFIM
+    
     \param si The site whose bond we are looking at
     \param bra The state resulting from applying the spin operator
     \param JJ The coupling of the spin operator on the bond 
@@ -256,6 +292,8 @@ __device__ float HOffBondXTFI(const int si, const int bra, const float JJ);
 
 /*!
     \brief A GPU function which finds the value of the spin operator on the bond in the x direction
+    
+    \ingroup TFIM
     
     \param si The site whose bond we are looking at
     \param bra The state resulting from applying the spin operator
@@ -268,6 +306,8 @@ __device__ float HOffBondYTFI(const int si, const int bra, const float JJ);
 /*!
     \brief A GPU function which finds the value of the spin operator on the bond on the diagonal
     
+    \ingroup TFIM
+    
     \param bra The state resulting from applying the spin operator
     \param lattice_Size The number of sites in the lattice
     \param d_Bond Array which stores information about which sites are bonded to which
@@ -277,6 +317,8 @@ __device__ float HDiagPartTFI(const int bra, int lattice_Size, int2* d_Bond, con
 
 /*!
     \brief A GPU function which finds and inserts the values, row indices, and column indices of diagonal elements into Hamiltonian storage arrays
+    
+    \ingroup TFIM
     
     \param d_basis An array storing the kets which are in-sector
     \param H A struct which contains arrays to be filled with information about the Hamiltonian's diagonal elements
@@ -288,6 +330,8 @@ __global__ void FillDiagonalsTFI(int* d_basis, f_hamiltonian H, int* d_Bond, par
 /*!
     \brief A GPU function which finds and inserts the values, row indices, and column indices of off-diagonal elements into Hamiltonian storage arrays 
     
+    \ingroup TFIM
+    
     \param d_basis_Position Array which stores the location of in-sector kets in d_basis
     \param d_basis Array which stores the in-sector kets
     \param H Struct which contains arrays to be filled with information about the Hamiltonian's off-diagonal elements
@@ -296,4 +340,3 @@ __global__ void FillDiagonalsTFI(int* d_basis, f_hamiltonian H, int* d_Bond, par
     \param offset How many blocks of off-diagonal elements have already been processed by other runs of the kernel
 */
 __global__ void FillSparseTFI(int* d_basis_Position, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data, int offset);
-
