@@ -19,10 +19,12 @@ __global__ void zero(double* a, int m);
 
 __global__ void identity(double* a, int m);
 
-__host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& Hamiltonian, int max_Iter, const int num_Eig, const double conv_req);
+__host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& Hamiltonian, double**& groundstates, int max_Iter, const int num_Eig, const double conv_req);
 
 __global__ void normalize(cuDoubleComplex* v, const int size, double norm);
 
 __host__ int tqli(double* d, double* e, int n, int max_Iter, double* z);
 
 __host__ double pythag(double a, double b);
+
+__global__ void GetGroundstate(double* groundstates, double** lanczos_store, double* H_eigen, int mat_dim, int vec_dim);

@@ -61,42 +61,42 @@ __device__ float HDiagPartHeisenberg(const int bra, int lattice_Size, int3* d_Bo
 __global__ void FillDiagonalsHeisenberg(int* d_basis, f_hamiltonian H, int* d_Bond, parameters data)
 {
 
-  int row = blockIdx.x*blockDim.x + threadIdx.x;
-  int lattice_Size = data.nsite;
-  int site = threadIdx.x%(lattice_Size);
-  int dim = H.sectordim;
+    int row = blockIdx.x*blockDim.x + threadIdx.x;
+    int lattice_Size = data.nsite;
+    int site = threadIdx.x%(lattice_Size);
+    int dim = H.sectordim;
 
-  unsigned int tempi;
+    unsigned int tempi;
 
-  __shared__ int3 tempbond[18];
+    __shared__ int3 tempbond[32];
 
-  if (row < dim)
-  {
-    tempi = d_basis[row];
-    (tempbond[site]).x = d_Bond[site];
-    (tempbond[site]).y = d_Bond[lattice_Size + site];
-    (tempbond[site]).z = d_Bond[2*lattice_Size + site];
+    if (row < dim)
+    {
+        tempi = d_basis[row];
+        (tempbond[site]).x = d_Bond[site];
+        (tempbond[site]).y = d_Bond[lattice_Size + site];
+        (tempbond[site]).z = d_Bond[2*lattice_Size + site];
 
-    H.vals[row] = HDiagPartHeisenberg(tempi, lattice_Size, tempbond, data.J1);
-    H.rows[row] = row;
-    H.cols[row] = row;
-    H.set[row]  = 1;
-  }
+        H.vals[row] = HDiagPartHeisenberg(tempi, lattice_Size, tempbond, data.J1);
+        H.rows[row] = row;
+        H.cols[row] = row;
+        H.set[row]  = 1;
+    }
 
-  else
-  {
-    H.rows[row] = 2*dim;
-    H.cols[row] = 2*dim;
-    H.set[row] = 0;
-  }
+    else
+    {
+        H.rows[row] = 2*dim;
+        H.cols[row] = 2*dim;
+        H.set[row] = 0;
+    }
 }
 
-__global__ void FillSparseHeisenberg(int* d_basis_Position, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data)
+__global__ void FillSparseHeisenberg(int* d_basis_Position, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data, int offset)
 {
 
     int lattice_Size = data.nsite;
     int dim = H.sectordim;
-    int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size);
+    int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size) + offset*(blockDim.x/(2*lattice_Size));
     int T0 = threadIdx.x%(2*lattice_Size);
 
 #if __CUDA_ARCH__ < 200
@@ -107,7 +107,7 @@ __global__ void FillSparseHeisenberg(int* d_basis_Position, int* d_basis, f_hami
 #error Could not detect GPU architecture
 #endif
 
-    __shared__ int3 tempbond[18];
+    __shared__ int3 tempbond[32];
     int count;
     __shared__ int temppos[array_size];
     __shared__ float tempval[array_size];
@@ -144,12 +144,12 @@ __global__ void FillSparseHeisenberg(int* d_basis_Position, int* d_basis, f_hami
             //Diagonal Part
 
             /*temppos[threadIdx.x] = d_basis_Position[tempi[threadIdx.x]];
-tempval[threadIdx.x] = HDiagPart(tempi[threadIdx.x], lattice_Size, tempbond, JJ);
+            tempval[threadIdx.x] = HDiagPart(tempi[threadIdx.x], lattice_Size, tempbond, JJ);
 
-H_sort[ idx(ii, 0, stride) ].value = tempval[threadIdx.x];
-H_sort[ idx(ii, 0, stride) ].colindex = temppos[threadIdx.x];
-H_sort[ idx(ii, 0, stride) ].rowindex = ii;
-H_sort[ idx(ii, 0, stride) ].dim = dim;*/
+            H_sort[ idx(ii, 0, stride) ].value = tempval[threadIdx.x];
+            H_sort[ idx(ii, 0, stride) ].colindex = temppos[threadIdx.x];
+            H_sort[ idx(ii, 0, stride) ].rowindex = ii;
+            H_sort[ idx(ii, 0, stride) ].dim = dim;*/
 
             //-------------------------------
             //Horizontal bond ---------------

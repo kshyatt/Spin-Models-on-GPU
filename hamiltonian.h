@@ -16,11 +16,11 @@ using namespace std;
 
 struct parameters
 {
-  int model_type;
-  int Sz;
-  int nsite;
-  float J1;
-  float J2;
+    int model_type;
+    int Sz;
+    int nsite;
+    float J1;
+    float J2;
 };
 
 struct d_hamiltonian
@@ -74,7 +74,7 @@ __device__ float HDiagPartHeisenberg(const int bra, int lattice_Size, int3* d_Bo
 
 __global__ void FillDiagonalsHeisenberg(int* d_basis, f_hamiltonian H, int* d_Bond, parameters data);
 
-__global__ void FillSparseHeisenberg(int* d_basis_Position, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data);
+__global__ void FillSparseHeisenberg(int* d_basis_Position, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data, int offset);
 
 //------Declarations of Hamiltonian functions for XY Model -------------------
 
@@ -86,7 +86,7 @@ __device__ float HDiagPartXY(const int bra, int lattice_Size, int3* d_Bond, cons
 
 __global__ void FillDiagonalsXY(int* d_basis, f_hamiltonian H, int* d_Bond, parameters data);
 
-__global__ void FillSparseXY(int* d_basis_Position, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data);
+__global__ void FillSparseXY(int* d_basis_Position, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data, int offset);
 
 //--------Declarations of Hamiltonian functions for transverse field Ising Model-------
 
@@ -98,5 +98,5 @@ __device__ float HDiagPartTFI(const int bra, int lattice_Size, int2* d_Bond, con
 
 __global__ void FillDiagonalsTFI(int* d_basis, f_hamiltonian H, int* d_Bond, parameters data);
 
-__global__ void FillSparseTFI(int* d_basis_Position, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data);
+__global__ void FillSparseTFI(int* d_basis_Position, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data, int offset);
 

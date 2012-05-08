@@ -1,8 +1,8 @@
 CC = nvcc
 CFLAGS = -O3 -gencode arch=compute_20,code=sm_21
-#LANCZLIBS = -lcublas -lcusparse
+LANCZLIBS = -lcublas -lcusparse
 HAMLIBS = -Lsort/sort/gnu/release -lmgpusort -lcuda -lcudart
-OBJS = launcher.o hamiltonian.o heisenberg.o xy.o tfising.o lattice.o
+OBJS = launcher.o lanczos.o hamiltonian.o heisenberg.o xy.o tfising.o lattice.o
 
 all: a.out
 
@@ -12,11 +12,11 @@ debug: a.out
 a.out : $(OBJS) 
 	$(CC) $(CFLAGS) $(OBJS) -o a.out $(HAMLIBS) $(LANCZLIBS)
 
-launcher.o : launcher.cu hamiltonian.h lattice.h
+launcher.o : launcher.cu lanczos.h lattice.h
 	$(CC) $(CFLAGS) -c launcher.cu
 
-#lanczos.o : lanczos.cu lanczos.h 
-#	$(CC) $(CFLAGS) -c $(LANCZLIBS) lanczos.cu
+lanczos.o : lanczos.cu lanczos.h 
+	$(CC) $(CFLAGS) -c $(LANCZLIBS) lanczos.cu
 
 hamiltonian.o : hamiltonian.cu hamiltonian.h
 	$(CC) $(CFLAGS) -c $(HAMLIBS) hamiltonian.cu

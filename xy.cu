@@ -57,12 +57,12 @@ JJ - the coupling parameter
 
 */
 
-__global__ void FillSparseXY(int* d_basis_Position, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data)
+__global__ void FillSparseXY(int* d_basis_Position, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data, int offset)
 {
 
     int dim = H.sectordim;
     int lattice_Size = data.nsite;
-    int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size);
+    int ii = (blockDim.x/(2*lattice_Size))*(blockIdx.x + offset) + threadIdx.x/(2*lattice_Size);
     int T0 = threadIdx.x%(2*lattice_Size);
 
 #if __CUDA_ARCH__ < 200
@@ -73,7 +73,7 @@ __global__ void FillSparseXY(int* d_basis_Position, int* d_basis, f_hamiltonian 
 #error Could not detect GPU architecture
 #endif
 
-    __shared__ int3 tempbond[18];
+    __shared__ int3 tempbond[32];
     int count;
     __shared__ int temppos[array_size];
     __shared__ float tempval[array_size];
@@ -111,7 +111,7 @@ __global__ void FillSparseXY(int* d_basis_Position, int* d_basis, f_hamiltonian 
             (tempbond[site]).z = d_Bond[2*lattice_Size + site];
 
             __syncthreads();
-            
+
             //Horizontal bond ---------------
             s = (tempbond[site]).x;
             tempod[threadIdx.x] = tempi;
@@ -162,4 +162,3 @@ __global__ void FillSparseXY(int* d_basis_Position, int* d_basis, f_hamiltonian 
         }
     }//end of ii
 }//end of FillSparse
-
