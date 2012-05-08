@@ -1,26 +1,60 @@
+/*!
+    \file lattice.h
+
+    \brief Functions to enumerate bonds between lattice sites
+
+*/
+
 #include<iostream>
 #include<cstdlib>
 
 using namespace std;
 
-/*class lattice{
+/*!
+    \brief Fills array with bond information for 12A cluster
 
-  public
-    int nsite;
-    int* Bond;
+    \param Bond Array which will be filled with connection information
 
-    typedef enum {
-      lattice_16A = 1;
-      lattice_18A = 2;
-      lattice_20A = 3;
-      lattice_24A = 4;
-    } latticetype_t;
 */
 void Fill_Bonds_12A(int* Bond);
+/*!
+    \brief Fills array with bond information for 16A cluster
+
+    \param Bond Array which will be filled with connection information
+
+*/
 void Fill_Bonds_16A(int* Bond);
+/*!
+    \brief Fills array with bond information for 16B cluster
+
+    \param Bond Array which will be filled with connection information
+
+*/
 void Fill_Bonds_16B(int* Bond);
+/*!
+    \brief Fills array with bond information for 18A cluster
+
+    \param Bond Array which will be filled with connection information
+
+*/
 void Fill_Bonds_18A(int* Bond);
+/*!
+    \brief Fills array with bond information for 18A cluster
+
+    \param Bond Array which will be filled with connection information
+
+*/
 void Fill_Bonds_20A(int* Bond);
+/*!
+    \brief Fills array with bond information for 20A cluster
+
+    \param Bond Array which will be filled with connection information
+
+*/
 void Fill_Bonds_22A(int* Bond);
-void Fill_Bonds_22B(int* Bond);
-//};
+/*!
+    \brief Fills array with bond information for 22A cluster
+
+    \param Bond Array which will be filled with connection information
+
+*/

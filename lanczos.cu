@@ -707,15 +707,6 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 // write a thing (separate file) to call routines to find expectation values, should be faster on GPU
 // make the tqli thing better!
 
-__global__ void normalize(cuDoubleComplex* v, const int size, double norm)
-{
-    int i = threadIdx.x + blockIdx.x*blockDim.x;
-    if (i < size)
-    {
-        v[i] = cuCdiv(v[i], make_cuDoubleComplex(norm, 0. ));
-    }
-}
-
 int tqli(double* d, double* e, int n, int max_Iter, double *z)
 
 {
