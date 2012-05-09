@@ -24,13 +24,13 @@ __host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], i
         {
             temp += (i1>>sp)&1;
         } //unpack bra
-        if (temp == lattice_Size/2 + Sz)
-        {
+        //if (temp == lattice_Size/2 + Sz)
+        //{
             basis[realdim] = i1;
             basis_Position[i1] = realdim;
             realdim++;
 
-        }
+        //}
     }
     return realdim;
 
@@ -392,47 +392,6 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
     }
     //----------------Sorting Hamiltonian--------------------------//
 
-
-        double* h_vals = (double*)malloc(num_Elem[0]*sizeof(double));
-        int* h_rows = (int*)malloc(num_Elem[0]*sizeof(int));
-        int* h_cols = (int*)malloc(num_Elem[0]*sizeof(int));
-
-        status[0] = cudaMemcpy(h_vals, d_H[0].vals, num_Elem[0]*sizeof(double), cudaMemcpyDeviceToHost);
-
-        if (status[0] != cudaSuccess)
-        {
-            cout<<"Error copying to h_vals: "<<cudaGetErrorString(status[0])<<endl;
-        }
-
-        status[0] = cudaMemcpy(h_rows, d_H[0].rows, num_Elem[0]*sizeof(int), cudaMemcpyDeviceToHost);
-
-        if (status[0] != cudaSuccess)
-        {
-            cout<<"Error copying to h_rows: "<<cudaGetErrorString(status[0])<<endl;
-        }
-
-        status[0] = cudaMemcpy(h_cols, d_H[0].cols, num_Elem[0]*sizeof(int), cudaMemcpyDeviceToHost);
-
-        if (status[0] != cudaSuccess)
-        {
-            cout<<"Error copying to h_cols: "<<cudaGetErrorString(status[0])<<endl;
-        }
-
-
-            ofstream fout;
-            fout.open("hamiltonian.log");
-            for(int j = 0; j < num_Elem[0]; j++)
-            {
-                //fout<<h_index[j]<<" - ";
-                fout<<h_rows[j]<<" "<<h_cols[j];
-                fout<<" "<<h_vals[j]<<std::endl;
-
-            }
-            fout.close();
-
-        free(h_rows);
-        free(h_cols);
-        free(h_vals);
     float** vals_buffer = (float**)malloc(how_many*sizeof(float*));
     int sortnumber[how_many];
 
@@ -514,7 +473,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
 
         //----This code dumps the Hamiltonian to a file-------------
 
-        /*double* h_vals = (double*)malloc(num_Elem[i]*sizeof(double));
+        double* h_vals = (double*)malloc(num_Elem[i]*sizeof(double));
         int* h_rows = (int*)malloc(num_Elem[i]*sizeof(int));
         int* h_cols = (int*)malloc(num_Elem[i]*sizeof(int));
 
@@ -556,7 +515,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
 
         free(h_rows);
         free(h_cols);
-        free(h_vals);*/
+        free(h_vals);
 
         cudaStreamSynchronize(stream[i]);
         cudaFree(vals_buffer[i]);

@@ -15,22 +15,16 @@ __device__ float HOffBondXTFI(const int si, const int bra, const float JJ)
 __device__ float HDiagPartTFI(const int bra, int lattice_Size, int2* d_Bond, const float JJ)
 {
 
-    //int S0b,S1b ; //spins (bra
-    //int T0,T1; //site
+    int S0b,S1b ; //spins (bra
+    int T0,T1; //site
     //int P0, P1, P2, P3; //sites for plaquette (Q)
     //int s0p, s1p, s2p, s3p;
     float valH = 0.f;
-    int temp = 0;
     int total = 0;
 
 
-    for (int Ti=0; Ti<lattice_Size; Ti++)
-    {
-        temp = (bra>>Ti)&1;
-        total += -1 + 2*temp;
-    }
 
-    /*for (int Ti=0; Ti<lattice_Size; Ti++)
+    for (int Ti=0; Ti<lattice_Size; Ti++)
     {
 
         T0 = (d_Bond[Ti]).x; //lower left spin
@@ -40,10 +34,8 @@ __device__ float HDiagPartTFI(const int bra, int lattice_Size, int2* d_Bond, con
         S1b = (bra>>T1)&1; //unpack bra
         valH += JJ*(S0b-0.5)*(S1b-0.5);
 
-    }//T0*/
+    }//T0
 
-    //cout<<bra<<" "<<valH<<endl;
-    valH = JJ*total*0.5;
     return valH;
 
 }//HdiagPart

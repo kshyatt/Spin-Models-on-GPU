@@ -40,15 +40,15 @@ int main()
 
             data[i].nsite = 16;
             Bond[i] = (int*)malloc(3*data[i].nsite*sizeof(int));
-            Fill_Bonds_16B(Bond[i]);
-            /*for( int j = 0; j < data[i].nsite; j++ ){
+            //Fill_Bonds_16B(Bond[i]);
+            for( int j = 0; j < data[i].nsite; j++ ){
               Bond[i][j] = j;
               Bond[i][j+ data[i].nsite] = (j+1)%data[i].nsite;
-            }*/
+            }
             data[i].Sz = 0;
-            data[i].J1 = 1.f;
+            data[i].J1 = 4.f;
             data[i].J2 = 0.f;
-            data[i].model_type = 0;
+            data[i].model_type = 2;
         }
 
 
