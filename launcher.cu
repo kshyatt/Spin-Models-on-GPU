@@ -1,3 +1,8 @@
+/*!
+    \file launcher.cu
+    \brief Controller code that launches Hamiltonian generation and Lanczos diagonalization
+*/
+
 #include"lattice.h"
 #include<cstdlib>
 #include"cuda.h"

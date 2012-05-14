@@ -1,6 +1,9 @@
 /*!
     \file hamiltonian.h
     \brief Functions for Hamiltonian generation
+
+    Contains declarations for functions which generate diagonal and off-diagonal elements of the Hamiltonian on the GPU. Also declares handler functions which go through all steps of matrix creation. Defines structs which store relevant information about the Hamiltonian. 
+
 */
 
 /*!
@@ -97,6 +100,68 @@ struct f_hamiltonian
     
     \brief Extracts the basis elements in the sector considered and determines size of this sector
     
+    Sz eigenstates are stored using a base 2 representation: 1 is an up spin, 0 is a down spin. For example:
+    - 1111 -> all spins are up
+    - 0000 -> all spins are down
+    - 1001 -> end spins are up, middle spins are down
+
+    This function looks at the total S_z value of the ket in question and determines from this whether the ket is in the S_z sector specified when the program is launched. If all S_z sectors are allowed (for instance, if the Hamiltonian is not S_z preserving, like the Transverse Field Ising Model) then all kets are allowed. The in-sector kets are stored in basis, and their position in that array is stored in basis_Position. For instance, if we specify that we only want to consider the S_z = 0 sector:
+
+<table>
+<tr>
+    <th> Ket </td> <th> S_z sector </td> <th> In basis? </td> <th> basis_Position entry </th>
+</tr>
+<tr>
+    <td> 0000 </td> <td> -4 </td> <td> not placed in basis </td> <td> basis_Position[0] = -1 </td>
+</tr>
+<tr>
+    <td> 0001 </td> <td> -2 </td> <td> not placed in basis </td> <td> basis_Position[1] = -1 </td>
+</tr>
+<tr>
+    <td> 0010 </td> <td> -2 </td> <td> not placed in basis </td> <td> basis_Position[2] = -1 </td>
+</tr>
+<tr>
+    <td> 0011 </td> <td> 0 </td> <td> placed in basis[0] </td> <td> basis_Position[3] = 0 </td>
+</tr>
+<tr> 
+    <td> 0100 </td> <td> -2 </td> <td> not placed in basis </td> <td> basis_Position[4] = -1 </td>
+</tr>
+<tr>
+    <td> 0101 </td> <td> 0 </td> <td> placed in basis[1] </td> <td> basis_Position[5] = 1 </td>
+</tr>
+<tr>
+    <td> 0110 </td> <td> 0 </td> <td> placed in basis[2] </td> <td> basis_Position[6] = 2 </td>
+</tr>
+<tr>
+    <td> 0111 </td> <td> 2 </td> <td> not placed in basis </td> <td> basis_Position[7] = -1 </td>
+</tr>
+<tr>
+    <td> 1000 </td> <td> -2 </td> <td> not placed in basis </td> <td> basis_Position[8] = -1 </td>
+</tr>
+<tr>
+    <td> 1001 </td> <td> 0 </td> <td> placed in basis[3] </td> <td> basis_Position[9] = 3 </td>
+</tr>
+<tr>
+    <td> 1010  </td> <td> 0 </td> <td> placed in basis[4] </td> <td> basis_Position[10] = 4 </td>
+</tr>
+<tr>
+    <td> 1011  </td> <td> 2 </td> <td> not placed in basis </td> <td> basis_Position[11] = -1 </td>
+</tr>
+<tr>
+    <td> 1100  </td> <td> 0 </td> <td> placed in basis[5] </td> <td> basis_Position[12] = 5  </td>
+</tr>
+<tr>
+    <td> 1101  </td> <td> 2 </td> <td> not placed in basis </td> <td> basis_Position[13] = -1 </td>
+</tr>
+<tr>
+    <td> 1110  </td> <td> 2 </td> <td> not placed in basis </td> <td> basis_Position[14] = -1 </td>
+</tr>
+<tr>
+    <td> 1111  </td> <td> 4 </td> <td> not placed in basis </td> <td> basis_Position[15] = -1 </td>
+</tr>
+</table>
+Each time an element is placed in basis, a counter is incremented. The final value of this counter gives the dimension of the sector of interest. In the case that no sector is specified, the counter is just the dimension of the full Hilbert space.
+
     \param dim The dimension of the full Hilbert space
     \param lattice_Size The number of sites in the lattice
     \param Sz The spin sector we are restricting ourselves to
@@ -112,6 +177,8 @@ __host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], i
     \fn __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonian*& hamil_lancz, parameters* data, int*& count_array, int device);
     
     \brief A CPU function which creates basis information, then calls GPU functions to fill arrays describing the Hamiltonian
+
+    This function launches one or many cudaStreams, depending on the value of `how_many`. Each stream is responsible for generating one Hamiltonian. First, ConstructSparseMatrix determines the structure of the basis by calling GetBasis. Then it allocates storage arrays on the GPU for the Hamiltonian, using f_hamiltonian. Since single precision operations are much faster on GPU at this time, this allows element generation to take much less time than it otherwise might. The function launches an instance of `FillDiagonals()` and `FillSparse()` in each stream, and these functions fill up the previously allocated storage arrays. A parallel reduction is performed on the array containing zero-valued/non-zero-valued flags to determine how many nonzero elements there are in the Hamiltonian. This is used instead of atomic operations because in this case reduction, a parallel summing algorithm, performs much better. At this point the modern GPU sorting library is loaded. This library is used because it allows multiple value arrays to be sorted by one key array, which thrust does not without defining another custom `struct`. The mgpu library sorts the Hamiltonian arrays and they are copied into the container that will be used for diagonalization later, with an intermediate conversion of the values from single to double precision. The Hamiltonian is now ready to be diagonalized or dumped to disk for storage/correctness checks.
     
     \param how_many How many Hamiltonians will be constructed at once on the GPU
     \param Bond Array storing information about which lattice sites are bonded to which
@@ -169,6 +236,8 @@ __device__ float HOffBondYHeisenberg(const int si, const int bra, const float JJ
 /*!
     \fn __device__ float HDiagPartHeisenberg(const int bra, int lattice_Size, int3* d_Bond, const float JJ);
     \brief A GPU function which finds the value of the spin operator on the bond on the diagonal
+   
+    This function computes the value of <i>S<sub>z</sub><sup>i</sup>S<sub>z</sub><sup>j</sup></i> over all bonded pairs <i> (i,j)</i>. If <i>i</i> and <i>j</i> have ferromagnetic ordering (they are aligned) then <i>S<sub>z</sub><sup>i</sup>S<sub>z</sub><sup>j</sup></i> = 1/4. If they have antiferrmagnetic ordering (they are anti-aligned) <i>S<sub>z</sub><sup>i</sup>S<sub>z</sub><sup>j</sup></i> = 0. The final value of the diagonal element is the coupling constant multiplied by the sum of all the bond <i>S<sub>z</sub></i> values.
     
     \ingroup Heisenberg
     
@@ -183,6 +252,8 @@ __device__ float HDiagPartHeisenberg(const int bra, int lattice_Size, int3* d_Bo
 
 /*!
     \brief A GPU function which finds and inserts the values, row indices, and column indices of diagonal elements into Hamiltonian storage arrays
+   
+    In the Heisenberg case, the only nonzero diagonal operator is <i>S<sub>z</sub></i> over the bonds. Since the diagonal operations are different than those for the off-diagonal elements, they are sequestered in their own kernel to avoid serializing threads in FillSparseHeisenberg() or a more complicated kernel in general. Each thread is assigned a ket, determines whether this ket is in the Hilbert space/sector, and then calls HDiagPartHeisenberg() to find the value of the diagonal element. If the ket is in the Hilbert space or sector, this value and the true row and column indices are written back to global memory. A flag (1) is also written for element counting purposes. If not, the value is still written but the row and column indices are set to be outside the dimension of the Hilbert space/sector. This is for sorting purposes. The counting flag is set to 0.
     
     \ingroup Heisenberg
     
@@ -197,6 +268,56 @@ __global__ void FillDiagonalsHeisenberg(int* d_basis, f_hamiltonian H, int* d_Bo
 /*!
     \brief A GPU function which finds and inserts the values, row indices, and column indices of off-diagonal elements into Hamiltonian storage arrays 
     
+    This function processes <i>S<sub>x</sub><sup>i</sup>S<sub>x</sub><sup>j</sup></i> and <i>S<sub>y</sub><sup>i</sup>S<sub>y</sub><sup>j</sup></i>. Since these operators can be expressed instead as combinations of <i>S<sub>+</sub></i> and <i>S<sub>-</sub></i>, this language (which is more convenient) is used instead. Each thread is assigned a row index and a site:
+
+\verbatim
+int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size) + offset*(blockDim.x/(2*lattice_Size));
+int T0 = threadIdx.x%(2*lattice_Size);
+int site = T0 / lattice_Size;
+\endverbatim    
+
+The thread determines whether the index it's been assigned is within the dimensions of the Hilbert space/sector and whether the site is within the lattice size. If so, it then copies the bond information from global to shared memory since it will be referenced quite often. 
+
+\verbatim
+if( ii < dim )
+{
+    if (T0 < 2*lattice_Size)
+    {   
+    
+        (tempbond[site]).x = d_Bond[site];
+        (tempbond[site]).y = d_Bond[lattice_Size + site];
+        (tempbond[site]).z = d_Bond[2*lattice_Size + site];
+
+\endverbatim
+
+An in-sector ket is extracted from d_basis and the spins on the thread's site and the site(s) it is bonded to are flipped as well. This generates the only bra that will give a non-zero matrix element. The thread ensures that this bra's position in d_basis is greater than the row index assigned at the beginning. This forces only the upper triangle of the matrix to be generated, which prevents duplicate elements from forming.
+
+\verbatim
+tempi = d_basis[ii];
+s = (tempbond[site]).x;
+tempod[threadIdx.x] = tempi;
+tempod[threadIdx.x] ^= (1<<s);
+s = (tempbond[site]).y;
+tempod[threadIdx.x] ^= (1<<s);
+
+compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
+temppos[threadIdx.x] = (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
+tempval[threadIdx.x] = HOffBondXHeisenberg(site, tempi, data.J1);
+\endverbatim
+
+The thread then inserts the element value, the row index, and the column index of the bra into global memory, interchanging the indices if the thread has been assigned to handle the complex conjugates. Since this Hamiltonian is entirely real-valued, it isn't necessary to conjugate the element values. Finally, the array of flags is set depending on whether the element is in-sector, upper-triangular, etc.
+
+\verbatim
+count += (int)compare;
+rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
+rowtemp = (compare) ? rowtemp : 2*dim;
+
+H.vals[ ii*stride + 4*site + (T0/lattice_Size) + start ] = tempval[threadIdx.x]; 
+H.cols[ ii*stride + 4*site + (T0/lattice_Size) + start ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
+H.rows[ ii*stride + 4*site + (T0/lattice_Size) + start ] = rowtemp;
+H.set[ ii*stride + 4*site + (T0/lattice_Size) + start ] = (int)compare;
+\endverbatim
+
     \ingroup Heisenberg
     
     \param d_basis_Position Array which stores the location of in-sector kets in d_basis
@@ -251,7 +372,9 @@ __device__ float HDiagPartXY(const int bra, int lattice_Size, int3* d_Bond, cons
 
 /*!
     \brief A GPU function which finds and inserts the values, row indices, and column indices of diagonal elements into Hamiltonian storage arrays
-    
+   
+    Since the XY model has no diagonal terms, this function simply ensures all diagonal elements are zero-valued.
+     
     \ingroup XY
     
     \param d_basis An array storing the kets which are in-sector
@@ -263,6 +386,56 @@ __global__ void FillDiagonalsXY(int* d_basis, f_hamiltonian H, int* d_Bond, para
 
 /*!
     \brief A GPU function which finds and inserts the values, row indices, and column indices of off-diagonal elements into Hamiltonian storage arrays 
+    
+    This function processes <i>S<sub>x</sub><sup>i</sup>S<sub>x</sub><sup>j</sup></i> and <i>S<sub>y</sub><sup>i</sup>S<sub>y</sub><sup>j</sup></i>. Since these operators can be expressed instead as combinations of <i>S<sub>+</sub></i> and <i>S<sub>-</sub></i>, this language (which is more convenient) is used instead. Each thread is assigned a row index and a site:
+
+\verbatim
+int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size) + offset*(blockDim.x/(2*lattice_Size));
+int T0 = threadIdx.x%(2*lattice_Size);
+int site = T0 / lattice_Size;
+\endverbatim    
+
+The thread determines whether the index it's been assigned is within the dimensions of the Hilbert space/sector and whether the site is within the lattice size. If so, it then copies the bond information from global to shared memory since it will be referenced quite often. 
+
+\verbatim
+if( ii < dim )
+{
+    if (T0 < 2*lattice_Size)
+    {   
+    
+        (tempbond[site]).x = d_Bond[site];
+        (tempbond[site]).y = d_Bond[lattice_Size + site];
+        (tempbond[site]).z = d_Bond[2*lattice_Size + site];
+
+\endverbatim
+
+An in-sector ket is extracted from d_basis and the spins on the thread's site and the site(s) it is bonded to are flipped as well. This generates the only bra that will give a non-zero matrix element. The thread ensures that this bra's position in d_basis is greater than the row index assigned at the beginning. This forces only the upper triangle of the matrix to be generated, which prevents duplicate elements from forming.
+
+\verbatim
+tempi = d_basis[ii];
+s = (tempbond[site]).x;
+tempod[threadIdx.x] = tempi;
+tempod[threadIdx.x] ^= (1<<s);
+s = (tempbond[site]).y;
+tempod[threadIdx.x] ^= (1<<s);
+
+compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
+temppos[threadIdx.x] = (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
+tempval[threadIdx.x] = HOffBondXHeisenberg(site, tempi, data.J1);
+\endverbatim
+
+The thread then inserts the element value, the row index, and the column index of the bra into global memory, interchanging the indices if the thread has been assigned to handle the complex conjugates. Since this Hamiltonian is entirely real-valued, it isn't necessary to conjugate the element values. Finally, the array of flags is set depending on whether the element is in-sector, upper-triangular, etc.
+
+\verbatim
+count += (int)compare;
+rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
+rowtemp = (compare) ? rowtemp : 2*dim;
+
+H.vals[ ii*stride + 4*site + (T0/lattice_Size) + start ] = tempval[threadIdx.x]; 
+H.cols[ ii*stride + 4*site + (T0/lattice_Size) + start ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
+H.rows[ ii*stride + 4*site + (T0/lattice_Size) + start ] = rowtemp;
+H.set[ ii*stride + 4*site + (T0/lattice_Size) + start ] = (int)compare;
+\endverbatim
     
     \ingroup XY
     
@@ -306,6 +479,8 @@ __device__ float HOffBondYTFI(const int si, const int bra, const float JJ);
 /*!
     \brief A GPU function which finds the value of the spin operator on the bond on the diagonal
     
+    This function computes the value of <i>S<sub>z</sub><sup>i</sup>S<sub>z</sub><sup>j</sup></i> over all bonded pairs <i>(i,j)</i>. If <i>i</i> and <i>j</i> have ferromagnetic ordering (they are aligned) then <i>S<sub>z</sub><sup>i</sup>S<sub>z</sub><sup>j</sup></i> = 1/4. If they have antiferrmagnetic ordering (they are anti-aligned) <i>S<sub>z</sub><sup>i</sup>S<sub>z</sub><sup>j</sup></i> = 0. The final value of the diagonal element is the coupling constant multiplied by the sum of all the bond <i>S<sub>z</sub></i> values.
+    
     \ingroup TFIM
     
     \param bra The state resulting from applying the spin operator
@@ -317,6 +492,8 @@ __device__ float HDiagPartTFI(const int bra, int lattice_Size, int2* d_Bond, con
 
 /*!
     \brief A GPU function which finds and inserts the values, row indices, and column indices of diagonal elements into Hamiltonian storage arrays
+    
+    In the Transverse Field Ising case, the only nonzero diagonal operator is <i>S<sub>z</sub></i> over the bonds. Since the diagonal operations are different than those for the off-diagonal elements, they are sequestered in their own kernel to avoid serializing threads in FillSparseTFI() or a more complicated kernel in general. Each thread is assigned a ket, determines whether this ket is in the Hilbert space/sector, and then calls HDiagPartTFI() to find the value of the diagonal element. If the ket is in the Hilbert space or sector, this value and the true row and column indices are written back to global memory. A flag (1) is also written for element counting purposes. If not, the value is still written but the row and column indices are set to be outside the dimension of the Hilbert space/sector. This is for sorting purposes. The counting flag is set to 0.
     
     \ingroup TFIM
     
@@ -330,6 +507,51 @@ __global__ void FillDiagonalsTFI(int* d_basis, f_hamiltonian H, int* d_Bond, par
 /*!
     \brief A GPU function which finds and inserts the values, row indices, and column indices of off-diagonal elements into Hamiltonian storage arrays 
     
+    This function processes <i>S<sub>x</sub><sup>i</sup></i>. Since this operator can be expressed instead as combinations of <i>S<sub>+</sub></i> and <i>S<sub>-</sub></i>, this language (which is more convenient) is used instead. This operator is single site, so bond information is not needed. Each thread is assigned a row index and a site. 
+    
+\verbatim
+   int ii = ( blockDim.x / ( 2 * lattice_Size ) ) * blockIdx.x + threadIdx.x / ( 2 * lattice_Size ) + offset;
+   int T0 = threadIdx.x % ( 2 * lattice_Size );
+\endverbatim
+
+The thread determines whether the index it's been assigned is within the dimensions of the Hilbert space/sector and whether the site is within the lattice size. 
+
+\verbatim
+if( ii < dim )
+    {
+        if ( T0 < 2 * lattice_Size )
+        {
+\endverbatim
+
+A ket is extracted from d_basis and the spin on the thread's site is flipped. This generates the only bra that will give a non-zero matrix element. The thread ensures that this bra's position in d_basis is greater than the row index assigned at the beginning. This forces only the upper triangle of the matrix to be generated, which prevents duplicate elements from forming. 
+
+\verbatim
+tempod[threadIdx.x] = tempi;
+
+//-----------------Horizontal bond ---------------
+temppos[ threadIdx.x ] = ( tempod[threadIdx.x] ^ ( 1 << site ) );
+//flip the site-th bit of row - applying the sigma_x operator
+compare = ( temppos[ threadIdx.x ] > ii ) && ( temppos[ threadIdx.x ] < dim );
+temppos[ threadIdx.x ] = compare ? temppos[ threadIdx.x ] : dim + 1;
+tempval[ threadIdx.x ] = HOffBondXTFI(site, tempi, data.J2);
+\endverbatim
+
+The thread then inserts the element value, the row index, and the column index of the bra into global memory, interchanging the indices if the thread has been assigned to handle the complex conjugates. Since this Hamiltonian is entirely real-valued, it isn't necessary to conjugate the element values. Finally, the array of flags is set depending on whether the element is in-sector, upper-triangular, etc.
+   
+\verbatim
+rowtemp = ( T0 / lattice_Size ) ? ii : temppos[ threadIdx.x ];
+rowtemp = compare ? rowtemp : dim + 1;
+temppos[ threadIdx.x ] = ( T0 / lattice_Size) ? temppos[ threadIdx.x ] : ii;
+temppos[ threadIdx.x ] = compare ? temppos[threadIdx.x] : dim + 1;
+
+//----Putting everything back into GPU main memory-----------
+
+H.vals[ ii*stride + 2 * site + ( T0 / lattice_Size ) + start ] = tempval[ threadIdx.x ];
+H.cols[ ii*stride + 2 * site + ( T0 / lattice_Size ) + start ] = temppos[ threadIdx.x ];
+H.rows[ ii*stride + 2 * site + ( T0 / lattice_Size ) + start ] = rowtemp;
+H.set[ ii*stride + 2 * site + ( T0 / lattice_Size ) + start ] = (int)compare;
+\endverbatim
+
     \ingroup TFIM
     
     \param d_basis_Position Array which stores the location of in-sector kets in d_basis

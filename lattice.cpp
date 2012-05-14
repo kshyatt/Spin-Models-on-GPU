@@ -1,8 +1,10 @@
+/*!
+    \file lattice.cpp
+    \brief Contains bond array filling functions, describing which sites are linked to which
+*/
 #include"lattice.h"
 
 void Fill_Bonds_12A(int* Bond){
-
-  //Bond = (int*)malloc(12*3*sizeof(int));
 
   for(int i = 0; i < 12; i++){
     Bond[i] = i;

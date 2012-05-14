@@ -1,3 +1,8 @@
+/*!
+    \file heisenberg.cu
+    \brief Functions to generate Hamiltonians for the Heisenberg model
+*/
+
 #include "hamiltonian.h"
 
 __device__ float HOffBondXHeisenberg(const int si, const int bra, const float JJ)

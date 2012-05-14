@@ -1,3 +1,8 @@
+/*!
+    \file hamiltonian.cu
+    \brief Controller code for Hamiltonian generation - runs through stages of generation and launches model-specific kernels
+*/
+
 #include"hamiltonian.h"
 
 /* NOTE: this function uses FORTRAN style matrices, where the values and positions are stored in a ONE dimensional array! Don't forget this! */
@@ -473,7 +478,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
 
         //----This code dumps the Hamiltonian to a file-------------
 
-        double* h_vals = (double*)malloc(num_Elem[i]*sizeof(double));
+        /*double* h_vals = (double*)malloc(num_Elem[i]*sizeof(double));
         int* h_rows = (int*)malloc(num_Elem[i]*sizeof(int));
         int* h_cols = (int*)malloc(num_Elem[i]*sizeof(int));
 
@@ -515,7 +520,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
 
         free(h_rows);
         free(h_cols);
-        free(h_vals);
+        free(h_vals);*/
 
         cudaStreamSynchronize(stream[i]);
         cudaFree(vals_buffer[i]);

@@ -1,3 +1,8 @@
+/*!
+    \file tfising.cu
+    \brief Functions to generate a Hamiltonian for the Transverse Field Ising model
+*/
+
 #include "hamiltonian.h"
 __device__ float HOffBondXTFI(const int si, const int bra, const float JJ)
 {
@@ -37,7 +42,6 @@ __device__ float HDiagPartTFI(const int bra, int lattice_Size, int2* d_Bond, con
     }//T0
 
     return valH;
-
 }//HdiagPart
 
 __global__ void FillDiagonalsTFI(int* d_basis, f_hamiltonian H, int* d_Bond, parameters data)

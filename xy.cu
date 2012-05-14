@@ -1,3 +1,8 @@
+/*! 
+    \file xy.cu
+    \brief Functions to generate Hamiltonians for the XY model
+*/
+
 #include "hamiltonian.h"
 __device__ float HOffBondXXY(const int si, const int bra, const float JJ)
 {
