@@ -200,7 +200,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
             cout<<"Error creating "<<i<<"th flag array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
-        status[i] = cudaMemset(d_H[i].set, 0, raw_size[i]*sizeof(int));
+        //status[i] = cudaMemset(d_H[i].set, 0, raw_size[i]*sizeof(int));
 
         status[i] = cudaMalloc(&d_Bond[i], 3*data[i].nsite*sizeof(int));
         if (status[i] != cudaSuccess)
@@ -239,7 +239,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
             offset[i] = (1<<16 - 1);
         }
 
-        status[i] = cudaStreamSynchronize(stream[i]);
+        //status[i] = cudaStreamSynchronize(stream[i]);
 
         if (status[i] != cudaSuccess)
         {
@@ -263,7 +263,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
     }
     for(int i = 0; i < how_many; i++)
     {
-        status[i] = cudaStreamSynchronize(stream[i]);
+        //status[i] = cudaStreamSynchronize(stream[i]);
 
         if (status[i] != cudaSuccess)
         {
@@ -410,11 +410,11 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
 
         MgpuSortData sortdata;
 
-        sortdata.AttachKey((uint*)d_H[i].rows);
+        sortdata.AttachKey((unsigned int*)d_H[i].rows);
         //sortdata.AttachKey((uint*)d_H[i].index);
         //sortdata.AttachVal(0, (uint*)d_H[i].rows);
-        sortdata.AttachVal(0, (uint*)d_H[i].cols);
-        sortdata.AttachVal(1, (uint*)d_H[i].vals);
+        sortdata.AttachVal(0, (unsigned int*)d_H[i].cols);
+        sortdata.AttachVal(1, (unsigned int*)d_H[i].vals);
 
         sortnumber[i] = raw_size[i];
 
@@ -461,7 +461,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
 
         //cudaMemcpy(vals_buffer[i], (float*)sortdata.values3[0], num_Elem[i]*sizeof(float), cudaMemcpyDeviceToDevice);
 
-        FullToCOO<<<num_Elem[i]/1024 + 1, 1024>>>(num_Elem[i], vals_buffer[i], hamil_lancz[i].vals, d_H[i].sectordim);
+        FullToCOO<<<num_Elem[i]/1024 + 1, 1024, 1>>>(num_Elem[i], vals_buffer[i], hamil_lancz[i].vals, d_H[i].sectordim);
 
         //int* h_index = (int*)malloc(num_Elem[i]*sizeof(int));
         // status[i] = cudaMemcpy(h_index, d_H[i].index, num_Elem[i]*sizeof(int), cudaMemcpyDeviceToHost);
@@ -526,7 +526,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
         cudaFree(vals_buffer[i]);
         free(Bond[i]);
     }
-    cudaDeviceSynchronize();
+    //cudaDeviceSynchronize();
 
     //----Free all the array storage to avoid memory leaks---------
 

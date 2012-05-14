@@ -25,9 +25,6 @@ __device__ float HDiagPartTFI(const int bra, int lattice_Size, int2* d_Bond, con
     //int P0, P1, P2, P3; //sites for plaquette (Q)
     //int s0p, s1p, s2p, s3p;
     float valH = 0.f;
-    int total = 0;
-
-
 
     for (int Ti=0; Ti<lattice_Size; Ti++)
     {
@@ -112,8 +109,8 @@ __global__ void FillSparseTFI(int* d_basis_Position, int* d_basis, f_hamiltonian
     int stride = 2 * lattice_Size;
     int site = T0 % ( lattice_Size );
     int rowtemp;
-    uint tempi;
-    __shared__ uint tempod[array_size];
+    __shared__ unsigned int tempi[array_size];
+    __shared__ unsigned int tempod[array_size];
 
     //int start = (bool)(dim%array_size) ? (dim/array_size + 1)*array_size : dim/array_size;
     int start = ( bool )( dim % 512 ) ? ( dim / 512 + 1 ) * 512 : dim ;
@@ -121,7 +118,7 @@ __global__ void FillSparseTFI(int* d_basis_Position, int* d_basis, f_hamiltonian
 
     if( ii < dim )
     {
-        tempi = d_basis[ii];
+        tempi[ threadIdx.x ] = d_basis[ ii ];
         if ( T0 < 2 * lattice_Size )
         {
 
@@ -131,13 +128,14 @@ __global__ void FillSparseTFI(int* d_basis_Position, int* d_basis, f_hamiltonian
 
             // __syncthreads();
 
-            tempod[threadIdx.x] = tempi;
+            tempod[ threadIdx.x ] = tempi[ threadIdx.x ];
 
             //-----------------Horizontal bond ---------------
-            temppos[ threadIdx.x ] = ( tempod[threadIdx.x] ^ ( 1 << site ) );// & ( 1 << site ); //flip the site-th bit of row - applying the sigma_x operator
+            temppos[ threadIdx.x ] = ( tempod[ threadIdx.x ] ^ ( 1 << site ) );
+            //flip the site-th bit of row - applying the sigma_x operator
             compare = ( temppos[ threadIdx.x ] > ii ) && ( temppos[ threadIdx.x ] < dim );
             temppos[ threadIdx.x ] = compare ? temppos[ threadIdx.x ] : dim + 1;
-            tempval[ threadIdx.x ] = HOffBondXTFI(site, tempi, data.J2);
+            tempval[ threadIdx.x ] = HOffBondXTFI(site, tempi[ threadIdx.x ], data.J2);
 
             rowtemp = ( T0 / lattice_Size ) ? ii : temppos[ threadIdx.x ];
             rowtemp = compare ? rowtemp : dim + 1;

@@ -157,6 +157,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     {
         std::cout<<"Error before thread sync: "<<cudaGetErrorString(status[0])<<std::endl;
     }
+    */
     //----------------Create arrays to hold current Lanczos vectors----------
     vector< vector<double> > h_a(how_many);
 
@@ -272,7 +273,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
             std::cout<<"Getting V1 = H*V0 failed! Error: ";
             std::cout<<cusparse_status[i]<<std::endl;
         }
-        cudaStreamSynchronize(stream[i]);
+        //cudaStreamSynchronize(stream[i]);
 
         if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
         {
@@ -294,6 +295,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         dottemp[i] = 0.;
 
         cublas_status[i] = cublasDdot(linalghandle, dim[i], v1[i], 1, v0[i], 1, &dottemp[i]);
+        
         h_a[i].push_back(dottemp[i]);
         h_b[i].push_back(0.);
 
@@ -305,7 +307,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
         
 
-        cudaStreamSynchronize(stream[i]);
+        //cudaStreamSynchronize(stream[i]);
         if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
         {
             std::cout<<"Getting h_a[0] failed! Error: ";
@@ -329,12 +331,12 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         */
 
         cublas_status[i] = cublasDscal(linalghandle, dim[i], &beta[i], y[i], 1);
-        cudaStreamSynchronize(stream[i]);
+        //cudaStreamSynchronize(stream[i]);
 
         axpytemp[i] = -1*h_a[i][0];
 
         cublas_status[i] = cublasDaxpy(linalghandle, 0, &axpytemp[i], v0[i], 1, v1[i], 1);
-        cudaStreamSynchronize(stream[i]);
+        //cudaStreamSynchronize(stream[i]);
 
         if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
         {
@@ -352,7 +354,8 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         normtemp[i] = 0.;
         cublas_status[i] = cublasDnrm2(linalghandle, dim[i], v1[i], 1, &normtemp[i]); //this is slow for some reason
 
-        cudaStreamSynchronize(stream[i]);
+        //cudaStreamSynchronize(stream[i]);
+
         if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
         {
             std::cout<<"Getting the norm of v1 failed! Error: ";
@@ -490,7 +493,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
                 }
 
                 cublas_status[i] = cublasDdot(linalghandle, dim[i], v1[i], 1, v2[i], 1, &dottemp[i]);
-                cudaStreamSynchronize(stream[i]);
+                //cudaStreamSynchronize(stream[i]);
 
                 h_a[i].push_back(dottemp[i]);
 
@@ -518,7 +521,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         for(int i = 0; i < how_many; i++)
         {
             cublasSetStream(linalghandle, stream[i]);
-            cudaStreamSynchronize(stream[i]);
+            //cudaStreamSynchronize(stream[i]);
             if (!done_flag[i])
             {
                 /*! 
@@ -560,7 +563,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         for(int i = 0; i < how_many; i++)
         {
             cublasSetStream(linalghandle, stream[i]);
-            status[i] = cudaStreamSynchronize(stream[i]);
+            //status[i] = cudaStreamSynchronize(stream[i]);
 
             if (status[i] != cudaSuccess)
             {
@@ -627,7 +630,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
                 }
                 h_offdia[i][iter[i]] = 0;
 
-                cudaStreamSynchronize(stream[i]);
+                //cudaStreamSynchronize(stream[i]);
 
                 //---------Diagonalize Lanczos matrix and check for convergence------------------
                 returned[i] = tqli(h_diag[i], h_offdia[i], iter[i] + 1, max_Iter, h_H_eigen[i]);
@@ -673,7 +676,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
     for( int i = 0; i < how_many; i++)
     {
-        cudaStreamSynchronize(stream[i]);
+        //cudaStreamSynchronize(stream[i]);
         GetGroundstate<<<dim[i]/512 + 1, 512, 0, stream[i]>>>(groundstates[i], lanczos_store[i], d_H_eigen[i], iter[i], dim[i]);
     }
 

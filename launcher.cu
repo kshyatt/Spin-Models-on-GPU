@@ -38,7 +38,7 @@ int main()
         int* num_Elem = (int*)malloc(how_many*sizeof(int));
 
         //cudaSetDevice(1);
-        int device = 0; //i%2;
+        int device = 1; //i%2;
 
         for(int i = 0; i < how_many; i++)
         {
@@ -52,7 +52,7 @@ int main()
             }
             data[i].Sz = 0;
             data[i].J1 = 4.f;
-            data[i].J2 = 0.f;
+            data[i].J2 = 1.f;
             data[i].model_type = 2;
         }
 
