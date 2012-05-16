@@ -108,12 +108,12 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
 
         d_H[i].sectordim = GetBasis(d_H[i].fulldim, data[i].nsite, data[i].Sz, basis_Position[i], basis[i]);
         //cudaEventRecord(start, 0);
-        status[i] = cudaMalloc(&d_basis_Position[i], d_H[i].fulldim*sizeof(int));
+        status[i] = cudaMalloc((void**)&d_basis_Position[i], d_H[i].fulldim*sizeof(int));
         if (status[i] != cudaSuccess)
         {
             cout<<"Error allocating "<<i<<"th d_basis_Position array: "<<cudaGetErrorString(status[i])<<endl;
         }
-        status[i] = cudaMalloc(&d_basis[i], d_H[i].sectordim*sizeof(int));
+        status[i] = cudaMalloc((void**)&d_basis[i], d_H[i].sectordim*sizeof(int));
 
         if (status[i] != cudaSuccess)
         {
@@ -173,23 +173,23 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
 
         //-------Allocate space on the GPU to store the Hamiltonian---------
 
-        status[i] = cudaMalloc(&d_H[i].rows, raw_size[i]*sizeof(int));
+        status[i] = cudaMalloc((void**)&d_H[i].rows, raw_size[i]*sizeof(int));
         if (status[i] != cudaSuccess)
         {
             cout<<"Error creating "<<i<<"th rows array: "<<cudaGetErrorString(status[i])<<endl;
         }
-        status[i] = cudaMalloc(&d_H[i].cols, raw_size[i]*sizeof(int));
+        status[i] = cudaMalloc((void**)&d_H[i].cols, raw_size[i]*sizeof(int));
         if (status[i] != cudaSuccess)
         {
             cout<<"Error creating "<<i<<"th cols array: "<<cudaGetErrorString(status[i])<<endl;
         }
-        status[i] = cudaMalloc(&d_H[i].vals, raw_size[i]*sizeof(float));
+        status[i] = cudaMalloc((void**)&d_H[i].vals, raw_size[i]*sizeof(float));
         if (status[i] != cudaSuccess)
         {
             cout<<"Error creating "<<i<<"th values array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
-        status[i] = cudaMalloc(&d_H[i].set, raw_size[i]*sizeof(int));
+        status[i] = cudaMalloc((void**)&d_H[i].set, raw_size[i]*sizeof(int));
         if (status[i] != cudaSuccess)
         {
             cout<<"Error creating "<<i<<"th flag array: "<<cudaGetErrorString(status[i])<<endl;
@@ -197,7 +197,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
 
         status[i] = cudaMemset(d_H[i].set, 0, raw_size[i]*sizeof(int));
 
-        status[i] = cudaMalloc(&d_Bond[i], 3*data[i].nsite*sizeof(int));
+        status[i] = cudaMalloc((void**)&d_Bond[i], 3*data[i].nsite*sizeof(int));
         if (status[i] != cudaSuccess)
         {
             cout<<"Error creating "<<i<<"th bonds array: "<<cudaGetErrorString(status[i])<<endl;
@@ -405,11 +405,11 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
 
         MgpuSortData sortdata;
 
-        sortdata.AttachKey((uint*)d_H[i].rows);
-        //sortdata.AttachKey((uint*)d_H[i].index);
-        //sortdata.AttachVal(0, (uint*)d_H[i].rows);
-        sortdata.AttachVal(0, (uint*)d_H[i].cols);
-        sortdata.AttachVal(1, (uint*)d_H[i].vals);
+        sortdata.AttachKey((unsigned int*)d_H[i].rows);
+        //sortdata.AttachKey((unsigned int*)d_H[i].index);
+        //sortdata.AttachVal(0, (unsigned int*)d_H[i].rows);
+        sortdata.AttachVal(0, (unsigned int*)d_H[i].cols);
+        sortdata.AttachVal(1, (unsigned int*)d_H[i].vals);
 
         sortnumber[i] = raw_size[i];
 
@@ -422,21 +422,21 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
 
         //-----Allocate final Hamiltonian storage and copy data to it-------
 
-        status[i] = cudaMalloc(&hamil_lancz[i].vals, num_Elem[i]*sizeof(cuDoubleComplex));
+        status[i] = cudaMalloc((void**)&hamil_lancz[i].vals, num_Elem[i]*sizeof(cuDoubleComplex));
 
         if (status[i] != cudaSuccess)
         {
             cout<<"Error allocating "<<i<<"th lancz values array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
-        status[i] = cudaMalloc(&hamil_lancz[i].rows, num_Elem[i]*sizeof(int));
+        status[i] = cudaMalloc((void**)&hamil_lancz[i].rows, num_Elem[i]*sizeof(int));
 
         if (status[i] != cudaSuccess)
         {
             cout<<"Error allocating "<<i<<"th lancz rows array: "<<cudaGetErrorString(status[i])<<endl;
         }
 
-        status[i] = cudaMalloc(&hamil_lancz[i].cols, num_Elem[i]*sizeof(int));
+        status[i] = cudaMalloc((void**)&hamil_lancz[i].cols, num_Elem[i]*sizeof(int));
 
         if (status[i] != cudaSuccess)
         {
@@ -450,7 +450,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
         cudaMemcpy(hamil_lancz[i].cols, (int*)sortdata.values1[0], num_Elem[i]*sizeof(int), cudaMemcpyDeviceToDevice);
 
         //cudaMemcpy(hamil_lancz[i].cols, (int*)sortdata.values2[0], num_Elem[i]*sizeof(int), cudaMemcpyDeviceToDevice);
-        cudaMalloc(&vals_buffer[i], num_Elem[i]*sizeof(float));
+        cudaMalloc((void**)&vals_buffer[i], num_Elem[i]*sizeof(float));
 
         cudaMemcpy(vals_buffer[i], (float*)sortdata.values2[0], num_Elem[i]*sizeof(float), cudaMemcpyDeviceToDevice);
 
