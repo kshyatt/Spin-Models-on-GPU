@@ -3,11 +3,12 @@
     \brief Controller code that launches Hamiltonian generation and Lanczos diagonalization
 */
 
-#include"lattice.h"
-#include<cstdlib>
-#include"cuda.h"
-#include<iostream>
-#include"lanczos.h"
+#include "lattice.h"
+#include <cstdlib>
+#include "cuda.h"
+#include <fstream>
+#include <iostream>
+#include "lanczos.h"
 //#include"hamiltonian.h"
 int main()
 {
@@ -15,11 +16,15 @@ int main()
     {
         int** Bond;
         //cout<<i<<" "<<endl;
-        int how_many = 1;
+        int how_many;
         /*if (i == 1)
         {
             how_many = 5;
         }*/
+
+        ifstream fin;
+        fin.open("data.dat");
+        fin >> how_many ; 
 
         Bond = (int**)malloc(how_many*sizeof(int*));
 
@@ -43,17 +48,21 @@ int main()
         for(int i = 0; i < how_many; i++)
         {
 
-            data[i].nsite = 16;
-            Bond[i] = (int*)malloc(3*data[i].nsite*sizeof(int));
-            //Fill_Bonds_16B(Bond[i]);
-            for( int j = 0; j < data[i].nsite; j++ ){
-              Bond[i][j] = j;
-              Bond[i][j+ data[i].nsite] = (j+1)%data[i].nsite;
+            fin >> data[i].nsite >> data[i].Sz >> data[i].J1 >> data[i].J2 >> data[i].model_type >> data[i].dimension;
+            switch (data[i].dimension)
+            {
+                case 1:
+                    Bond[i] = (int*)malloc(2*data[i].nsite*sizeof(int));
+                    for( int j = 0; j < data[i].nsite; j++ ){
+                        Bond[i][j] = j;
+                        Bond[i][j+ data[i].nsite] = (j+1)%data[i].nsite;
+                    }
+                    break;
+                case 2:
+                    Bond[i] = (int*)malloc(3*data[i].nsite*sizeof(int));
+                    Fill_Bonds_16B(Bond[i]);
+                    break;
             }
-            data[i].Sz = 0;
-            data[i].J1 = 4.f;
-            data[i].J2 = 1.f;
-            data[i].model_type = 2;
         }
 
 

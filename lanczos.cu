@@ -685,7 +685,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     {
         for(int j = 0; j < num_Eig; j++)
         {
-            std::cout<<std::setprecision(12)<<h_ordered[i][j]/16<<" ";
+            std::cout<<std::setprecision(12)<<h_ordered[i][j]<<" ";
         }
         std::cout<<std::endl;
 

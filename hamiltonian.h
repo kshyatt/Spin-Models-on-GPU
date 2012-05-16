@@ -52,6 +52,8 @@ struct parameters
     float J1;
     //! Describes the strength of the second interaction. Only used in Transverse Field Ising model. In other cases, set to 0.
     float J2;
+    //! How many dimensions the system in question has - options are 1, 2, or 3
+    int dimension;
 };
 
 /*!
@@ -171,7 +173,7 @@ Each time an element is placed in basis, a counter is incremented. The final val
     \return The size of the in-sector Hilbert space
 */
 
-__host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], int basis[]);
+__host__ int GetBasis(int dim, parameters data, int basis_Position[], int basis[]);
 
 /*! 
     \fn __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonian*& hamil_lancz, parameters* data, int*& count_array, int device);

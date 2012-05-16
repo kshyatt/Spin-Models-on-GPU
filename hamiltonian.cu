@@ -11,7 +11,7 @@ Outputs: basis_Position - a full array now
 basis[] - a full array now
 
 */
-__host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], int basis[])
+__host__ int GetBasis(int dim, parameters data, int basis_Position[], int basis[])
 {
     unsigned int temp = 0;
     int realdim = 0;
@@ -20,17 +20,23 @@ __host__ int GetBasis(int dim, int lattice_Size, int Sz, int basis_Position[], i
     {
         temp = 0;
         basis_Position[i1] = -1;
-        for (int sp =0; sp<lattice_Size; sp++)
+        for (int sp =0; sp<data.nsite; sp++)
         {
             temp += (i1>>sp)&1;
         } //unpack bra
-        //if (temp == lattice_Size/2 + Sz)
-        //{
+        if ( ( (data.model_type == 1) || (data.model_type == 0) ) && temp == data.nsite/2 + data.Sz)
+        {
             basis[realdim] = i1;
             basis_Position[i1] = realdim;
             realdim++;
 
-        //}
+        }
+        else if ( data.model_type == 2)
+        {
+            basis[realdim] = i1;
+            basis_Position[i1] = realdim;
+            realdim++;
+        }
     }
     return realdim;
 
@@ -106,7 +112,7 @@ __host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonia
         basis_Position[i] = (int*)malloc(d_H[i].fulldim*sizeof(int));
         basis[i] = (int*)malloc(d_H[i].fulldim*sizeof(int));
 
-        d_H[i].sectordim = GetBasis(d_H[i].fulldim, data[i].nsite, data[i].Sz, basis_Position[i], basis[i]);
+        d_H[i].sectordim = GetBasis(d_H[i].fulldim, data[i], basis_Position[i], basis[i]);
         //cudaEventRecord(start, 0);
         status[i] = cudaMalloc((void**)&d_basis_Position[i], d_H[i].fulldim*sizeof(int));
         if (status[i] != cudaSuccess)
