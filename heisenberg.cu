@@ -1,8 +1,3 @@
-/*!
-    \file heisenberg.cu
-    \brief Functions to generate Hamiltonians for the Heisenberg model
-*/
-
 #include "hamiltonian.h"
 
 __device__ float HOffBondXHeisenberg(const int si, const int bra, const float JJ)
@@ -117,8 +112,8 @@ __global__ void FillSparseHeisenberg(int* d_basis_Position, int* d_basis, f_hami
     __shared__ int temppos[array_size];
     __shared__ float tempval[array_size];
     //__shared__ uint tempi[array_size];
-    unsigned int tempi;
-    __shared__ unsigned int tempod[array_size];
+    uint tempi;
+    __shared__ uint tempod[array_size];
 
     int stride = 4*lattice_Size;
     //int tempcount;

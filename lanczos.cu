@@ -677,7 +677,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     for( int i = 0; i < how_many; i++)
     {
         //cudaStreamSynchronize(stream[i]);
-        GetGroundstate<<<dim[i]/512 + 1, 512, 0, stream[i]>>>(groundstates[i], lanczos_store[i], d_H_eigen[i], iter[i], dim[i]);
+        //GetGroundstate<<<dim[i]/512 + 1, 512, 0, stream[i]>>>(groundstates[i], lanczos_store[i], d_H_eigen[i], iter[i], dim[i]);
     }
 
     //--------------Free arrays to prevent memory leaks------------------------
