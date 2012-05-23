@@ -1,13 +1,22 @@
+#include <iostream>
+#include <vector>
+#include <utility>
+
+using namespace std;
 
 struct graph
 {
-    int** adj_mat;
-    int* flag;
+    vector< vector<pair <int,int> > > adj_mat;
+    vector<int*> flag;
     unsigned int count;
+    int order;
+    int max_vertex_order;
 };
 
-__host__ void GenerateAllGraphs(unsigned int initial_order, unsigned int final_order, int max_vertex_order, int lattice_type, graph**& graphs);
+void GenerateAllGraphs( vector<graph>& clusters, unsigned int initial_order, unsigned int final_order, int lattice_type);
 
-__global__ void GenerateNewGraphs( int* old_graphs, int old_graph_order, int* new_graphs, int* new_graphs_flags, int max_vertex_order, int lattice_type );
+void PrintGraphs( vector<graph>& clusters, unsigned int initial_order, unsigned int final_order);
 
-__global__ void FindCanonicalGraphs( int* graphs, int graph_order);
+void GenerateNewGraphs( graph& old_graphs, graph& new_graphs, int lattice_type );
+
+void FindCanonicalGraphs( int* graphs, int graph_order);
