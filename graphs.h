@@ -1,10 +1,12 @@
 #include <iostream>
 #include <vector>
 #include <utility>
+#include <algorithm>
+#include "nauty.h"
 
 using namespace std;
 
-struct graph
+struct cluster
 {
     vector< vector<pair <int,int> > > adj_mat;
     vector<int*> flag;
@@ -13,10 +15,12 @@ struct graph
     int max_vertex_order;
 };
 
-void GenerateAllGraphs( vector<graph>& clusters, unsigned int initial_order, unsigned int final_order, int lattice_type);
+void GenerateAllGraphs( vector<cluster>& clusters, unsigned int initial_order, unsigned int final_order, int lattice_type);
 
-void PrintGraphs( vector<graph>& clusters, unsigned int initial_order, unsigned int final_order);
+bool GraphSort( pair<int,int> i, pair<int,int> j);
 
-void GenerateNewGraphs( graph& old_graphs, graph& new_graphs, int lattice_type );
+void PrintGraphs( vector<cluster>& clusters, unsigned int initial_order, unsigned int final_order);
 
-void FindCanonicalGraphs( int* graphs, int graph_order);
+void GenerateNewGraphs( cluster& old_graphs, cluster& new_graphs, int lattice_type );
+
+void FindCanonicalGraphs( vector<cluster>& cluster, int graph_order);

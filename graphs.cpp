@@ -2,8 +2,8 @@
 
 int main()
 {
-    vector<graph> clusters;
-    clusters.resize(3);
+    vector<cluster> clusters;
+    clusters.resize(2);
 
     clusters[0].adj_mat.resize(1);
     clusters[0].adj_mat[0].resize(1);
@@ -19,7 +19,7 @@ int main()
     clusters[1].max_vertex_order = 4;
     clusters[1].order = 2;
     
-    clusters[2].adj_mat.resize(2);
+    /*clusters[2].adj_mat.resize(2);
     clusters[2].adj_mat[0].resize(2);
     clusters[2].adj_mat[1].resize(2);
     clusters[2].adj_mat[0][0] = make_pair(0,1);
@@ -29,14 +29,20 @@ int main()
     clusters[2].count = 2;
     clusters[2].max_vertex_order = 4;
     clusters[2].order = 3;
+    */
     //PrintGraphs( clusters, 1, 1);
-    GenerateAllGraphs( clusters, 3, 5, 0);
-    cout<<clusters[3].count<<endl;
-    PrintGraphs( clusters, 1, 4);
+    GenerateAllGraphs( clusters, 2, 5, 0);
+    //cout<<clusters[3].count<<endl;
+    //PrintGraphs( clusters, 1, 5);
     return 0;
 }
 
-void PrintGraphs( vector<graph>& clusters, unsigned int initial_order, unsigned int final_order)
+bool GraphSort( pair<int, int> i , pair<int, int> j)
+{
+    return (i.first == j.first) ? (i.second < j.second) : (i.first < j.first);
+}
+
+void PrintGraphs( vector<cluster>& clusters, unsigned int initial_order, unsigned int final_order)
 {
     for(unsigned int i = initial_order - 1; i <= final_order; i++)
     {
@@ -52,23 +58,24 @@ void PrintGraphs( vector<graph>& clusters, unsigned int initial_order, unsigned 
     }
 }
 
-void GenerateAllGraphs( vector<graph>& clusters, unsigned int initial_order, unsigned int final_order, int lattice_type )
+void GenerateAllGraphs( vector<cluster>& clusters, unsigned int initial_order, unsigned int final_order, int lattice_type )
 {
     //cout<< clusters[0].adj_mat[0][0].second<<endl;
     for (unsigned int i = initial_order; i <= final_order; i++)
     {
         clusters.resize(clusters.size() + 1);
         GenerateNewGraphs(clusters.at(i-1), clusters.at(i), lattice_type);
+        FindCanonicalGraphs(clusters.at(i));
 
     }
 }
 
-void GenerateNewGraphs(graph & old_graphs, graph & new_graphs, int lattice_type )
+void GenerateNewGraphs(cluster & old_graphs, cluster & new_graphs, int lattice_type )
 {
     //int matrix_size = 0;
     new_graphs.count = 0;
     new_graphs.order = old_graphs.order + 1;
-
+    new_graphs.max_vertex_order = old_graphs.max_vertex_order;
     /*for (int i = 0; i < old_graphs.order; i++)
     {
         matrix_size += i;
@@ -108,7 +115,7 @@ void GenerateNewGraphs(graph & old_graphs, graph & new_graphs, int lattice_type 
                     {
                         next_row_start++;
                     }
-                    int insert_index = 0;
+                    int insert_index = 1;
                     bool dupe_flag = false;
                     int next_vertex_order = 0;
                     for(unsigned int l = 0; l < old_list.size(); l++ )
@@ -133,11 +140,43 @@ void GenerateNewGraphs(graph & old_graphs, graph & new_graphs, int lattice_type 
                         //new_graphs.adj_mat.resize(new_graphs.count);
                         //new_graphs.adj_mat.at(new_graphs.count - 1) = old_graphs.adj_mat.at(i);
                         new_graphs.adj_mat.push_back(old_list);
+                        
                         pair<int,int> temp_pair = make_pair(j,k);
-                        new_graphs.adj_mat[new_graphs.count - 1].insert( new_graphs.adj_mat[new_graphs.count - 1].begin() + insert_index , temp_pair);
+                        
+                        new_graphs.adj_mat[new_graphs.count - 1].insert( new_graphs.adj_mat[new_graphs.count - 1].begin() + insert_index, temp_pair);
+                        
+                        std::sort( new_graphs.adj_mat[new_graphs.count - 1].begin(),  new_graphs.adj_mat[new_graphs.count - 1].end(), GraphSort);
                     }
                 }
             }
         }
     }
+}
+
+void FindCanonicalGraphs( vector<cluster>& clusters)
+{
+    cluster cluster_container = clusters[graph_order - 1];
+    unsigned int truecount = 0;
+    for(unsigned int i = 0; i < cluster_container.count; i++)
+    {
+        graph* current;
+        for( unsigned int j = 0; j < cluster_container.adj_mat[i].size() )
+        {
+            //convert to nauty's graph representation
+        }
+        int* label = new int[cluster_container.order];
+        int* orbit = new int[cluster_container.order];
+        optionblk ops;
+        ops.getcanon = TRUE;
+        ops.defaultptn = TRUE;  
+        ops.writeautoms = TRUE; 
+        ops.writemarkers = FALSE;
+        ops.cartesian = TRUE;
+        statsblk stat;
+        setword* workspace = new setword[100];
+        graph* canonical;
+
+        nauty(current, label, NULL, NULL, orbit, &ops, &stats, workspace, 100, 1, cluster_container.order, canonical);
+
+
 }
