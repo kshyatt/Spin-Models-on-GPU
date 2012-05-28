@@ -48,7 +48,7 @@ int main()
         for(int i = 0; i < how_many; i++)
         {
 
-            fin >> data[i].nsite >> data[i].Sz >> data[i].J1 >> data[i].J2 >> data[i].model_type >> data[i].dimension;
+            fin >> data[i].nsite >> data[i].Sz >> data[i].J1 >> data[i].J2 >> data[i].modelType >> data[i].dimension;
             switch (data[i].dimension)
             {
                 case 1:

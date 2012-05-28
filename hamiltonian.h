@@ -42,7 +42,7 @@ using namespace std;
 struct parameters
 {
     //! The spin model being simulated - three possibilities. All handled in the S_z basis   
-    int model_type;
+    int modelType;
     
     //! Restricts basis to states which have (spins up) - (spins down) = Sz. Onlly useful when Hamiltonian is S_z preserving. 
     int Sz;
@@ -71,9 +71,9 @@ struct d_hamiltonian
     //! An array which holds the values as double precision floats
     double* vals;
     //! The full dimension of the Hilbert space
-    int fulldim;
+    int fullDim;
     //! The dimension of the sector considered (can equal fulldim)
-    int sectordim;
+    int sectorDim;
 };
 
 /*!
@@ -92,9 +92,9 @@ struct f_hamiltonian
     //! This array contains either 0 or 1, determining whether the corresponding Hamiltonian element is zero-valued (0) or not (1). This is used to get the total number of nonzero elements. 
     int* set;
     //! The full dimension of the Hilbert space
-    int fulldim;
+    int fullDim;
     //! The dimension of the sector considered (can equal fulldim)
-    int sectordim;
+    int sectorDim;
 };
 
 /*!
@@ -182,27 +182,27 @@ __host__ int GetBasis(int dim, parameters data, int basis_Position[], int basis[
 
     This function launches one or many cudaStreams, depending on the value of `how_many`. Each stream is responsible for generating one Hamiltonian. First, ConstructSparseMatrix determines the structure of the basis by calling GetBasis. Then it allocates storage arrays on the GPU for the Hamiltonian, using f_hamiltonian. Since single precision operations are much faster on GPU at this time, this allows element generation to take much less time than it otherwise might. The function launches an instance of `FillDiagonals()` and `FillSparse()` in each stream, and these functions fill up the previously allocated storage arrays. A parallel reduction is performed on the array containing zero-valued/non-zero-valued flags to determine how many nonzero elements there are in the Hamiltonian. This is used instead of atomic operations because in this case reduction, a parallel summing algorithm, performs much better. At this point the modern GPU sorting library is loaded. This library is used because it allows multiple value arrays to be sorted by one key array, which thrust does not without defining another custom `struct`. The mgpu library sorts the Hamiltonian arrays and they are copied into the container that will be used for diagonalization later, with an intermediate conversion of the values from single to double precision. The Hamiltonian is now ready to be diagonalized or dumped to disk for storage/correctness checks.
     
-    \param how_many How many Hamiltonians will be constructed at once on the GPU
+    \param howMany How many Hamiltonians will be constructed at once on the GPU
     \param Bond Array storing information about which lattice sites are bonded to which
-    \param hamil_lancz Array of structs which store the final Hamiltonians for diagonalization once they have been generated
+    \param hamilLancz Array of structs which store the final Hamiltonians for diagonalization once they have been generated
     \param data Array of structs which store the input parameters such as model, S_z sector, and coupling constants
-    \param count_array Array which holds the number of nonzero elements for each Hamiltonian
+    \param countArray Array which holds the number of nonzero elements for each Hamiltonian
     \param device Which GPU the functions will be launched on
 */
-__host__ void ConstructSparseMatrix(const int how_many, int** Bond, d_hamiltonian*& hamil_lancz, parameters* data, int*& count_array, int device);
+__host__ void ConstructSparseMatrix(const int howMany, int** Bond, d_hamiltonian*& hamilLancz, parameters* data, int*& countArray, int device);
 
 /*! 
     \fn __global__ void FullToCOO(int num_Elem, float* H_vals, double* hamil_Values, int dim);
     
     \brief A GPU function which switches the single precision values to double precision
     
-    \param num_Elem The number of non-zero elements in the Hamiltonian
+    \param numElem The number of non-zero elements in the Hamiltonian
     \param H_vals The array storing the Hamiltonian values in single precision
-    \param hamil_Values The array which will store the Hamiltonian values in double precision
+    \param hamilValues The array which will store the Hamiltonian values in double precision
     \param dim The dimension of the Hilbert space
 */
 
-__global__ void FullToCOO(int num_Elem, float* H_vals, double* hamil_Values, int dim);
+__global__ void FullToCOO(int numElem, float* H_vals, double* hamilValues, int dim);
 
 //--------Declarations of Hamiltonian functions for Heisenberg Model--------------
 

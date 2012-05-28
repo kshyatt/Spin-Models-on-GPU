@@ -27,7 +27,7 @@ __device__ float HOffBondYHeisenberg(const int si, const int bra, const float JJ
 
 }
 
-__device__ float HDiagPartHeisenberg(const int bra, int lattice_Size, int3* d_Bond, const float JJ)
+__device__ float HDiagPartHeisenberg(const int bra, int latticeSize, int3* d_Bond, const float JJ)
 {
 
     int S0b,S1b ; //spins (bra
@@ -36,7 +36,7 @@ __device__ float HDiagPartHeisenberg(const int bra, int lattice_Size, int3* d_Bo
     //int s0p, s1p, s2p, s3p;
     float valH = 0.f;
 
-    for (int Ti=0; Ti<lattice_Size; Ti++)
+    for (int Ti=0; Ti<latticeSize; Ti++)
     {
         //***HEISENBERG PART
 
@@ -62,22 +62,22 @@ __global__ void FillDiagonalsHeisenberg(int* d_basis, f_hamiltonian H, int* d_Bo
 {
 
     int row = blockIdx.x*blockDim.x + threadIdx.x;
-    int lattice_Size = data.nsite;
-    int site = threadIdx.x%(lattice_Size);
-    int dim = H.sectordim;
+    int latticeSize = data.nsite;
+    int site = threadIdx.x%(latticeSize);
+    int dim = H.sectorDim;
 
     unsigned int tempi;
 
-    __shared__ int3 tempbond[32];
+    __shared__ int3 tempBond[32];
 
     if (row < dim)
     {
         tempi = d_basis[row];
-        (tempbond[site]).x = d_Bond[site];
-        (tempbond[site]).y = d_Bond[lattice_Size + site];
-        (tempbond[site]).z = d_Bond[2*lattice_Size + site];
+        (tempBond[site]).x = d_Bond[site];
+        (tempBond[site]).y = d_Bond[latticeSize + site];
+        (tempBond[site]).z = d_Bond[2*latticeSize + site];
 
-        H.vals[row] = HDiagPartHeisenberg(tempi, lattice_Size, tempbond, data.J1);
+        H.vals[row] = HDiagPartHeisenberg(tempi, latticeSize, tempBond, data.J1);
         H.rows[row] = row;
         H.cols[row] = row;
         H.set[row]  = 1;
@@ -91,37 +91,37 @@ __global__ void FillDiagonalsHeisenberg(int* d_basis, f_hamiltonian H, int* d_Bo
     }
 }
 
-__global__ void FillSparseHeisenberg(int* d_basis_Position, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data, int offset)
+__global__ void FillSparseHeisenberg(int* d_basisPosition, int* d_basis, f_hamiltonian H, int* d_Bond, parameters data, int offset)
 {
 
-    int lattice_Size = data.nsite;
-    int dim = H.sectordim;
-    int ii = (blockDim.x/(2*lattice_Size))*blockIdx.x + threadIdx.x/(2*lattice_Size) + offset*(blockDim.x/(2*lattice_Size));
-    int T0 = threadIdx.x%(2*lattice_Size);
+    int latticeSize = data.nsite;
+    int dim = H.sectorDim;
+    int ii = (blockDim.x/(2*latticeSize))*blockIdx.x + threadIdx.x/(2*latticeSize) + offset*(blockDim.x/(2*latticeSize));
+    int T0 = threadIdx.x%(2*latticeSize);
 
 #if __CUDA_ARCH__ < 200
-    const int array_size = 512;
+    const int arraySize = 512;
 #elif __CUDA_ARCH__ >= 200
-    const int array_size = 1024;
+    const int arraySize = 1024;
 #else
 #error Could not detect GPU architecture
 #endif
 
-    __shared__ int3 tempbond[32];
+    __shared__ int3 tempBond[32];
     int count;
-    __shared__ int temppos[array_size];
-    __shared__ float tempval[array_size];
-    //__shared__ uint tempi[array_size];
+    __shared__ int tempPos[arraySize];
+    __shared__ float tempVal[arraySize];
+    //__shared__ uint tempi[arraySize];
     uint tempi;
-    __shared__ uint tempod[array_size];
+    __shared__ uint tempod[arraySize];
 
-    int stride = 4*lattice_Size;
+    int stride = 4*latticeSize;
     //int tempcount;
-    int site = T0%(lattice_Size);
+    int site = T0%(latticeSize);
     count = 0;
-    int rowtemp;
+    int rowTemp;
 
-    int start = (bool)(dim%array_size) ? (dim/array_size + 1)*array_size : dim/array_size;
+    int start = (bool)(dim%arraySize) ? (dim/arraySize + 1)*arraySize : dim/arraySize;
 
     int s;
     //int si, sj;//sk,sl; //spin operators
@@ -133,75 +133,75 @@ __global__ void FillSparseHeisenberg(int* d_basis_Position, int* d_basis, f_hami
     if( ii < dim )
     {
         tempi = d_basis[ii];
-        if (T0 < 2*lattice_Size)
+        if (T0 < 2*latticeSize)
         {
             //Putting bond info in shared memory
-            (tempbond[site]).x = d_Bond[site];
-            (tempbond[site]).y = d_Bond[lattice_Size + site];
-            (tempbond[site]).z = d_Bond[2*lattice_Size + site];
+            (tempBond[site]).x = d_Bond[site];
+            (tempBond[site]).y = d_Bond[latticeSize + site];
+            (tempBond[site]).z = d_Bond[2*latticeSize + site];
 
             __syncthreads();
             //Diagonal Part
 
-            /*temppos[threadIdx.x] = d_basis_Position[tempi[threadIdx.x]];
-            tempval[threadIdx.x] = HDiagPart(tempi[threadIdx.x], lattice_Size, tempbond, JJ);
+            /*tempPos[threadIdx.x] = d_basisPosition[tempi[threadIdx.x]];
+            tempVal[threadIdx.x] = HDiagPart(tempi[threadIdx.x], latticeSize, tempBond, JJ);
 
-            H_sort[ idx(ii, 0, stride) ].value = tempval[threadIdx.x];
-            H_sort[ idx(ii, 0, stride) ].colindex = temppos[threadIdx.x];
+            H_sort[ idx(ii, 0, stride) ].value = tempVal[threadIdx.x];
+            H_sort[ idx(ii, 0, stride) ].colindex = tempPos[threadIdx.x];
             H_sort[ idx(ii, 0, stride) ].rowindex = ii;
             H_sort[ idx(ii, 0, stride) ].dim = dim;*/
 
             //-------------------------------
             //Horizontal bond ---------------
-            s = (tempbond[site]).x;
+            s = (tempBond[site]).x;
             tempod[threadIdx.x] = tempi;
             tempod[threadIdx.x] ^= (1<<s);
-            s = (tempbond[site]).y;
+            s = (tempBond[site]).y;
             tempod[threadIdx.x] ^= (1<<s);
 
             //tempod[threadIdx.x] ^= (1<<si); //toggle bit
             //tempod[threadIdx.x] ^= (1<<sj); //toggle bit
 
-            compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
-            temppos[threadIdx.x] = (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
-            tempval[threadIdx.x] = HOffBondXHeisenberg(site, tempi, data.J1);
+            compare = (d_basisPosition[tempod[threadIdx.x]] > ii);
+            tempPos[threadIdx.x] = (compare) ? d_basisPosition[tempod[threadIdx.x]] : dim;
+            tempVal[threadIdx.x] = HOffBondXHeisenberg(site, tempi, data.J1);
 
             count += (int)compare;
-            //tempcount = (T0/lattice_Size);
-            rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
-            rowtemp = (compare) ? rowtemp : 2*dim;
+            //tempcount = (T0/latticeSize);
+            rowTemp = (T0/latticeSize) ? ii : tempPos[threadIdx.x];
+            rowTemp = (compare) ? rowTemp : 2*dim;
 
-            H.vals[ ii*stride + 4*site + (T0/lattice_Size) + start ] = tempval[threadIdx.x]; // (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
-            H.cols[ ii*stride + 4*site + (T0/lattice_Size) + start ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
-            H.rows[ ii*stride + 4*site + (T0/lattice_Size) + start ] = rowtemp;
+            H.vals[ ii*stride + 4*site + (T0/latticeSize) + start ] = tempVal[threadIdx.x]; // (T0/latticeSize) ? tempVal[threadIdx.x] : cuConj(tempVal[threadIdx.x]);
+            H.cols[ ii*stride + 4*site + (T0/latticeSize) + start ] = (T0/latticeSize) ? tempPos[threadIdx.x] : ii;
+            H.rows[ ii*stride + 4*site + (T0/latticeSize) + start ] = rowTemp;
 
-            H.set[ ii*stride + 4*site + (T0/lattice_Size) + start ] = (int)compare;
+            H.set[ ii*stride + 4*site + (T0/latticeSize) + start ] = (int)compare;
 
 
 //Vertical bond -----------------
-            s = (tempbond[site]).x;
+            s = (tempBond[site]).x;
             tempod[threadIdx.x] = tempi;
             tempod[threadIdx.x] ^= (1<<s);
-            s = (tempbond[site]).z;
+            s = (tempBond[site]).z;
             tempod[threadIdx.x] ^= (1<<s);
 
             //tempod[threadIdx.x] ^= (1<<si); //toggle bit
             //tempod[threadIdx.x] ^= (1<<sj); //toggle bit
 
-            compare = (d_basis_Position[tempod[threadIdx.x]] > ii);
-            temppos[threadIdx.x] = (compare) ? d_basis_Position[tempod[threadIdx.x]] : dim;
-            tempval[threadIdx.x] = HOffBondYHeisenberg(site,tempi, data.J1);
+            compare = (d_basisPosition[tempod[threadIdx.x]] > ii);
+            tempPos[threadIdx.x] = (compare) ? d_basisPosition[tempod[threadIdx.x]] : dim;
+            tempVal[threadIdx.x] = HOffBondYHeisenberg(site,tempi, data.J1);
 
             count += (int)compare;
-            //tempcount = (T0/lattice_Size);
-            rowtemp = (T0/lattice_Size) ? ii : temppos[threadIdx.x];
-            rowtemp = (compare) ? rowtemp : 2*dim;
+            //tempcount = (T0/latticeSize);
+            rowTemp = (T0/latticeSize) ? ii : tempPos[threadIdx.x];
+            rowTemp = (compare) ? rowTemp : 2*dim;
 
-            H.vals[ ii*stride + 4*site + 2 + (T0/lattice_Size) + start ] = tempval[threadIdx.x]; // (T0/lattice_Size) ? tempval[threadIdx.x] : cuConj(tempval[threadIdx.x]);
-            H.cols[ ii*stride + 4*site + 2 + (T0/lattice_Size) + start ] = (T0/lattice_Size) ? temppos[threadIdx.x] : ii;
-            H.rows[ ii*stride + 4*site + 2 + (T0/lattice_Size) + start ] = rowtemp;
+            H.vals[ ii*stride + 4*site + 2 + (T0/latticeSize) + start ] = tempVal[threadIdx.x]; // (T0/latticeSize) ? tempVal[threadIdx.x] : cuConj(tempVal[threadIdx.x]);
+            H.cols[ ii*stride + 4*site + 2 + (T0/latticeSize) + start ] = (T0/latticeSize) ? tempPos[threadIdx.x] : ii;
+            H.rows[ ii*stride + 4*site + 2 + (T0/latticeSize) + start ] = rowTemp;
 
-            H.set[ ii*stride + 4*site + 2 + (T0/lattice_Size) + start ] = (int)compare;
+            H.set[ ii*stride + 4*site + 2 + (T0/latticeSize) + start ] = (int)compare;
         }
     }//end of ii
 }//end of FillSparse

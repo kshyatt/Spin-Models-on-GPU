@@ -65,7 +65,8 @@ void GenerateAllGraphs( vector<cluster>& clusters, unsigned int initial_order, u
     {
         clusters.resize(clusters.size() + 1);
         GenerateNewGraphs(clusters.at(i-1), clusters.at(i), lattice_type);
-        FindCanonicalGraphs(clusters.at(i));
+        cout<<"Automorphisms for order "<<i<<endl;
+        if( i > 2 )FindCanonicalGraphs(clusters, i);
 
     }
 }
@@ -153,30 +154,115 @@ void GenerateNewGraphs(cluster & old_graphs, cluster & new_graphs, int lattice_t
     }
 }
 
-void FindCanonicalGraphs( vector<cluster>& clusters)
+void FindCanonicalGraphs( vector<cluster>& clusters, int graph_order)
 {
     cluster cluster_container = clusters[graph_order - 1];
     unsigned int truecount = 0;
     for(unsigned int i = 0; i < cluster_container.count; i++)
     {
-        graph* current;
-        for( unsigned int j = 0; j < cluster_container.adj_mat[i].size() )
+        cout<<"Cluster "<<i<<" of order "<<graph_order<<endl;
+        DYNALLSTAT(graph, current, graph_size);
+        DYNALLSTAT(graph, canonical, canonical_size);
+        DYNALLSTAT(int, label, label_size);
+        DYNALLSTAT(int, orbit, orbit_size);
+        DYNALLSTAT(int, ptn, patt_size);
+        DYNALLSTAT(setword, workspace, work_size);
+
+        static DEFAULTOPTIONS_GRAPH(ops);
+
+        int m = 1;
+        nauty_check(WORDSIZE, m, graph_order, NAUTYVERSIONID); 
+
+        set *gv;
+
+        DYNALLOC2(graph, current, graph_size, m, graph_order, "malloc");
+        DYNALLOC2(graph, canonical, canonical_size, m, graph_order, "malloc");
+        DYNALLOC1(setword, workspace, work_size, 5*m, "malloc");
+        DYNALLOC1(int, label, label_size, graph_order, "malloc");
+        DYNALLOC1(int, orbit, orbit_size, graph_order, "malloc");
+        DYNALLOC1(int, ptn, patt_size, graph_order, "malloc");
+
+        FILE* autos;
+        char* mode = "w";
+        autos = fopen("automorphism", mode);
+
+        //unsigned int* current = new unsigned int[graph_order];
+        for( unsigned int j = 0; j < graph_order; j++ )
         {
-            //convert to nauty's graph representation
+            
+            gv = GRAPHROW(current, j, m);
+            EMPTYSET(gv, m);
+
+            for( unsigned int count = 0; count < cluster_container.adj_mat[i].size(); count++)
+            {
+                if( cluster_container.adj_mat[i][count].first == j)
+                {
+                    ADDELEMENT(gv, cluster_container.adj_mat[i][count].second);
+                }
+                if( cluster_container.adj_mat[i][count].second == j)
+                {
+                    ADDELEMENT(gv, cluster_container.adj_mat[i][count].first);
+                }
+            }
         }
-        int* label = new int[cluster_container.order];
-        int* orbit = new int[cluster_container.order];
-        optionblk ops;
+        //optionblk ops;
         ops.getcanon = TRUE;
         ops.defaultptn = TRUE;  
         ops.writeautoms = TRUE; 
         ops.writemarkers = FALSE;
         ops.cartesian = TRUE;
+        ops.outfile = autos;
         statsblk stat;
-        setword* workspace = new setword[100];
-        graph* canonical;
+        //setword* workspace = new setword[5*graph_order];
+        //graph* canonical = new graph[graph_order*MAXM];
 
-        nauty(current, label, NULL, NULL, orbit, &ops, &stats, workspace, 100, 1, cluster_container.order, canonical);
+        nauty(current, label, ptn, NULL, orbit, &ops, &stat, workspace, 5*m, m, graph_order, canonical);
+        fclose(autos);
 
+        //---------Eliminate isomorphic graphs--------//
 
+        std::string automorph = getFileContents("automorphism");
+        stringstream iss (automorph);
+        char buff[2*graph_order];
+        int group[graph_order];
+        for(int charcount = 0; charcount < automorph.length(); charcount += 2*graph_order + 1)
+        {
+            iss.getline(buff, 2*graph_order); 
+            for(int j = 0; j < graph_order; j++)
+            { 
+                group[j] = buff[2*j];
+            }
+            vector< pair<int,int> > isograph = cluster_container.adj_mat[i];
+            for(int j = 0; j < cluster_container.adj_mat[i].size(); j+=2)
+            {
+                isograph.insert(isograph.begin() + j, make_pair(isograph[j].second, isograph[j].first));
+            }
+            
+            for(unsigned int j = 0; j<isograph.size(); j++)
+            {
+                isograph.at(j).first = group[isograph.at(j).first];
+                isograph.at(j).second = group[isograph.at(j).second];
+                if ( isograph.at(j).first > isograph.at(j).second )
+                {
+                    isograph.erase(isograph.begin() + j);
+                }
+            }
+            sort(isograph.begin(), isograph.end());
+            
+            vector< vector< pair<int,int> > >::iterator dup_index = find(cluster_container.adj_mat.begin(), cluster_container.adj_mat.end(), isograph);
+            if ( dup_index < cluster_container.adj_mat.end())
+            {
+                cluster_container.adj_mat.erase(dup_index);
+            }
+            truecount++;
+        }
+    }
+    cout<<truecount<<endl;   
+}
+
+std::string getFileContents(const std::string& filename)
+{
+    std::ifstream file(filename.c_str());
+    return std::string(std::istreambuf_iterator<char>(file),
+                        std::istreambuf_iterator<char>());
 }

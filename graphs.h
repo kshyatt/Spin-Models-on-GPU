@@ -1,8 +1,13 @@
 #include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
 #include <vector>
 #include <utility>
 #include <algorithm>
-#include "nauty.h"
+extern "C" {
+#include "nauty/nauty.h"
+}
 
 using namespace std;
 
@@ -24,3 +29,5 @@ void PrintGraphs( vector<cluster>& clusters, unsigned int initial_order, unsigne
 void GenerateNewGraphs( cluster& old_graphs, cluster& new_graphs, int lattice_type );
 
 void FindCanonicalGraphs( vector<cluster>& cluster, int graph_order);
+
+std::string getFileContents(const std::string& filename);

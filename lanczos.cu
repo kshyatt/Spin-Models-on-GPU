@@ -13,25 +13,25 @@
 /*Function lanczos: takes a hermitian matrix H, tridiagonalizes it, and finds the n smallest eigenvalues - this version only returns eigenvalues, not
  eigenvectors.
 ---------------------------------------------------------------------------------------------------------------------------------------------------
-Input: how_many, the number of Hamiltonians to process
-num_Elem - the number of nonzero elements per matrix
+Input: howMany, the number of Hamiltonians to process
+numElem - the number of nonzero elements per matrix
 Hamiltonian - an array of Hamiltonians, each element being a custom struct containing the rows, cols, and vals in COO format as well as the dimensions
-max_Iter, the starting number of iterations we'll try
-num_Eig, the number of eigenvalues we're interested in seeing
-conv_req, the convergence we'd like to see
+maxIter, the starting number of iterations we'll try
+numEig, the number of eigenvalues we're interested in seeing
+convReq, the convergence we'd like to see
 ---------------------------------------------------------------------------------------------------------------------------------------------------
-Output: h_ordered, the array of the num_Eig smallest eigenvalues, ordered from smallest to largest
+Output: h_ordered, the array of the numEig smallest eigenvalues, ordered from smallest to largest
 ---------------------------------------------------------------------------------------------------------------------------------------------------
 */
-__host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& Hamiltonian, double**& groundstates, int max_Iter, const int num_Eig, const double conv_req)
+__host__ void lanczos(const int howMany, const int* numElem, d_hamiltonian*& Hamiltonian, double**& groundstates, int maxIter, const int numEig, const double convReq)
 {
 
     //----------Initializing CUBLAS and CUSPARSE libraries as well as storage on GPU----------------
 
-    int* dim = (int*)malloc(how_many*sizeof(int));
-    for(int i = 0; i < how_many; i++)
+    int* dim = (int*)malloc(howMany*sizeof(int));
+    for(int i = 0; i < howMany; i++)
     {
-        dim[i] = Hamiltonian[i].sectordim;
+        dim[i] = Hamiltonian[i].sectorDim;
     }
 
     /*! 
@@ -39,25 +39,25 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     First it is necessary to create handles, streams, and to initialize the two CUDA libraries which will be used:
 	\verbatim
     */
-    cudaStream_t stream[how_many];
+    cudaStream_t stream[howMany];
 
-    cublasStatus_t cublas_status[how_many];
+    cublasStatus_t cublasStatus[howMany];
 
-    cublasHandle_t linalghandle;
-    cublas_status[0] = cublasCreate(&linalghandle);
+    cublasHandle_t linAlgHandle;
+    cublasStatus[0] = cublasCreate(&linAlgHandle);
 
-    if (cublas_status[0] != CUBLAS_STATUS_SUCCESS)
+    if (cublasStatus[0] != CUBLAS_STATUS_SUCCESS)
     {
-        std::cout<<"Initializing CUBLAS failed! Error: "<<cublas_status[0]<<std::endl;
+        std::cout<<"Initializing CUBLAS failed! Error: "<<cublasStatus[0]<<std::endl;
     }
 
-    cusparseHandle_t sparsehandle;
-    cusparseStatus_t cusparse_status[how_many];
-    cusparse_status[0] = cusparseCreate(&sparsehandle);
+    cusparseHandle_t sparseHandle;
+    cusparseStatus_t cusparseStatus[howMany];
+    cusparseStatus[0] = cusparseCreate(&sparseHandle);
 
-    if (cusparse_status[0] != CUSPARSE_STATUS_SUCCESS)
+    if (cusparseStatus[0] != CUSPARSE_STATUS_SUCCESS)
     {
-        std::cout<<"Failed to initialize CUSPARSE! Error: "<<cusparse_status[0]<<std::endl;
+        std::cout<<"Failed to initialize CUSPARSE! Error: "<<cusparseStatus[0]<<std::endl;
     }
     /*!
     \endverbatim
@@ -65,61 +65,61 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     The function also transforms the Hamiltonian into CSR format so that CUSPARSE can use it for matrix-vector multiplications.
     \verbatim
     */
-    cusparseMatDescr_t H_descr[how_many];
-    for(int i = 0; i<how_many; i++)
+    cusparseMatDescr_t H_descr[howMany];
+    for(int i = 0; i<howMany; i++)
     {
-        cusparse_status[i] = cusparseCreateMatDescr(&H_descr[i]);
+        cusparseStatus[i] = cusparseCreateMatDescr(&H_descr[i]);
 
-        if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+        if (cusparseStatus[i] != CUSPARSE_STATUS_SUCCESS)
         {
-            std::cout<<"Error creating matrix description: "<<cusparse_status[i]<<std::endl;
+            std::cout<<"Error creating matrix description: "<<cusparseStatus[i]<<std::endl;
         }
-        cusparse_status[i] = cusparseSetMatType(H_descr[i], CUSPARSE_MATRIX_TYPE_GENERAL);
-        if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+        cusparseStatus[i] = cusparseSetMatType(H_descr[i], CUSPARSE_MATRIX_TYPE_GENERAL);
+        if (cusparseStatus[i] != CUSPARSE_STATUS_SUCCESS)
         {
-            std::cout<<"Error setting matrix type: "<<cusparse_status[i]<<std::endl;
+            std::cout<<"Error setting matrix type: "<<cusparseStatus[i]<<std::endl;
         }
-        cusparse_status[i] = cusparseSetMatIndexBase(H_descr[i], CUSPARSE_INDEX_BASE_ZERO);
-        if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+        cusparseStatus[i] = cusparseSetMatIndexBase(H_descr[i], CUSPARSE_INDEX_BASE_ZERO);
+        if (cusparseStatus[i] != CUSPARSE_STATUS_SUCCESS)
         {
-            std::cout<<"Error setting matrix index base: "<<cusparse_status[i]<<std::endl;
+            std::cout<<"Error setting matrix index base: "<<cusparseStatus[i]<<std::endl;
         }
 
     }
-    cudaError_t status[how_many];
-    int** d_H_rowptrs;
-    d_H_rowptrs = (int**)malloc(how_many*sizeof(int*));
+    cudaError_t status[howMany];
+    int** d_H_rowPtrs;
+    d_H_rowPtrs = (int**)malloc(howMany*sizeof(int*));
 
-    for(int i = 0; i < how_many; i++)
+    for(int i = 0; i < howMany; i++)
     {
         status[i] = cudaStreamCreate(&stream[i]);
         if (status[i] != cudaSuccess)
         {
             std::cout<<"Error creating streams: "<<cudaGetErrorString(status[i])<<std::endl;
         }
-        status[i] = cudaMalloc(&d_H_rowptrs[i], (dim[i] + 1)*sizeof(int));
+        status[i] = cudaMalloc(&d_H_rowPtrs[i], (dim[i] + 1)*sizeof(int));
         if (status[i] != cudaSuccess)
         {
-            std::cout<<"Error allocating d_H_rowptrs: "<<cudaGetErrorString(status[i])<<std::endl;
+            std::cout<<"Error allocating d_H_rowPtrs: "<<cudaGetErrorString(status[i])<<std::endl;
         }
     }
 
     //---------------Converting from COO to CSR format for Hamiltonians----------------
-    //cusparseHybMat_t hyb_Ham[how_many];
-    for(int i = 0; i < how_many; i++)
+    //cusparseHybMat_t hyb_Ham[howMany];
+    for(int i = 0; i < howMany; i++)
     {
-        /*cusparse_status[i] = cusparseCreateHybMat(&hyb_Ham[i]);
-        if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+        /*cusparseStatus[i] = cusparseCreateHybMat(&hyb_Ham[i]);
+        if (cusparseStatus[i] != cusparseStatus_SUCCESS)
         {
-        	std::cout<<"Error creating HYB matrix: "<<cusparse_status[i]<<std::endl;
+        	std::cout<<"Error creating HYB matrix: "<<cusparseStatus[i]<<std::endl;
         }
 
         cout<<"Done creating HYB matrices"<<endl;*/
 
-        cusparse_status[i] = cusparseSetStream(sparsehandle, stream[i]);
-        if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+        cusparseStatus[i] = cusparseSetStream(sparseHandle, stream[i]);
+        if (cusparseStatus[i] != CUSPARSE_STATUS_SUCCESS)
         {
-            std::cout<<"Error switching streams: "<<cusparse_status[i]<<std::endl;
+            std::cout<<"Error switching streams: "<<cusparseStatus[i]<<std::endl;
         }
 
 
@@ -129,11 +129,11 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         {
             std::cout<<"Error synchronizing stream: "<<cudaGetErrorString(status[i])<<std::endl;
         }
-        cusparse_status[i] = cusparseXcoo2csr(sparsehandle, Hamiltonian[i].rows, num_Elem[i], dim[i], d_H_rowptrs[i], CUSPARSE_INDEX_BASE_ZERO);
+        cusparseStatus[i] = cusparseXcoo2csr(sparseHandle, Hamiltonian[i].rows, numElem[i], dim[i], d_H_rowPtrs[i], CUSPARSE_INDEX_BASE_ZERO);
 
-        if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+        if (cusparseStatus[i] != CUSPARSE_STATUS_SUCCESS)
         {
-            std::cout<<"Error converting to CSR: "<<cusparse_status[i]<<std::endl;
+            std::cout<<"Error converting to CSR: "<<cusparseStatus[i]<<std::endl;
         }
 
         status[i] = cudaPeekAtLastError();
@@ -142,11 +142,11 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
             std::cout<<"Error synchronizing stream: "<<cudaGetErrorString(status[i])<<std::endl;
         }
 
-        /*cusparse_status[i] = cusparseDcsr2hyb(sparsehandle, dim[i], dim[i], H_descr[i], Hamiltonian[i].vals, d_H_rowptrs[i], Hamiltonian[i].cols, hyb_Ham[i], 0, CUSPARSE_HYB_PARTITION_AUTO);
+        /*cusparseStatus[i] = cusparseDcsr2hyb(sparseHandle, dim[i], dim[i], H_descr[i], Hamiltonian[i].vals, d_H_rowPtrs[i], Hamiltonian[i].cols, hyb_Ham[i], 0, CUSPARSE_HYB_PARTITION_AUTO);
 
-        	if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+        	if (cusparseStatus[i] != cusparseStatus_SUCCESS)
         {
-        	std::cout<<"Error converting to HYB: "<<cusparse_status[i]<<std::endl;
+        	std::cout<<"Error converting to HYB: "<<cusparseStatus[i]<<std::endl;
         }*/
 
     }
@@ -159,9 +159,9 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     }
     */
     //----------------Create arrays to hold current Lanczos vectors----------
-    vector< vector<double> > h_a(how_many);
+    vector< vector<double> > h_a(howMany);
 
-    vector< vector<double> > h_b(how_many);
+    vector< vector<double> > h_b(howMany);
     //Making the "random" starting vector
 
     /*! 
@@ -170,14 +170,14 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     
     \verbatim
     */
-    double** v0 = (double**)malloc(how_many*sizeof(double*));
-    double** v1 = (double**)malloc(how_many*sizeof(double*));
-    double** v2 = (double**)malloc(how_many*sizeof(double*));
-    double*** lanczos_store = (double***)malloc(how_many*sizeof(double**));
+    double** v0 = (double**)malloc(howMany*sizeof(double*));
+    double** v1 = (double**)malloc(howMany*sizeof(double*));
+    double** v2 = (double**)malloc(howMany*sizeof(double*));
+    double*** lanczosStore = (double***)malloc(howMany*sizeof(double**));
 
-    double** host_v0 = (double**)malloc(how_many*sizeof(double*));
+    double** host_v0 = (double**)malloc(howMany*sizeof(double*));
 
-    for(int i = 0; i < how_many; i++)
+    for(int i = 0; i < howMany; i++)
     {
         status[i] = cudaMalloc(&v0[i], dim[i]*sizeof(double));
         if (status[i] != cudaSuccess)
@@ -194,7 +194,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         {
             std::cout<<"Error creating storage for v2 on GPU: "<<cudaGetErrorString(status[i])<<std::endl;
         }
-        lanczos_store[i] = (double**)malloc(max_Iter*sizeof(double*));
+        lanczosStore[i] = (double**)malloc(maxIter*sizeof(double*));
         host_v0[i] = (double*)malloc(dim[i]*sizeof(double));
 
 
@@ -208,11 +208,11 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
         }
 
-        status[i] = cudaMalloc(&lanczos_store[i][0], dim[i]*sizeof(double));
+        status[i] = cudaMalloc(&lanczosStore[i][0], dim[i]*sizeof(double));
 
         if (status[i] != cudaSuccess)
         {
-            std::cout<<"Error creating storage for v0 in lanczos_store: "<<cudaGetErrorString(status[i])<<std::endl;
+            std::cout<<"Error creating storage for v0 in lanczosStore: "<<cudaGetErrorString(status[i])<<std::endl;
         }
 
         status[i] = cudaMemcpyAsync(v0[i], host_v0[i], dim[i]*sizeof(double), cudaMemcpyHostToDevice, stream[i]);
@@ -229,57 +229,51 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
     //--------------Create dummy variables for CUBLAS functions----------------
 
-    double* normtemp = (double*)malloc(how_many*sizeof(double));
-    double* alpha = (double*)malloc(how_many*sizeof(double));
-    double* beta = (double*)malloc(how_many*sizeof(double));
+    double* normTemp = (double*)malloc(howMany*sizeof(double));
+    double* alpha = (double*)malloc(howMany*sizeof(double));
+    double* beta = (double*)malloc(howMany*sizeof(double));
 
-    double* dottemp = (double*)malloc(how_many*sizeof(double));
-    double* axpytemp = (double*)malloc(how_many*sizeof(double));
+    double* dotTemp = (double*)malloc(howMany*sizeof(double));
+    double* axpyTemp = (double*)malloc(howMany*sizeof(double));
     
-    double** y = (double**)malloc(how_many*sizeof(double*));
+    double** y = (double**)malloc(howMany*sizeof(double*));
     /*!
     \endverbatim
     */
     //--------------Generate first Lanczos vector--------------------------
 
-    for(int i = 0; i < how_many; i++)
+    for(int i = 0; i < howMany; i++)
     {
-        cublasSetStream(linalghandle, stream[i]);
-        cusparseSetStream(sparsehandle, stream[i]);
+        cublasSetStream(linAlgHandle, stream[i]);
+        cusparseSetStream(sparseHandle, stream[i]);
         /*! 
         Then the initial multiplication to generate the first Lanczos vector is performed. 
         \verbatim
         */     
-       cublas_status[i] = cublasDnrm2(linalghandle, dim[i], v0[i], 1, &normtemp[i]);
+       cublasStatus[i] = cublasDnrm2(linAlgHandle, dim[i], v0[i], 1, &normTemp[i]);
 
-        normtemp[i] = 1./normtemp[i];
+        normTemp[i] = 1./normTemp[i];
 
-        cublas_status[i] = cublasDscal(linalghandle, dim[i], &normtemp[i], v0[i], 1);
+        cublasStatus[i] = cublasDscal(linAlgHandle, dim[i], &normTemp[i], v0[i], 1);
 
         alpha[i] = 1.;
         beta[i] = 0.;
 
-        cudaMemcpyAsync(lanczos_store[i][0], v0[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
+        cudaMemcpyAsync(lanczosStore[i][0], v0[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
 
         //-----------Apply Hamiltonian to V0--------------------
-        cusparse_status[i] = cusparseDcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim[i], dim[i], num_Elem[i], &alpha[i], H_descr[i], Hamiltonian[i].vals, d_H_rowptrs[i], Hamiltonian[i].cols, v0[i], &beta[i], v1[i]); // the Hamiltonian is applied here
+        cusparseStatus[i] = cusparseDcsrmv(sparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim[i], dim[i], numElem[i], &alpha[i], H_descr[i], Hamiltonian[i].vals, d_H_rowPtrs[i], Hamiltonian[i].cols, v0[i], &beta[i], v1[i]); // the Hamiltonian is applied here
 
         /*!
         \endverbatim
         */
 
-        if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+        if (cusparseStatus[i] != CUSPARSE_STATUS_SUCCESS)
         {
             std::cout<<"Getting V1 = H*V0 failed! Error: ";
-            std::cout<<cusparse_status[i]<<std::endl;
+            std::cout<<cusparseStatus[i]<<std::endl;
         }
         //cudaStreamSynchronize(stream[i]);
-
-        if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
-        {
-            std::cout<<"Getting V1 = H*V0 failed! Error: ";
-            std::cout<<cusparse_status[i]<<std::endl;
-        }
         if (cudaPeekAtLastError() != 0 )
         {
             std::cout<<"Getting V1  = H*V0 failed! Error: ";
@@ -289,29 +283,29 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
     }
 
-    for(int i = 0; i < how_many; i++)
+    for(int i = 0; i < howMany; i++)
     {
-        cublasSetStream(linalghandle, stream[i]);
-        dottemp[i] = 0.;
+        cublasSetStream(linAlgHandle, stream[i]);
+        dotTemp[i] = 0.;
 
-        cublas_status[i] = cublasDdot(linalghandle, dim[i], v1[i], 1, v0[i], 1, &dottemp[i]);
+        cublasStatus[i] = cublasDdot(linAlgHandle, dim[i], v1[i], 1, v0[i], 1, &dotTemp[i]);
         
-        h_a[i].push_back(dottemp[i]);
+        h_a[i].push_back(dotTemp[i]);
         h_b[i].push_back(0.);
 
-        if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
+        if (cublasStatus[i] != CUBLAS_STATUS_SUCCESS)
         {
             std::cout<<"Getting d_a[0] failed! Error: ";
-            std::cout<<cublas_status[i]<<std::endl;
+            std::cout<<cublasStatus[i]<<std::endl;
         }
 
         
 
         //cudaStreamSynchronize(stream[i]);
-        if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
+        if (cublasStatus[i] != CUBLAS_STATUS_SUCCESS)
         {
             std::cout<<"Getting h_a[0] failed! Error: ";
-            std::cout<<cublas_status[i]<<std::endl;
+            std::cout<<cublasStatus[i]<<std::endl;
         }
 
         
@@ -330,18 +324,18 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         \verbatim
         */
 
-        cublas_status[i] = cublasDscal(linalghandle, dim[i], &beta[i], y[i], 1);
+        cublasStatus[i] = cublasDscal(linAlgHandle, dim[i], &beta[i], y[i], 1);
         //cudaStreamSynchronize(stream[i]);
 
-        axpytemp[i] = -1*h_a[i][0];
+        axpyTemp[i] = -1*h_a[i][0];
 
-        cublas_status[i] = cublasDaxpy(linalghandle, 0, &axpytemp[i], v0[i], 1, v1[i], 1);
+        cublasStatus[i] = cublasDaxpy(linAlgHandle, 0, &axpyTemp[i], v0[i], 1, v1[i], 1);
         //cudaStreamSynchronize(stream[i]);
 
-        if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
+        if (cublasStatus[i] != CUBLAS_STATUS_SUCCESS)
         {
             std::cout<<"V1 = V1 - alpha*V0 failed! Error: ";
-            std::cout<<cublas_status[i]<<std::endl;
+            std::cout<<cublasStatus[i]<<std::endl;
         }
         if (cudaPeekAtLastError() != 0 )
         {
@@ -351,15 +345,15 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
         //---------Normalize V1 and copy it to Lanczos storage-----------
 
-        normtemp[i] = 0.;
-        cublas_status[i] = cublasDnrm2(linalghandle, dim[i], v1[i], 1, &normtemp[i]); //this is slow for some reason
+        normTemp[i] = 0.;
+        cublasStatus[i] = cublasDnrm2(linAlgHandle, dim[i], v1[i], 1, &normTemp[i]); //this is slow for some reason
 
         //cudaStreamSynchronize(stream[i]);
 
-        if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
+        if (cublasStatus[i] != CUBLAS_STATUS_SUCCESS)
         {
             std::cout<<"Getting the norm of v1 failed! Error: ";
-            std::cout<<cublas_status[i]<<std::endl;
+            std::cout<<cublasStatus[i]<<std::endl;
         }
 
         if (cudaPeekAtLastError() != 0 )
@@ -370,23 +364,23 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
     }
 
-    double* gamma = (double*)malloc(how_many*sizeof(double));
+    double* gamma = (double*)malloc(howMany*sizeof(double));
 
-    for(int i = 0; i < how_many; i++)
+    for(int i = 0; i < howMany; i++)
     {
-        cublasSetStream(linalghandle, stream[i]);
+        cublasSetStream(linAlgHandle, stream[i]);
 
-        h_b[i].push_back(normtemp[i]);
+        h_b[i].push_back(normTemp[i]);
 
-        normtemp[i] = 1./normtemp[i];
+        normTemp[i] = 1./normTemp[i];
         gamma[i] = 1./h_b[i][1]; //alpha = 1/beta in v1 = v1 - alpha*v0
-        cublas_status[i] = cublasDscal(linalghandle, dim[i], &normtemp[i], v1[i], 1);
+        cublasStatus[i] = cublasDscal(linAlgHandle, dim[i], &normTemp[i], v1[i], 1);
 
 
-        if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
+        if (cublasStatus[i] != CUBLAS_STATUS_SUCCESS)
         {
             std::cout<<"Normalizing v1 failed! Error: ";
-            std::cout<<cublas_status[i]<<std::endl;
+            std::cout<<cublasStatus[i]<<std::endl;
         }
 
 
@@ -395,8 +389,8 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
             std::cout<<"Normalizing V1 failed! Error: ";
             std::cout<<cudaGetErrorString(cudaPeekAtLastError())<<std::endl;
         }
-        cudaMalloc(&lanczos_store[i][1], dim[i]*sizeof(double));
-        cudaMemcpyAsync(lanczos_store[i][1], v1[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
+        cudaMalloc(&lanczosStore[i][1], dim[i]*sizeof(double));
+        cudaMemcpyAsync(lanczosStore[i][1], v1[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
     }
     /*!    
     \endverbatim
@@ -408,23 +402,23 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 	\verbatim
     */
     
-    double* gs_Energy = (double*)malloc(how_many*sizeof(double));
+    double* gsEnergy = (double*)malloc(howMany*sizeof(double));
 
-    double* eigtemp = (double*)malloc(how_many*sizeof(double));
+    double* eigTemp = (double*)malloc(howMany*sizeof(double));
 
-    int* returned = (int*)malloc(how_many*sizeof(int));
+    int* returned = (int*)malloc(howMany*sizeof(int));
 
-    int* iter = (int*)malloc(how_many*sizeof(int));
+    int* iter = (int*)malloc(howMany*sizeof(int));
 
-    bool* done_flag = (bool*)malloc(how_many*sizeof(bool));
+    bool* doneFlag = (bool*)malloc(howMany*sizeof(bool));
 
-    double** h_H_eigen = (double**)malloc(how_many*sizeof(double*));
-    double** d_H_eigen = (double**)malloc(how_many*sizeof(double*));
+    double** h_H_eigen = (double**)malloc(howMany*sizeof(double*));
+    double** d_H_eigen = (double**)malloc(howMany*sizeof(double*));
 
-    double** h_diag = (double**)malloc(how_many*sizeof(double*));
-    double** h_offdia = (double**)malloc(how_many*sizeof(double*));
+    double** h_diag = (double**)malloc(howMany*sizeof(double*));
+    double** h_offdia = (double**)malloc(howMany*sizeof(double*));
 
-    vector< vector < double > > h_ordered(how_many);
+    vector< vector < double > > h_ordered(howMany);
     /*!
     \endverbatim
     */
@@ -432,15 +426,15 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     The flags and storage are initialized for the interations
     \verbatim
     */
-    for(int i = 0; i<how_many; i++)
+    for(int i = 0; i<howMany; i++)
     {
-        gs_Energy[i] = 1.;
-        eigtemp[i] = 0.;
+        gsEnergy[i] = 1.;
+        eigTemp[i] = 0.;
         iter[i] = 0;
-        done_flag[i] = false;
-        h_ordered[i].resize(num_Eig, 0);
-        h_H_eigen[i] = (double*)malloc(max_Iter*max_Iter*sizeof(double));
-        cudaMalloc(&d_H_eigen[i], max_Iter*max_Iter*sizeof(double));
+        doneFlag[i] = false;
+        h_ordered[i].resize(numEig, 0);
+        h_H_eigen[i] = (double*)malloc(maxIter*maxIter*sizeof(double));
+        cudaMalloc(&d_H_eigen[i], maxIter*maxIter*sizeof(double));
         h_diag[i] = (double*)malloc(h_a[i].size()*sizeof(double));
         h_offdia[i] = (double*)malloc(h_b[i].size()*sizeof(double));
     }
@@ -450,67 +444,67 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
     //---------Begin Lanczos iteration-----------------------------
 
-    bool all_done = false;
+    bool allDone = false;
 
-    while( !all_done )
+    while( !allDone )
     {
-        all_done = true;
-        for(int i = 0; i < how_many; i++)
+        allDone = true;
+        for(int i = 0; i < howMany; i++)
         {
-            cublasSetStream(linalghandle, stream[i]);
-            cusparseSetStream(sparsehandle, stream[i]);
+            cublasSetStream(linAlgHandle, stream[i]);
+            cusparseSetStream(sparseHandle, stream[i]);
             cudaStreamSynchronize(stream[i]);
 
             /*! 
             If the current diagonalization is not complete, multiply H*V1 to get a new V2
             \verbatim
             */
-            if (!done_flag[i])
+            if (!doneFlag[i])
             {
                 iter[i]++;
                 
-                cusparse_status[i] = cusparseDcsrmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim[i], dim[i], num_Elem[i], &alpha[i], H_descr[i], Hamiltonian[i].vals, d_H_rowptrs[i], Hamiltonian[i].cols, v1[i], &beta[i], v2[i]);
+                cusparseStatus[i] = cusparseDcsrmv(sparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE, dim[i], dim[i], numElem[i], &alpha[i], H_descr[i], Hamiltonian[i].vals, d_H_rowPtrs[i], Hamiltonian[i].cols, v1[i], &beta[i], v2[i]);
                 
-                if( cusparse_status[i] != 0)
+                if( cusparseStatus[i] != 0)
                 {
                     cout<<"Error applying H to V1 in "<<iter[i]<<"th iteration"<<endl;
                 }
-                //cusparse_status[i] = cusparseDhybmv(sparsehandle, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha[i], H_descr[i], hyb_Ham[i], v1[i], &beta[i], v2[i]); // the Hamiltonian is applied here, in this gross expression
+                //cusparseStatus[i] = cusparseDhybmv(sparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE, &alpha[i], H_descr[i], hyb_Ham[i], v1[i], &beta[i], v2[i]); // the Hamiltonian is applied here, in this gross expression
             }
             /*!
             \endverbatim
             */
         }
-        for(int i = 0; i < how_many; i++)
+        for(int i = 0; i < howMany; i++)
         {
-            cublasSetStream(linalghandle, stream[i]);
-            if (!done_flag[i])
+            cublasSetStream(linAlgHandle, stream[i]);
+            if (!doneFlag[i])
             {
-                if (cusparse_status[i] != CUSPARSE_STATUS_SUCCESS)
+                if (cusparseStatus[i] != CUSPARSE_STATUS_SUCCESS)
                 {
                     std::cout<<"Error applying the Hamiltonian in "<<iter[i]<<"th iteration!";
-                    std::cout<<"Error: "<<cusparse_status[i]<<std::endl;
+                    std::cout<<"Error: "<<cusparseStatus[i]<<std::endl;
                 }
 
-                cublas_status[i] = cublasDdot(linalghandle, dim[i], v1[i], 1, v2[i], 1, &dottemp[i]);
+                cublasStatus[i] = cublasDdot(linAlgHandle, dim[i], v1[i], 1, v2[i], 1, &dotTemp[i]);
                 //cudaStreamSynchronize(stream[i]);
 
-                h_a[i].push_back(dottemp[i]);
+                h_a[i].push_back(dotTemp[i]);
 
 
-                if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
+                if (cublasStatus[i] != CUBLAS_STATUS_SUCCESS)
                 {
                     std::cout<<"Error getting v1 * v2 in "<<iter[i]<<"th iteration! Error: ";
-                    std::cout<<cublas_status[i]<<std::endl;
+                    std::cout<<cublasStatus[i]<<std::endl;
                 }
 
-                axpytemp[i] = -1.*h_b[i][iter[i]];
+                axpyTemp[i] = -1.*h_b[i][iter[i]];
 
-                cublas_status[i] = cublasDaxpy( linalghandle, dim[i], &axpytemp[i], v0[i], 1, v2[i], 1);
-                if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
+                cublasStatus[i] = cublasDaxpy( linAlgHandle, dim[i], &axpyTemp[i], v0[i], 1, v2[i], 1);
+                if (cublasStatus[i] != CUBLAS_STATUS_SUCCESS)
                 {
                     std::cout<<"Error getting (d_b/d_a)*v0 + v1 in "<<iter[i]<<"th iteration!";
-                    std::cout<<"Error: "<<cublas_status[i]<<std::endl;
+                    std::cout<<"Error: "<<cublasStatus[i]<<std::endl;
                 }
 
             }
@@ -518,51 +512,51 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
         //--------Find next set of elements in Lanczos Hamiltonian----
 
-        for(int i = 0; i < how_many; i++)
+        for(int i = 0; i < howMany; i++)
         {
-            cublasSetStream(linalghandle, stream[i]);
+            cublasSetStream(linAlgHandle, stream[i]);
             //cudaStreamSynchronize(stream[i]);
-            if (!done_flag[i])
+            if (!doneFlag[i])
             {
                 /*! 
                 Similarly to setting up V1, V2 must be rescaled
                 \verbatim
                 */
-                axpytemp[i] = -1.*h_a[i][iter[i]];
-                cublas_status[i] = cublasDaxpy( linalghandle, dim[i], &axpytemp[i], v1[i], 1, v2[i], 1);
-                if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
+                axpyTemp[i] = -1.*h_a[i][iter[i]];
+                cublasStatus[i] = cublasDaxpy( linAlgHandle, dim[i], &axpyTemp[i], v1[i], 1, v2[i], 1);
+                if (cublasStatus[i] != CUBLAS_STATUS_SUCCESS)
                 {
                     std::cout<<"Error getting v2 + d_a*v1 in "<<iter[i]<<"th iteration! Error: ";
-                    std::cout<<cublas_status[i]<<std::endl;
+                    std::cout<<cublasStatus[i]<<std::endl;
                 }
 
-                cublas_status[i] = cublasDnrm2( linalghandle, dim[i], v2[i], 1, &normtemp[i]);
+                cublasStatus[i] = cublasDnrm2( linAlgHandle, dim[i], v2[i], 1, &normTemp[i]);
                 
-                if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
+                if (cublasStatus[i] != CUBLAS_STATUS_SUCCESS)
                 {
                     std::cout<<"Error getting norm of v2 in "<<iter[i]<<"th iteration! Error: ";
-                    std::cout<<cublas_status[i]<<std::endl;
+                    std::cout<<cublasStatus[i]<<std::endl;
                 }
 
 
-                h_b[i].push_back(normtemp[i]);
-                gamma[i] = 1./normtemp[i];
+                h_b[i].push_back(normTemp[i]);
+                gamma[i] = 1./normTemp[i];
                 /*!
                 \endverbatim
                 */
-                cublas_status[i] = cublasDscal(linalghandle, dim[i], &gamma[i], v2[i], 1);
-                if (cublas_status[i] != CUBLAS_STATUS_SUCCESS)
+                cublasStatus[i] = cublasDscal(linAlgHandle, dim[i], &gamma[i], v2[i], 1);
+                if (cublasStatus[i] != CUBLAS_STATUS_SUCCESS)
                 {
                     std::cout<<"Error getting 1/d_b * v2 in "<<iter[i]<<"th iteration! Error: ";
-                    std::cout<<cublas_status[i]<<std::endl;
+                    std::cout<<cublasStatus[i]<<std::endl;
                 }
             }
         }
 
 
-        for(int i = 0; i < how_many; i++)
+        for(int i = 0; i < howMany; i++)
         {
-            cublasSetStream(linalghandle, stream[i]);
+            cublasSetStream(linAlgHandle, stream[i]);
             //status[i] = cudaStreamSynchronize(stream[i]);
 
             if (status[i] != cudaSuccess)
@@ -570,7 +564,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
                 std::cout<<"Error syncing before copying v1 to v0: "<<cudaGetErrorString(status[i])<<std::endl;
             }
 
-            if (!done_flag[i])
+            if (!doneFlag[i])
             {
                 /*!
                 Reorthogonalization is performed on v2 to ensure that the excited states do not collapse into the groundstate
@@ -578,11 +572,11 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
                 */
                 for(int j = 0; j < iter[i] + 1; j++)
                 {
-                    cublasDdot(linalghandle, dim[i], v2[i], 1, lanczos_store[i][j], 1, &dottemp[i]);
-                    dottemp[i] *= -1.;
-                    cublasDaxpy(linalghandle, dim[i],  &dottemp[i], lanczos_store[i][j], 1, v2[i], 1);
-                    dottemp[i] = 1. - dottemp[i]*dottemp[i];
-                    cublasDscal(linalghandle, dim[i], &dottemp[i], v2[i], 1);
+                    cublasDdot(linAlgHandle, dim[i], v2[i], 1, lanczosStore[i][j], 1, &dotTemp[i]);
+                    dotTemp[i] *= -1.;
+                    cublasDaxpy(linAlgHandle, dim[i],  &dotTemp[i], lanczosStore[i][j], 1, v2[i], 1);
+                    dotTemp[i] = 1. - dotTemp[i]*dotTemp[i];
+                    cublasDscal(linAlgHandle, dim[i], &dotTemp[i], v2[i], 1);
 
                 }
                 /*!
@@ -602,8 +596,8 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
                     std::cout<<"Error copying v2 to v1: "<<cudaGetErrorString(status[i])<<std::endl;
                 }
              
-                status[i] = cudaMalloc(&lanczos_store[i][iter[i] + 1], dim[i]*sizeof(double));
-                status[i] = cudaMemcpyAsync(lanczos_store[i][iter[i] + 1], v2[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
+                status[i] = cudaMalloc(&lanczosStore[i][iter[i] + 1], dim[i]*sizeof(double));
+                status[i] = cudaMemcpyAsync(lanczosStore[i][iter[i] + 1], v2[i], dim[i]*sizeof(double), cudaMemcpyDeviceToDevice, stream[i]);
                 /*!
                 \endverbatim
                 */
@@ -611,9 +605,9 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
         }
 
-        for(int i = 0; i < how_many; i++)
+        for(int i = 0; i < howMany; i++)
         {
-            if (!done_flag[i] && iter[i] > 5)
+            if (!doneFlag[i] && iter[i] > 5)
             {
                 //---Copy Lanczos matrix information for diagonalization-----
                 free(h_diag[i]);
@@ -633,57 +627,57 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
                 //cudaStreamSynchronize(stream[i]);
 
                 //---------Diagonalize Lanczos matrix and check for convergence------------------
-                returned[i] = tqli(h_diag[i], h_offdia[i], iter[i] + 1, max_Iter, h_H_eigen[i]);
+                returned[i] = tqli(h_diag[i], h_offdia[i], iter[i] + 1, maxIter, h_H_eigen[i]);
                 status[i] = cudaPeekAtLastError();
                 if( status[i] != cudaSuccess)
                 {
                     cout<<"Error in identity! Error: "<<cudaGetErrorString(status[i])<<endl;
                 }
                 //cout<<"Done tqli in "<<iter[i]<<"th iteration"<<endl;
-                cudaMemcpyAsync(d_H_eigen[i], h_H_eigen[i], max_Iter*max_Iter*sizeof(double), cudaMemcpyHostToDevice, stream[i]);
+                cudaMemcpyAsync(d_H_eigen[i], h_H_eigen[i], maxIter*maxIter*sizeof(double), cudaMemcpyHostToDevice, stream[i]);
 
                 sort(h_diag[i], h_diag[i] + h_a[i].size());
-                for (int j = 0; j < num_Eig; j++)
+                for (int j = 0; j < numEig; j++)
                 {
                     h_ordered[i][j] = h_diag[i][j];
                     //cout<<h_ordered[i][j]<<" ";
                 }
                 //cout<<endl;
 
-                gs_Energy[i] = h_ordered[i][num_Eig - 1];
-                done_flag[i] = (fabs(gs_Energy[i] - eigtemp[i]) < conv_req);// && iter[i] > 10;// ? (iter[i] > 10) : false;
-                //done_flag[i] = iter[i] == max_Iter - 2;
-                eigtemp[i] = h_ordered[i][num_Eig - 1];
+                gsEnergy[i] = h_ordered[i][numEig - 1];
+                doneFlag[i] = (fabs(gsEnergy[i] - eigTemp[i]) < convReq);// && iter[i] > 10;// ? (iter[i] > 10) : false;
+                //doneFlag[i] = iter[i] == maxIter - 2;
+                eigTemp[i] = h_ordered[i][numEig - 1];
 
-                if (iter[i] == max_Iter - 2) // have to use this or d_b will overflow
+                if (iter[i] == maxIter - 2) // have to use this or d_b will overflow
                 {
                     //this stuff here is used to resize the main arrays in the case that we aren't converging quickly enough
-                    h_a[i].resize(2*max_Iter);
-                    h_b[i].resize(2*max_Iter);
-                    max_Iter *= 2;
+                    h_a[i].resize(2*maxIter);
+                    h_b[i].resize(2*maxIter);
+                    maxIter *= 2;
                 }
             }
         }
-        all_done = true;
-        for(int i = 0; i< how_many; i++)
+        allDone = true;
+        for(int i = 0; i< howMany; i++)
         {
-            all_done = (all_done && done_flag[i]);
+            allDone = (allDone && doneFlag[i]);
         }
     }
 
 
     //-------------Get groundstates------------------------------------------
 
-    for( int i = 0; i < how_many; i++)
+    for( int i = 0; i < howMany; i++)
     {
         //cudaStreamSynchronize(stream[i]);
-        //GetGroundstate<<<dim[i]/512 + 1, 512, 0, stream[i]>>>(groundstates[i], lanczos_store[i], d_H_eigen[i], iter[i], dim[i]);
+        //GetGroundstate<<<dim[i]/512 + 1, 512, 0, stream[i]>>>(groundstates[i], lanczosStore[i], d_H_eigen[i], iter[i], dim[i]);
     }
 
     //--------------Free arrays to prevent memory leaks------------------------
-    for(int i = 0; i < how_many; i++)
+    for(int i = 0; i < howMany; i++)
     {
-        for(int j = 0; j < num_Eig; j++)
+        for(int j = 0; j < numEig; j++)
         {
             std::cout<<std::setprecision(12)<<h_ordered[i][j]<<" ";
         }
@@ -691,10 +685,10 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 
         for(int j = 0; j < iter[i]; j++)
         {
-            cudaFree(lanczos_store[i][j]);
+            cudaFree(lanczosStore[i][j]);
         }
-        free(lanczos_store[i]);
-        cudaFree(d_H_rowptrs[i]);
+        free(lanczosStore[i]);
+        cudaFree(d_H_rowPtrs[i]);
         cudaFree(v0[i]);
         cudaFree(v1[i]);
         cudaFree(v2[i]);
@@ -707,31 +701,31 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
         //cusparseDestroyHybMat(hyb_Ham[i]);
     }
 
-    free(gs_Energy);
-    free(eigtemp);
+    free(gsEnergy);
+    free(eigTemp);
     free(alpha);
     free(beta);
     free(returned);
     free(iter);
-    free(done_flag);
+    free(doneFlag);
     free(h_H_eigen);
     free(d_H_eigen);
     free(gamma);
     free(y);
-    free(normtemp);
-    free(axpytemp);
-    free(dottemp);
+    free(normTemp);
+    free(axpyTemp);
+    free(dotTemp);
     free(host_v0);
     free(v0);
     free(v1);
     free(v2);
     free(h_diag);
     free(h_offdia);
-    free(lanczos_store);
+    free(lanczosStore);
     //free(dim);
-    free(d_H_rowptrs);
+    free(d_H_rowPtrs);
 
-    cublas_status[0] = cublasDestroy(linalghandle);
+    cublasStatus[0] = cublasDestroy(linAlgHandle);
 
     //----------Output groundstate to file to check for correctness------
 
@@ -747,14 +741,14 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     fout.close();
     free(host_groundstate);
     free(dim);
-    if (cublas_status[0] != CUBLAS_STATUS_SUCCESS)
+    if (cublasStatus[0] != CUBLAS_STATUS_SUCCESS)
     {
         printf("CUBLAS failed to shut down properly! \n");
     }
 
-    cusparse_status[0] = cusparseDestroy(sparsehandle);
+    cusparseStatus[0] = cusparseDestroy(sparseHandle);
 
-    if (cusparse_status[0] != CUSPARSE_STATUS_SUCCESS)
+    if (cusparseStatus[0] != CUSPARSE_STATUS_SUCCESS)
     {
         printf("CUSPARSE failed to release handle! \n");
     }
@@ -763,7 +757,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
     /*if (iter == 1) {
     	std::ofstream fout;
     	fout.open("lanczos.log");
-    	//fout<<normtemp<<std::endl;
+    	//fout<<normTemp<<std::endl;
     	fout<<std::endl;
     	//int* h_H_vals = (int*)malloc((dim+1)*sizeof(int));
     	cudaMemcpy(host_v0, v2, dim*sizeof(cuDoubleComplex), cudaMemcpyDeviceToHost);
@@ -780,7 +774,7 @@ __host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& H
 // write a thing (separate file) to call routines to find expectation values, should be faster on GPU
 // make the tqli thing better!
 
-int tqli(double* d, double* e, int n, int max_Iter, double *z)
+int tqli(double* d, double* e, int n, int maxIter, double *z)
 
 {
 
@@ -863,17 +857,17 @@ double pythag(double a, double b)
     else return (absb == 0.0 ? 0.0 : absb*sqrt(1.0+(absa/absb)*(absa/absb)));
 }
 
-__global__ void GetGroundstate(double* groundstates, double** lanczos_store, double* H_eigen, int mat_dim, int vec_dim)
+__global__ void GetGroundstate(double* groundstates, double** lanczosStore, double* H_eigen, int mat_dim, int vec_dim)
 {
 
     int element = blockIdx.x*blockDim.x + threadIdx.x;
 
     if ( element < vec_dim )
     {
-        groundstates[element] = H_eigen[0]*lanczos_store[0][element];
-        for (int lanc_iter = 1; lanc_iter < mat_dim; lanc_iter++)
+        groundstates[element] = H_eigen[0]*lanczosStore[0][element];
+        for (int lancIter = 1; lancIter < mat_dim; lancIter++)
         {
-            groundstates[element] += H_eigen[lanc_iter]*lanczos_store[lanc_iter][element];
+            groundstates[element] += H_eigen[lancIter]*lanczosStore[lancIter][element];
         }
     }
 };
