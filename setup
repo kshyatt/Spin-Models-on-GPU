@@ -1,5 +1,12 @@
 #!/bin/bash
 
+wget http://cs.anu.edu.au/~bdm/nauty/nauty24r2.tar.gz
+tar -xzf nauty24r2.tar.gz
+cd nauty/
+./configure
+make
+cd ..
+
 git clone git://github.com/seanbaxter/mgpu.git
 mv mgpu sort
 cd sort/sort/gnu/mgpusort/

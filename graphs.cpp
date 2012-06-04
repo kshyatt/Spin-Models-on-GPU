@@ -33,7 +33,7 @@ int main()
     //PrintGraphs( clusters, 1, 1);
     GenerateAllGraphs( clusters, 2, 5, 0);
     //cout<<clusters[3].count<<endl;
-    //PrintGraphs( clusters, 1, 5);
+    PrintGraphs( clusters, 1, 5);
     return 0;
 }
 
@@ -157,10 +157,11 @@ void GenerateNewGraphs(cluster & old_graphs, cluster & new_graphs, int lattice_t
 void FindCanonicalGraphs( vector<cluster>& clusters, int graph_order)
 {
     cluster cluster_container = clusters[graph_order - 1];
+    cout<<cluster_container.count<<endl;
     unsigned int truecount = 0;
     for(unsigned int i = 0; i < cluster_container.count; i++)
     {
-        cout<<"Cluster "<<i<<" of order "<<graph_order<<endl;
+        //cout<<"Cluster "<<i<<" of order "<<graph_order<<endl;
         DYNALLSTAT(graph, current, graph_size);
         DYNALLSTAT(graph, canonical, canonical_size);
         DYNALLSTAT(int, label, label_size);
