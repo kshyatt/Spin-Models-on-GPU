@@ -23,7 +23,7 @@ convReq, the convergence we'd like to see
 Output: h_ordered, the array of the numEig smallest eigenvalues, ordered from smallest to largest
 ---------------------------------------------------------------------------------------------------------------------------------------------------
 */
-__host__ void lanczos(const int howMany, const int* numElem, d_hamiltonian*& Hamiltonian, double**& groundstates, int maxIter, const int numEig, const double convReq)
+__host__ void lanczos(const int howMany, const int* numElem, d_hamiltonian*& Hamiltonian, double**& groundstates, double**& eigenvalues, int maxIter, const int numEig, const double convReq)
 {
 
     //----------Initializing CUBLAS and CUSPARSE libraries as well as storage on GPU----------------

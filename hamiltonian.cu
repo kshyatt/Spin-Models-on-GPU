@@ -38,22 +38,65 @@ __host__ int GetBasis(int dim, parameters data, int basisPosition[], int basis[]
             realDim++;
         }
     }
+
+    #if CHECK = 1
+        fstream basfile;
+        fstream basposfile;
+        switch( data.Sz )
+        {
+            case 0 :
+                basfile.open("tests0basis.dat");
+                basposfile.open("tests0basisposition.dat");
+                break;
+            case 1 :
+                basfile.open("tests1basis.dat");
+                basposfile.open("tests1basisposition.dat");
+                break;
+            case 2 :
+                basfile.open("tests2basis.dat");
+                basposfile.open("tests2basisposition.dat");
+                break;
+            case 3 :
+                basfile.open("tests3basis.dat");
+                basposfile.open("tests3basisposition.dat");
+                break;
+            case 4 :
+                basfile.open("tests4basis.dat");
+                basposfile.open("tests4basisposition.dat");
+                break;
+            case 5 :
+                basfile.open("tests5basis.dat");
+                basposfile.open("tests5basisposition.dat");
+                break;
+            case 6 :
+                basfile.open("tests6basis.dat");
+                basposfile.open("tests6basisposition.dat");
+                break;
+            case 7 :
+                basfile.open("tests7basis.dat");
+                basposfile.open("tests7basisposition.dat");
+                break;
+            case 8 :
+                basfile.open("tests8basis.dat");
+                basposfile.open("tests8basisposition.dat");
+                break;
+        }
+
+        for( unsigned int i = 0; i < dim; i++)
+        {
+            if (i < realDim) basfile<<basis[i]<<endl;
+            basposfile<<basisPosition[i]<<endl;
+        }
+        basfile.close();
+        basposfile.close();
+    #endif
+
     return realDim;
 
 }
 
 /* Function: ConstructSparseMatrix:
 
-Inputs: model_Type - tells this function how many elements there could be, what generating functions to use, etc. Presently only supports Heisenberg
-lattice_Size - the number of lattice sites
-Bond - the bond values ??
-hamil_Values - an empty pointer for a device array containing the values
-hamil_PosRow - an empty pointer for a device array containing the locations of each value in a row
-hamil_PosCol - an empty pointer to a device array containing the locations of each values in a column
-
-Outputs: hamil_Values - a pointer to a device array containing the values
-hamil_PosRow - a pointer to a device array containing the locations of each value in a row
-hamil_PosCol - a pointer to a device array containing the locations of each values in a column
 
 */
 
@@ -503,49 +546,71 @@ __host__ void ConstructSparseMatrix( const int howMany, int** Bond, d_hamiltonia
 
         //----This code dumps the Hamiltonian to a file-------------
 
-        double* h_vals = (double*)malloc(numElem[i]*sizeof(double));
-        int* h_rows = (int*)malloc(numElem[i]*sizeof(int));
-        int* h_cols = (int*)malloc(numElem[i]*sizeof(int));
+        #if CHECK = 1
 
-        status[i] = cudaMemcpy(h_vals, hamilLancz[i].vals, numElem[i]*sizeof(double), cudaMemcpyDeviceToHost);
+            double* h_vals = (double*)malloc(numElem[i]*sizeof(double));
+            int* h_rows = (int*)malloc(numElem[i]*sizeof(int));
+            int* h_cols = (int*)malloc(numElem[i]*sizeof(int));
 
-        if (status[i] != cudaSuccess)
-        {
-            cout<<"Error copying to h_vals: "<<cudaGetErrorString(status[i])<<endl;
-        }
+            status[i] = cudaMemcpy(h_vals, hamilLancz[i].vals, numElem[i]*sizeof(double), cudaMemcpyDeviceToHost);
 
-        status[i] = cudaMemcpy(h_rows, hamilLancz[i].rows, numElem[i]*sizeof(int), cudaMemcpyDeviceToHost);
+            if (status[i] != cudaSuccess)
+            {
+                cout<<"Error copying to h_vals: "<<cudaGetErrorString(status[i])<<endl;
+            }
 
-        if (status[i] != cudaSuccess)
-        {
-            cout<<"Error copying to h_rows: "<<cudaGetErrorString(status[i])<<endl;
-        }
+            status[i] = cudaMemcpy(h_rows, hamilLancz[i].rows, numElem[i]*sizeof(int), cudaMemcpyDeviceToHost);
 
-        status[i] = cudaMemcpy(h_cols, hamilLancz[i].cols, numElem[i]*sizeof(int), cudaMemcpyDeviceToHost);
+            if (status[i] != cudaSuccess)
+            {
+                cout<<"Error copying to h_rows: "<<cudaGetErrorString(status[i])<<endl;
+            }
 
-        if (status[i] != cudaSuccess)
-        {
-            cout<<"Error copying to h_cols: "<<cudaGetErrorString(status[i])<<endl;
-        }
+            status[i] = cudaMemcpy(h_cols, hamilLancz[i].cols, numElem[i]*sizeof(int), cudaMemcpyDeviceToHost);
+
+            if (status[i] != cudaSuccess)
+            {
+                cout<<"Error copying to h_cols: "<<cudaGetErrorString(status[i])<<endl;
+            }
 
 
-        if(i == 0)
-        {
-            ofstream fout;
-            fout.open("hamiltonian.log");
+            ofstream hamrows;
+            ofstream hamcols;
+            ofstream hamvals;
+            
+            switch (data[0].modelType)
+            {
+                case 0 :
+                    hamrows.open("heistestrows.dat");
+                    hamcols.open("heistestcols.dat");
+                    hamvals.open("heistestvals.dat");
+                    break;
+                case 1 :
+                    hamrows.open("xytestrows.dat");
+                    hamcols.open("xytestcols.dat");
+                    hamvals.open("xytestvals.dat");
+                    break;
+                case 2 :
+                    hamrows.open("isingtestrows.dat");
+                    hamcols.open("isingtestcols.dat");
+                    hamvals.open("isingtestvals.dat");
+                    break;
+            }
             for(int j = 0; j < numElem[i]; j++)
             {
-                //fout<<h_index[j]<<" - ";
-                fout<<h_rows[j]<<" "<<h_cols[j];
-                fout<<" "<<h_vals[j]<<std::endl;
-
+                
+                hamrows<<h_rows[j]<<endl;
+                hamcols<<h_cols[j]<<endl;
+                hamvals<<h_vals[j]<<endl;
             }
-            fout.close();
-        }
+            hamrows.close();
+            hamcols.close();
+            hamvals.close();
+            free(h_rows);
+            free(h_cols);
+            free(h_vals);
 
-        free(h_rows);
-        free(h_cols);
-        free(h_vals);
+        #endif
 
         cudaStreamSynchronize(stream[i]);
         cudaFree(valsBuffer[i]);

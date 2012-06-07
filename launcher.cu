@@ -34,6 +34,8 @@ int main()
 
         double** groundstates = (double**)malloc(how_many*sizeof(double*));
 
+        double** eigenvalues = (double**)malloc(how_many*sizeof(double*));
+
         if (data == NULL)
         {
             cerr<<"Malloc of parameter container failed!"<<endl;
@@ -63,6 +65,7 @@ int main()
                     Fill_Bonds_16B(Bond[i]);
                     break;
             }
+            eigenvalues[i] = (double*)malloc(3*sizeof(double));
         }
 
 
@@ -79,7 +82,7 @@ int main()
         cout<<"Time to construct Hamiltonians: "<<time<<endl;
         cudaEventRecord(start,0);
         */
-        lanczos(how_many, num_Elem, hamil_lancz, groundstates, 200, 3, 1e-12);
+        lanczos(how_many, num_Elem, hamil_lancz, groundstates, eigenvalues, 200, 3, 1e-12);
         /*
         cudaEventRecord(stop,0);
         cudaEventSynchronize(stop);

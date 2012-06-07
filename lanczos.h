@@ -27,14 +27,15 @@ using namespace std;
     \param num_Elem An array containing the number of non-zero elements per Hamiltonian
     \param Hamiltonian An array of structs containing the Hamiltonian information
     \param groundstates An array which will be filled with the groundstate vector after diagonalization
+    \param eigenvalues An array which will be filled with the eigenenergies
     \param max_Iter The starting maximum number of iterations 
     \param num_Eig The number of eigenstates to extract
     \param conv_req The convergence requirement for the eigenvalues
 */
 
-__host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& Hamiltonian, double**& groundstates, int max_Iter, const int num_Eig, const double conv_req);
+__host__ void lanczos(const int how_many, const int* num_Elem, d_hamiltonian*& Hamiltonian, double**& groundstates, double**& eigenvalues, int max_Iter, const int num_Eig, const double conv_req);
 
-/*! 
+    /*! 
     \brief A CPU function which diagonalizes a symmetric tridiagonal matrix using the QL scheme
 
     \param d An array containing the diagonal elements of the matrix
