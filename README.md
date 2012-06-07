@@ -24,20 +24,29 @@ Make sure that the CUDA toolkit and developer divers are installed following the
 * cd Spin-Models-on-GPU
 * ./setup
 
-For later builds you can simply type "make".  If setup does not work you may have to manually download the MGPU library from the about link.
+For later builds you can simply type "make".  If setup does not work you may have to manually download the MGPU library from the above link.
 
 What Works and What Doesn't
 -------------------------------------
 The makefile will compile all the code. See nVidia's nvcc guide for more compiler flags you can pass. 
 
-Right now hamiltonian and lanczos should work to deliver the correct eigenvaluesfor the Heisenberg and XY models. The verdict on the transverse field Ising model is still out. lanczos applies reorthogonalization to prevent eigenstates from collapsing into each other. 
+Right now hamiltonian and lanczos should work to deliver the correct eigenvalues for the Heisenberg, TF Ising, and XY models. Lanczos applies reorthogonalization to prevent eigenstates from collapsing into each other. 
 
-If you want to vary the parameters, you will need to modify launcher.cu. For one parameter models (Heisenberg and XY), you only need to change J1. For the TFIM,the quantity usually called h is denoted J2 here. 
+To pass parameters, you will need to create data.dat. This file contains information that launcher.cu reads in to pass to functions. This way, you'll only need to compile when you make changes to the code itself. Each line in data.dat corresponds to one set of parameters, so if you're simulating five systems, data.dat should have five lines. On each line, you should put:
+
+Number of sites | Sz sector considered (ignored for TFIM) | First coupling parameter (J1) | Second coupling parameter (J2) | Model considered | System dimension
+
+For one parameter models (Heisenberg and XY), you only need to change J1. For the TFIM,the quantity usually called h is denoted J2 here. 
+
+Testing
+--------------------------------------
+The tests folder contains code which uses Google's C++ testing framework to run some unit tests on hamiltonian and lanczos. Follow gtest's README for compilation instructions. gtest is available as a package through most Linux distros. 
 
 To Do
 --------------------------------------
 * Change the way lanczos looks for convergence
 * Improve the diagonalization scheme in lanczos
 * Add benchmarking information
-* Improve makefile to allow release and debug compilation
+* Improve makefile to allow testing
 * Add additional geometries to lattice
+* Add more unit tests, especially to graphs
