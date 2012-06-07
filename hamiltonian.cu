@@ -39,7 +39,7 @@ __host__ int GetBasis(int dim, parameters data, int basisPosition[], int basis[]
         }
     }
 
-    #if CHECK = 1
+    #if CHECK == 1
         fstream basfile;
         fstream basposfile;
         switch( data.Sz )
@@ -546,7 +546,7 @@ __host__ void ConstructSparseMatrix( const int howMany, int** Bond, d_hamiltonia
 
         //----This code dumps the Hamiltonian to a file-------------
 
-        #if CHECK = 1
+        #if CHECK == 1
 
             double* h_vals = (double*)malloc(numElem[i]*sizeof(double));
             int* h_rows = (int*)malloc(numElem[i]*sizeof(int));

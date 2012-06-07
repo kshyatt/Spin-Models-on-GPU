@@ -28,6 +28,8 @@ void PrintGraphs( vector<cluster>& clusters, unsigned int initial_order, unsigne
 
 void GenerateNewGraphs( cluster& old_graphs, cluster& new_graphs, int lattice_type );
 
-void FindCanonicalGraphs( vector<cluster>& cluster, int graph_order);
+void FindCanonicalGraphs( vector<cluster>& clusters, int graph_order);
+
+void CheckEmbeddableSquare( vector<cluster>& clusters, int graph_order);
 
 std::string getFileContents(const std::string& filename);

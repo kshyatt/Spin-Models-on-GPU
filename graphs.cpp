@@ -31,9 +31,9 @@ int main()
     clusters[2].order = 3;
     */
     //PrintGraphs( clusters, 1, 1);
-    GenerateAllGraphs( clusters, 2, 5, 0);
+    GenerateAllGraphs( clusters, 2, 3, 0);
     //cout<<clusters[3].count<<endl;
-    PrintGraphs( clusters, 1, 5);
+    PrintGraphs( clusters, 1, 3);
     return 0;
 }
 
@@ -66,7 +66,11 @@ void GenerateAllGraphs( vector<cluster>& clusters, unsigned int initial_order, u
         clusters.resize(clusters.size() + 1);
         GenerateNewGraphs(clusters.at(i-1), clusters.at(i), lattice_type);
         cout<<"Automorphisms for order "<<i<<endl;
-        if( i > 2 )FindCanonicalGraphs(clusters, i);
+        if( i > 2 )
+        {
+            FindCanonicalGraphs(clusters, i);
+            CheckEmbeddableSquare(clusters, i);
+        }
 
     }
 }
@@ -259,6 +263,48 @@ void FindCanonicalGraphs( vector<cluster>& clusters, int graph_order)
         }
     }
     cout<<truecount<<endl;   
+}
+
+void CheckEmbeddableSquare( vector<cluster>& clusters, int order )
+{
+    for( unsigned int i = 0; i < clusters[order].count; i++)
+    {
+        int* colour = (int*)malloc(order*sizeof(int));
+        colour[0] = 1;
+        int checkIndex = 0;
+        bool embeddable = true;
+        for(int currentSite = 0; currentSite < order; currentSite++)
+        {
+        
+            vector< pair<int,int> >& currentGraph = clusters[order].adj_mat[i];
+            while( checkIndex < clusters[order].adj_mat[i].size() && clusters[order].adj_mat[i][checkIndex].first == currentSite )
+            {
+                if ( colour[currentGraph[checkIndex].second] == 0)
+                {
+                    colour[currentGraph[checkIndex].second] = colour[currentSite] == 1 ? 2 : 1;
+                    checkIndex++;
+                }
+
+                else
+                {
+                    if (colour[currentGraph[checkIndex].second] == colour[currentSite] )
+                    {
+                        embeddable = false;
+                    }
+                    checkIndex++;
+
+                }
+
+            }
+        }
+        free(colour);
+        if (!embeddable)
+        {
+            clusters[order].adj_mat.erase(clusters[order].adj_mat.begin() + i);
+            clusters[order].count--;
+            i--;
+        }
+    }
 }
 
 std::string getFileContents(const std::string& filename)
