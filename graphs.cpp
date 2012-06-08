@@ -31,9 +31,9 @@ int main()
     clusters[2].order = 3;
     */
     //PrintGraphs( clusters, 1, 1);
-    GenerateAllGraphs( clusters, 2, 3, 0);
+    GenerateAllGraphs( clusters, 2, 4, 0);
     //cout<<clusters[3].count<<endl;
-    PrintGraphs( clusters, 1, 3);
+    PrintGraphs( clusters, 1, 4);
     return 0;
 }
 
@@ -75,82 +75,83 @@ void GenerateAllGraphs( vector<cluster>& clusters, unsigned int initial_order, u
     }
 }
 
-void GenerateNewGraphs(cluster & old_graphs, cluster & new_graphs, int lattice_type )
+void GenerateNewGraphs(cluster & oldGraphs, cluster & newGraphs, int lattice_type )
 {
-    //int matrix_size = 0;
-    new_graphs.count = 0;
-    new_graphs.order = old_graphs.order + 1;
-    new_graphs.max_vertex_order = old_graphs.max_vertex_order;
-    /*for (int i = 0; i < old_graphs.order; i++)
+    
+    newGraphs.count = 0;
+    newGraphs.order = oldGraphs.order + 1;
+    newGraphs.max_vertex_order = oldGraphs.max_vertex_order;
+
+    for(unsigned int i = 0; i < oldGraphs.count; i++) //look at each old graph
     {
-        matrix_size += i;
-    }*/
-
-    //unsigned int total_new = old_graphs.count * matrix_size;
-
-    //new_graphs.adj_mat.resize(total_new);
-
-    for(unsigned int i = 0; i < old_graphs.count; i++) //look at each old graph
-    {
-        std::vector< std::pair<int,int> >& old_list = old_graphs.adj_mat[i];
-        for( int j = 0; j < old_graphs.order; j++) //look at each row
+        vector< pair<int,int> >& oldList = oldGraphs.adj_mat[i];
+        
+        for( int currentSite = 0; currentSite < oldGraphs.order; currentSite++) //look at each row
         {
-            int current_row_start = 0;
-            while( old_list[current_row_start].first < j)
+            int currentRowStart = 0;
+
+            while( oldList[currentRowStart].first < currentSite)
             {
-                current_row_start++;
+                currentRowStart++;
             }
             
-            int current_vertex_order = 0;
-            for(unsigned int l = 0; l < old_list.size(); l++ )
+            int currentVertexOrder = 0;
+            
+            for(unsigned int l = 0; l < oldList.size(); l++ )
             {
-                if (old_list[l].first == j || old_list[l].second == j)
+                if (oldList[l].first == currentSite || oldList[l].second == currentSite)
                 {
-                    current_vertex_order++;
+                    currentVertexOrder++;
                 }
             }
             
-            if( current_vertex_order < old_graphs.max_vertex_order)
+            if ( currentVertexOrder < oldGraphs.max_vertex_order)
             {
-                for (int k = j + 1; k < old_graphs.order + 1; k++) //look at each edge
+                for (int nextSite = currentSite + 1; nextSite < oldGraphs.order + 1; nextSite++) //look at each edge
                 { 
 
-                    int next_row_start = 0;
-                    while( old_list[next_row_start].first < k)
+                    int nextRowStart = 0;
+                    
+                    while( oldList[ nextRowStart ].first < nextSite) //find out where the pairs for the next site start
                     {
-                        next_row_start++;
+                        nextRowStart++;
                     }
-                    int insert_index = 1;
-                    bool dupe_flag = false;
-                    int next_vertex_order = 0;
-                    for(unsigned int l = 0; l < old_list.size(); l++ )
+
+                    int insertIndex = 1; 
+                    bool dupeFlag = false; //check to make sure edge between currentSite and nextSite doesn't already exist
+                    int nextVertexOrder = 0;
+
+                    for( unsigned int currentPair = 0; currentPair < oldList.size(); currentPair++ )
                     {
-                        if (old_list[l].first == k || old_list[l].second == k)
+                        if ( oldList[currentPair].first == nextSite || oldList[currentPair].second == nextSite )
                         {
-                            next_vertex_order++;
+                            nextVertexOrder++;
                         }
-                        if ((old_list[l].first == j && old_list[l].second < k) || (old_list[l].first == j && old_list[l+1].first > j))
+                        
+                        if ( ( oldList[currentPair].first == currentSite && oldList[currentPair].second < nextSite ) || 
+                             ( oldList[currentPair].first == currentSite && oldList[ currentPair + 1 ].first > currentSite )
+                           )
                         {
-                            insert_index = l+1;
+                            insertIndex = currentPair + 1;
                         }
-                        if (old_list[l].first == j && old_list[l].second == k)
+
+                        if ( oldList[currentPair].first == currentSite && oldList[currentPair].second == nextSite )
                         {
-                            dupe_flag = true;
+                            dupeFlag = true;
                         }
                     }
                 
-                    if (next_vertex_order < old_graphs.max_vertex_order && !dupe_flag)
+                    if (nextVertexOrder < oldGraphs.max_vertex_order && !dupeFlag)
                     {
-                        new_graphs.count++;
-                        //new_graphs.adj_mat.resize(new_graphs.count);
-                        //new_graphs.adj_mat.at(new_graphs.count - 1) = old_graphs.adj_mat.at(i);
-                        new_graphs.adj_mat.push_back(old_list);
+                        newGraphs.count++;
+                        newGraphs.adj_mat.push_back(oldList);
                         
-                        pair<int,int> temp_pair = make_pair(j,k);
+                        pair<int,int> tempPair = make_pair(currentSite,nextSite);
                         
-                        new_graphs.adj_mat[new_graphs.count - 1].insert( new_graphs.adj_mat[new_graphs.count - 1].begin() + insert_index, temp_pair);
+                        newGraphs.adj_mat[newGraphs.count - 1].insert( newGraphs.adj_mat[newGraphs.count - 1].begin() + insertIndex, temp_pair);
                         
-                        std::sort( new_graphs.adj_mat[new_graphs.count - 1].begin(),  new_graphs.adj_mat[new_graphs.count - 1].end(), GraphSort);
+                        std::sort( newGraphs.adj_mat[newGraphs.count - 1].begin(),  newGraphs.adj_mat[newGraphs.count - 1].end(), GraphSort);
+                        currentVertexOrder++;
                     }
                 }
             }
@@ -160,12 +161,12 @@ void GenerateNewGraphs(cluster & old_graphs, cluster & new_graphs, int lattice_t
 
 void FindCanonicalGraphs( vector<cluster>& clusters, int graph_order)
 {
-    cluster cluster_container = clusters[graph_order - 1];
-    cout<<cluster_container.count<<endl;
-    unsigned int truecount = 0;
-    for(unsigned int i = 0; i < cluster_container.count; i++)
+    cluster clusterContainer = clusters[graph_order - 1];
+    unsigned int trueCount = 0;
+    
+    for(unsigned int i = 0; i < clusterContainer.count; i++)
     {
-        //cout<<"Cluster "<<i<<" of order "<<graph_order<<endl;
+        //Allocate space to store graph information for nauty
         DYNALLSTAT(graph, current, graph_size);
         DYNALLSTAT(graph, canonical, canonical_size);
         DYNALLSTAT(int, label, label_size);
@@ -192,25 +193,26 @@ void FindCanonicalGraphs( vector<cluster>& clusters, int graph_order)
         autos = fopen("automorphism", mode);
 
         //unsigned int* current = new unsigned int[graph_order];
-        for( unsigned int j = 0; j < graph_order; j++ )
+        for( unsigned int currentVertex = 0; currentVertex < graph_order; currentVertex++ )
         {
             
-            gv = GRAPHROW(current, j, m);
+            gv = GRAPHROW(current, currentVertex, m);
             EMPTYSET(gv, m);
 
-            for( unsigned int count = 0; count < cluster_container.adj_mat[i].size(); count++)
+            for( unsigned int count = 0; count < clusterContainer.adj_mat[i].size(); count++)
             {
-                if( cluster_container.adj_mat[i][count].first == j)
+                if( clusterContainer.adj_mat[i][count].first == currentVertex)
                 {
-                    ADDELEMENT(gv, cluster_container.adj_mat[i][count].second);
+                    ADDELEMENT(gv, clusterContainer.adj_mat[i][count].second);
                 }
-                if( cluster_container.adj_mat[i][count].second == j)
+                if( clusterContainer.adj_mat[i][count].second == currentVertex)
                 {
-                    ADDELEMENT(gv, cluster_container.adj_mat[i][count].first);
+                    ADDELEMENT(gv, clusterContainer.adj_mat[i][count].first);
                 }
             }
         }
-        //optionblk ops;
+        
+        //Define options for nauty - get the automorphisms, and write them out to a file 
         ops.getcanon = TRUE;
         ops.defaultptn = TRUE;  
         ops.writeautoms = TRUE; 
@@ -218,8 +220,6 @@ void FindCanonicalGraphs( vector<cluster>& clusters, int graph_order)
         ops.cartesian = TRUE;
         ops.outfile = autos;
         statsblk stat;
-        //setword* workspace = new setword[5*graph_order];
-        //graph* canonical = new graph[graph_order*MAXM];
 
         nauty(current, label, ptn, NULL, orbit, &ops, &stat, workspace, 5*m, m, graph_order, canonical);
         fclose(autos);
@@ -227,42 +227,46 @@ void FindCanonicalGraphs( vector<cluster>& clusters, int graph_order)
         //---------Eliminate isomorphic graphs--------//
 
         std::string automorph = getFileContents("automorphism");
+
         stringstream iss (automorph);
+        
         char buff[2*graph_order];
         int group[graph_order];
-        for(int charcount = 0; charcount < automorph.length(); charcount += 2*graph_order + 1)
+        
+        for(int charCount = 0; charCount < automorph.length(); charCount += 2*graph_order + 1)
         {
             iss.getline(buff, 2*graph_order); 
             for(int j = 0; j < graph_order; j++)
             { 
                 group[j] = buff[2*j];
             }
-            vector< pair<int,int> > isograph = cluster_container.adj_mat[i];
-            for(int j = 0; j < cluster_container.adj_mat[i].size(); j+=2)
+            
+            vector< pair<int,int> > isograph = clusterContainer.adj_mat[i];
+            
+            for(int oldSite = 0; oldSite < clusterContainer.adj_mat[i].size(); oldSite+=2)
             {
-                isograph.insert(isograph.begin() + j, make_pair(isograph[j].second, isograph[j].first));
+                isograph.insert( isograph.begin() + oldSite, make_pair( isograph[oldSite].second, isograph[oldSite].first ) );
             }
             
-            for(unsigned int j = 0; j<isograph.size(); j++)
+            for(unsigned int currentSite = 0; currentSite < isograph.size(); currentSite++)
             {
-                isograph.at(j).first = group[isograph.at(j).first];
-                isograph.at(j).second = group[isograph.at(j).second];
-                if ( isograph.at(j).first > isograph.at(j).second )
+                isograph.at(currentSite).first = group[ isograph.at(currentSite).first ];
+                isograph.at(currentSite).second = group[ isograph.at(currentSite).second ];
+                if ( isograph.at(currentSite).first > isograph.at(currentSite).second )
                 {
-                    isograph.erase(isograph.begin() + j);
+                    isograph.erase(isograph.begin() + currentSite);
                 }
             }
             sort(isograph.begin(), isograph.end());
             
-            vector< vector< pair<int,int> > >::iterator dup_index = find(cluster_container.adj_mat.begin(), cluster_container.adj_mat.end(), isograph);
-            if ( dup_index < cluster_container.adj_mat.end())
+            vector< vector< pair<int,int> > >::iterator dupIndex = find(clusterContainer.adj_mat.begin(), clusterContainer.adj_mat.end(), isograph);
+            if ( dupIndex < clusterContainer.adj_mat.end())
             {
-                cluster_container.adj_mat.erase(dup_index);
+                clusterContainer.adj_mat.erase(dupIndex);
             }
-            truecount++;
+            trueCount++;
         }
     }
-    cout<<truecount<<endl;   
 }
 
 void CheckEmbeddableSquare( vector<cluster>& clusters, int order )

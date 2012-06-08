@@ -17,7 +17,7 @@ __device__ float HOffBondXTFI(const int si, const int bra, const float JJ)
 
 }
 
-__device__ float HDiagPartTFI(const int bra, int latticeSize, int2* d_Bond, const float JJ)
+__device__ float HDiagPartTFI1D(const int bra, int latticeSize, int3* d_Bond, const float JJ)
 {
 
     int S0b,S1b ; //spins (bra
@@ -41,6 +41,32 @@ __device__ float HDiagPartTFI(const int bra, int latticeSize, int2* d_Bond, cons
     return valH;
 }//HdiagPart
 
+__device__ float HDiagPartTFI2D(const int bra, int latticeSize, int3* d_Bond, const float JJ)
+{
+
+    int S0b,S1b ; //spins (bra
+    int T0,T1; //site
+    //int P0, P1, P2, P3; //sites for plaquette (Q)
+    //int s0p, s1p, s2p, s3p;
+    float valH = 0.f;
+
+    for (int Ti=0; Ti<latticeSize; Ti++)
+    {
+
+        T0 = (d_Bond[Ti]).x; //lower left spin
+        S0b = (bra>>T0)&1;
+        //if (T0 != Ti) cout<<"Square error 3\n";
+        T1 = (d_Bond[Ti]).y; //first bond
+        S1b = (bra>>T1)&1; //unpack bra
+        valH += JJ*(S0b-0.5)*(S1b-0.5);
+        T1 = (d_Bond[Ti]).z; //second bond
+        S1b = (bra>>T1)&1; //unpack bra
+        valH += JJ*(S0b-0.5)*(S1b-0.5);
+
+    }//T0
+
+    return valH;
+}//HdiagPart
 __global__ void FillDiagonalsTFI(int* d_basis, f_hamiltonian H, int* d_Bond, parameters data)
 {
 
@@ -50,7 +76,7 @@ __global__ void FillDiagonalsTFI(int* d_basis, f_hamiltonian H, int* d_Bond, par
 
     unsigned int tempi;
 
-    __shared__ int2 tempBond[18];
+    __shared__ int3 tempBond[18];
     //int3 tempBond[16];
 
     if (row < H.sectorDim)
@@ -59,7 +85,18 @@ __global__ void FillDiagonalsTFI(int* d_basis, f_hamiltonian H, int* d_Bond, par
         (tempBond[site]).x = d_Bond[site];
         (tempBond[site]).y = d_Bond[latticeSize + site];
 
-        H.vals[row] = HDiagPartTFI(tempi, latticeSize, tempBond, data.J1);
+        switch( data.dimension )
+        {
+            case 1 :
+                H.vals[row] = HDiagPartTFI1D(tempi, latticeSize, tempBond, data.J1);
+                break;
+            case 2 :
+                
+                (tempBond[site].z) = d_Bond[2*latticeSize + site];
+                H.vals[row] = HDiagPartTFI2D(tempi, latticeSize, tempBond, data.J1);
+                break;
+        }
+
         H.rows[row] = row;
         H.cols[row] = row;
         H.set[row] = 1;
