@@ -236,8 +236,8 @@ __device__ float HOffBondXHeisenberg(const int si, const int bra, const float JJ
 __device__ float HOffBondYHeisenberg(const int si, const int bra, const float JJ);
 
 /*!
-    \fn __device__ float HDiagPartHeisenberg(const int bra, int lattice_Size, int3* d_Bond, const float JJ);
-    \brief A GPU function which finds the value of the spin operator on the bond on the diagonal
+    \fn __device__ float HDiagPartHeisenberg1D(const int bra, int lattice_Size, int3* d_Bond, const float JJ);
+    \brief A GPU function which finds the value of the spin operator on the bond on the diagonal in one dimension
    
     This function computes the value of <i>S<sub>z</sub><sup>i</sup>S<sub>z</sub><sup>j</sup></i> over all bonded pairs <i> (i,j)</i>. If <i>i</i> and <i>j</i> have ferromagnetic ordering (they are aligned) then <i>S<sub>z</sub><sup>i</sup>S<sub>z</sub><sup>j</sup></i> = 1/4. If they have antiferrmagnetic ordering (they are anti-aligned) <i>S<sub>z</sub><sup>i</sup>S<sub>z</sub><sup>j</sup></i> = 0. The final value of the diagonal element is the coupling constant multiplied by the sum of all the bond <i>S<sub>z</sub></i> values.
     
@@ -250,7 +250,24 @@ __device__ float HOffBondYHeisenberg(const int si, const int bra, const float JJ
     
     \result The value of <a|H|b> on the diagonal 
 */
-__device__ float HDiagPartHeisenberg(const int bra, int lattice_Size, int3* d_Bond, const float JJ);
+__device__ float HDiagPartHeisenberg1D(const int bra, int lattice_Size, int3* d_Bond, const float JJ);
+
+/*!
+    \fn __device__ float HDiagPartHeisenberg2D(const int bra, int lattice_Size, int3* d_Bond, const float JJ);
+    \brief A GPU function which finds the value of the spin operator on the bond on the diagonal in two dimensions
+   
+    This function computes the value of <i>S<sub>z</sub><sup>i</sup>S<sub>z</sub><sup>j</sup></i> over all bonded pairs <i> (i,j)</i>. If <i>i</i> and <i>j</i> have ferromagnetic ordering (they are aligned) then <i>S<sub>z</sub><sup>i</sup>S<sub>z</sub><sup>j</sup></i> = 1/4. If they have antiferrmagnetic ordering (they are anti-aligned) <i>S<sub>z</sub><sup>i</sup>S<sub>z</sub><sup>j</sup></i> = 0. The final value of the diagonal element is the coupling constant multiplied by the sum of all the bond <i>S<sub>z</sub></i> values.
+    
+    \ingroup Heisenberg
+    
+    \param bra The state resulting from applying the spin operator
+    \param lattice_Size The number of sites in the lattice
+    \param d_Bond Array which stores information about which sites are bonded to which
+    \param JJ The coupling of the spin operator on the bond
+    
+    \result The value of <a|H|b> on the diagonal 
+*/
+__device__ float HDiagPartHeisenberg2D(const int bra, int lattice_Size, int3* d_Bond, const float JJ);
 
 /*!
     \brief A GPU function which finds and inserts the values, row indices, and column indices of diagonal elements into Hamiltonian storage arrays
