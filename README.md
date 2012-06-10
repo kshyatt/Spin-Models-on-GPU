@@ -6,7 +6,7 @@ Date: May 03 2012
 
 Introduction
 -------------------
-This code is intended to simulate the 2D Heisenberg, 2D XY, and 1D transverse field Ising models. The 2D models are simulated on variety of square <a href="http://arxiv.org/pdf/cond-mat/0608507">Betts</a> lattices. 
+This code is intended to simulate the 1D and 2D Heisenberg, 2D XY, and 1D and 2D transverse field Ising models. The 2D models are simulated on variety of square <a href="http://arxiv.org/pdf/cond-mat/0608507">Betts</a> lattices. 
 It generates the sparse Hamiltonian in COO format and then applies the Lanczos method to it. 
 
 The GPU code is based off of CPU code written by Roger Melko. 
