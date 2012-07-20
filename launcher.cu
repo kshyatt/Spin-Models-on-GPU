@@ -15,12 +15,7 @@ int main()
     for(int i = 0; i < 1; i++)
     {
         int** Bond;
-        //cout<<i<<" "<<endl;
         int how_many;
-        /*if (i == 1)
-        {
-            how_many = 5;
-        }*/
 
         ifstream fin;
         fin.open("data.dat");
@@ -67,27 +62,8 @@ int main()
             }
             eigenvalues[i] = (double*)malloc(3*sizeof(double));
         }
-
-
-        /*cudaEvent_t start, stop;
-        cudaEventCreate(&start);
-        cudaEventCreate(&stop);*/
-        //float time;
-
-        //cudaEventRecord(start,0);
         ConstructSparseMatrix(how_many, Bond, hamil_lancz, data, num_Elem, device);
-        /*cudaEventRecord(stop,0);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&time, start, stop);
-        cout<<"Time to construct Hamiltonians: "<<time<<endl;
-        cudaEventRecord(start,0);
-        */
         lanczos(how_many, num_Elem, hamil_lancz, groundstates, eigenvalues, 200, 3, 1e-12);
-        /*
-        cudaEventRecord(stop,0);
-        cudaEventSynchronize(stop);
-        cudaEventElapsedTime(&time, start, stop);
-        cout<<"Time to perform Lanczos: "<<time<<endl;*/
         for(int j = 0; j<how_many; j++)
         {
             cudaFree(hamil_lancz[j].rows);
@@ -95,8 +71,6 @@ int main()
             cudaFree(hamil_lancz[j].vals);
             cudaFree(groundstates[j]);
         }
-        //cudaEventDestroy(start);
-        //cudaEventDestroy(stop);
         free(data);
         free(Bond);
         free(hamil_lancz);

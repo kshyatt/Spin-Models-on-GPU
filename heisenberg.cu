@@ -162,6 +162,7 @@ __global__ void FillSparseHeisenberg(int* d_basisPosition, int* d_basis, f_hamil
     int start = (bool)(dim%arraySize) ? (dim/arraySize + 1)*arraySize : dim/arraySize;
 
     int s;
+    int braSector;
     //int si, sj;//sk,sl; //spin operators
     //unsigned int tempi;// tempod; //tempj;
     //cuDoubleComplex tempD;
@@ -182,14 +183,17 @@ __global__ void FillSparseHeisenberg(int* d_basisPosition, int* d_basis, f_hamil
             //Horizontal bond ---------------
             s = (tempBond[site]).x;
             tempod[threadIdx.x] = tempi;
+            braSector = (tempi & (1 << s)) >> s;
             tempod[threadIdx.x] ^= (1<<s);
             s = (tempBond[site]).y;
+            braSector ^= (tempi & (1 << s)) >> s;
             tempod[threadIdx.x] ^= (1<<s);
 
             //tempod[threadIdx.x] ^= (1<<si); //toggle bit
             //tempod[threadIdx.x] ^= (1<<sj); //toggle bit
 
-            compare = (d_basisPosition[tempod[threadIdx.x]] > ii);
+            compare = (d_basisPosition[tempod[threadIdx.x]] != -1) && braSector;
+            compare &= (d_basisPosition[tempod[threadIdx.x]] > ii);
             tempPos[threadIdx.x] = (compare) ? d_basisPosition[tempod[threadIdx.x]] : dim;
             tempVal[threadIdx.x] = HOffBondXHeisenberg(site, tempi, data.J1);
 
@@ -211,14 +215,17 @@ __global__ void FillSparseHeisenberg(int* d_basisPosition, int* d_basis, f_hamil
                 //Vertical bond -----------------
                 s = (tempBond[site]).x;
                 tempod[threadIdx.x] = tempi;
+                braSector = (tempi & (1 << s)) >> s;
                 tempod[threadIdx.x] ^= (1<<s);
                 s = (tempBond[site]).z;
+                braSector ^= (tempi & (1 << s)) >> s;
                 tempod[threadIdx.x] ^= (1<<s);
 
                 //tempod[threadIdx.x] ^= (1<<si); //toggle bit
                 //tempod[threadIdx.x] ^= (1<<sj); //toggle bit
 
-                compare = (d_basisPosition[tempod[threadIdx.x]] > ii);
+                compare = (d_basisPosition[tempod[threadIdx.x]] != -1) && braSector;
+                compare &= (d_basisPosition[tempod[threadIdx.x]] > ii);
                 tempPos[threadIdx.x] = (compare) ? d_basisPosition[tempod[threadIdx.x]] : dim;
                 tempVal[threadIdx.x] = HOffBondYHeisenberg(site,tempi, data.J1);
 

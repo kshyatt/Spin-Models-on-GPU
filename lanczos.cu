@@ -636,7 +636,7 @@ __host__ void lanczos(const int howMany, const int* numElem, d_hamiltonian*& Ham
                 //cout<<"Done tqli in "<<iter[i]<<"th iteration"<<endl;
                 cudaMemcpyAsync(d_H_eigen[i], h_H_eigen[i], maxIter*maxIter*sizeof(double), cudaMemcpyHostToDevice, stream[i]);
 
-                sort(h_diag[i], h_diag[i] + h_a[i].size());
+                std::sort(h_diag[i], h_diag[i] + h_a[i].size());
                 for (int j = 0; j < numEig; j++)
                 {
                     h_ordered[i][j] = h_diag[i][j];
@@ -730,7 +730,7 @@ __host__ void lanczos(const int howMany, const int* numElem, d_hamiltonian*& Ham
     //----------Output groundstate to file to check for correctness------
 
     double* host_groundstate = (double*)malloc(dim[0]*sizeof(double));
-    std::ofstream fout;
+    /*std::ofstream fout;
     fout.open("lanczos.log");
     cudaMemcpy(host_groundstate, groundstates[0], dim[0]*sizeof(double), cudaMemcpyDeviceToHost);
     for(int i = 0; i < dim[0] ; i++)
@@ -738,7 +738,7 @@ __host__ void lanczos(const int howMany, const int* numElem, d_hamiltonian*& Ham
         fout<<host_groundstate[i]<<std::endl;
     }
 
-    fout.close();
+    fout.close();*/
     free(host_groundstate);
     free(dim);
     if (cublasStatus[0] != CUBLAS_STATUS_SUCCESS)

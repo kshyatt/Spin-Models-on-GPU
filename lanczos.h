@@ -4,17 +4,11 @@
     \brief Functions to perform Lanczos diagonalizations on Hamiltonians
 */
 
-#include<iostream>
-#include<cstdlib>
-#include<cmath>
-#include<fstream>
 #include<iomanip>
 #include"hamiltonian.h"
-#include"cuda.h"
 #include"cuda_runtime.h"
 #include"cublas_v2.h"
 #include"cusparse_v2.h"
-#include"cuComplex.h"
 
 #define SIGN(a,b) ((b) >= 0.0 ? fabs(a) : -fabs(a))
 

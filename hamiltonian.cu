@@ -1,16 +1,5 @@
 #include"hamiltonian.h"
 
-/* NOTE: this function uses FORTRAN style matrices, where the values and positions are stored in a ONE dimensional array! Don't forget this! */
-/* Function GetBasis - fills two arrays with information about the basis
-Inputs: dim - the initial dimension of the Hamiltonian
-lattice_Size - the number of sites
-Sz - the value of the Sz operator
-basisPosition[] - an empty array that records the positions of the basis
-basis - an empty array that records the basis
-Outputs: basisPosition - a full array now
-basis[] - a full array now
-
-*/
 __host__ int GetBasis(int dim, parameters data, int basisPosition[], int basis[])
 {
     unsigned int temp = 0;
@@ -24,7 +13,7 @@ __host__ int GetBasis(int dim, parameters data, int basisPosition[], int basis[]
         {
             temp += (i1>>sp)&1;
         } //unpack bra
-        if ( ( (data.modelType == 1) || (data.modelType == 0) ) && temp == data.nsite/2 + data.Sz)
+        if ( ( (data.modelType == 1) || (data.modelType == 0) ) && ((temp <= data.nsite/2 + data.Sz ) && (temp >= data.nsite/2 - data.Sz) ) )
         {
             basis[ realDim ] = i1;
             basisPosition[ i1 ] = realDim;
@@ -39,9 +28,9 @@ __host__ int GetBasis(int dim, parameters data, int basisPosition[], int basis[]
         }
     }
 
-    #if CHECK == 1
-        fstream basfile;
-        fstream basposfile;
+    /*#if CHECK == 1
+        ofstream basfile;
+        ofstream basposfile;
         switch( data.Sz )
         {
             case 0 :
@@ -84,21 +73,17 @@ __host__ int GetBasis(int dim, parameters data, int basisPosition[], int basis[]
 
         for( unsigned int i = 0; i < dim; i++)
         {
+            cout<<i<<endl;
             if (i < realDim) basfile<<basis[i]<<endl;
             basposfile<<basisPosition[i]<<endl;
         }
         basfile.close();
         basposfile.close();
     #endif
-
+    */
     return realDim;
 
 }
-
-/* Function: ConstructSparseMatrix:
-
-
-*/
 
 __host__ void ConstructSparseMatrix( const int howMany, int** Bond, d_hamiltonian*& hamilLancz, parameters* data, int*& countArray, int device )
 {
@@ -427,8 +412,8 @@ __host__ void ConstructSparseMatrix( const int howMany, int** Bond, d_hamiltonia
     
     for(int i = 0; i < howMany; i++)
     {
-        thrust::device_ptr<int> red_ptr(d_H[i].set);
-        numElem[i] = thrust::reduce(red_ptr, red_ptr + rawSize[i]);
+        //thrust::device_ptr<int> red_ptr(d_H[i].set);
+        //numElem[i] = thrust::reduce(red_ptr, red_ptr + rawSize[i]);
     }
 
     //----Free GPU storage for basis and bond information which is not needed------
@@ -545,7 +530,7 @@ __host__ void ConstructSparseMatrix( const int howMany, int** Bond, d_hamiltonia
         countArray[i] = numElem[i];
 
         //----This code dumps the Hamiltonian to a file-------------
-
+        /*
         #if CHECK == 1
 
             double* h_vals = (double*)malloc(numElem[i]*sizeof(double));
@@ -611,6 +596,7 @@ __host__ void ConstructSparseMatrix( const int howMany, int** Bond, d_hamiltonia
             free(h_vals);
 
         #endif
+        */
 
         cudaStreamSynchronize(stream[i]);
         cudaFree(valsBuffer[i]);
